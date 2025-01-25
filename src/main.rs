@@ -624,6 +624,8 @@ impl App {
                             KeyCode::Tab => self.toggle_folder_expansion()?,
                             KeyCode::Up => self.move_selection(-1),
                             KeyCode::Down => self.move_selection(1),
+                            KeyCode::PageUp => self.move_selection(-10),
+                            KeyCode::PageDown => self.move_selection(10),
                             KeyCode::Enter => self.handle_enter()?,
                             _ => {}
                         }
