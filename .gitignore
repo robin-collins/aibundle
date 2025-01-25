@@ -25,3 +25,8 @@ Thumbs.db
 # Environment files
 .env
 .env.local
+
+test_dir/*
+test_dir*
+
+.specstory*

@@ -1,0 +1,1253 @@
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEventKind},
+    terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    execute,
+};
+use ratatui::{
+    backend::CrosstermBackend,
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Clear},
+    Terminal, Frame,
+    layout::{Layout, Constraint, Direction, Rect},
+    style::{Style, Color},
+    prelude::Alignment,
+    text::Line,
+};
+use std::{io, path::PathBuf, env, collections::HashSet};
+use std::fs;
+use cli_clipboard::{ClipboardContext, ClipboardProvider};
+use ignore::{gitignore::GitignoreBuilder, Match};
+use std::process::Command;
+use std::env::consts::OS;
+use std::thread;
+use std::time::Duration;
+
+const VERSION: &str = "0.1.0";
+const ICONS: &[(&str, &str)] = &[
+// Folders
+("folder", "📁"),
+("folder_open", "📂"),
+("archive_folder", "🗄️"), // For archive or special folders
+
+// Development
+("rs", "🦀"), // Rust
+("ts", "💠"), // TypeScript
+("js", "📜"), // JavaScript
+("py", "🐍"), // Python
+("java", "☕"), // Java
+("class", "☕"), // Java Class Files
+("cpp", "⚡"), // C++
+("c", "🔌"), // C
+("h", "📐"), // C Header
+("hpp", "📐"), // C++ Header
+("go", "🐹"), // Go
+("rb", "💎"), // Ruby
+("php", "🐘"), // PHP
+("scala", "💫"), // Scala
+("swift", "🕊️"), // Swift
+("kotlin", "🎯"), // Kotlin
+("dart", "🦋"), // Dart
+("lua", "🌙"), // Lua
+("sh", "🐚"), // Shell Script
+("pl", "🔮"), // Perl
+("r", "📊"), // R
+("erl", "🐘"), // Erlang
+("hs", "☯️"), // Haskell
+("sql", "🗃️"), // SQL
+("m", "🔧"), // Objective-C / MATLAB (context-dependent)
+("adb", "📱"), // Android Debug Bridge Scripts
+("gradle", "🛠️"), // Gradle Build Scripts
+("pom", "📦"), // Maven POM Files
+("sbt", "📚"), // Scala Build Tool
+("makefile", "🛠️"), // Makefile
+("Dockerfile", "🐳"), // Dockerfile
+("Vagrantfile", "🔧"), // Vagrant Configuration
+("gulpfile", "🛠️"), // Gulp Build Scripts
+("webpack.config", "🔗"), // Webpack Configuration
+
+// Web
+("html", "🌐"),
+("htm", "🌐"),
+("css", "🎨"),
+("scss", "🎨"),
+("sass", "🎨"),
+("less", "🎨"),
+("jsx", "⚛️"),
+("tsx", "⚛️"),
+("vue", "💚"),
+("svelte", "🔥"),
+("twig", "🧵"), // Twig Templates
+("asp", "🖥️"),
+("aspx", "🖥️"),
+("jsp", "🖥️"),
+("erb", "🌸"), // Embedded Ruby
+("handlebars", "🪡"), // Handlebars Templates
+("ejs", "🖥️"), // Embedded JavaScript
+("phphtml", "🐘"), // PHP Embedded in HTML
+("jade", "🌿"), // Jade/Pug Templates
+
+// Data
+("json", "📋"),
+("yaml", "⚙️"),
+("yml", "⚙️"),
+("xml", "📰"),
+("csv", "📊"),
+("sql", "🗃️"),
+("db", "🗃️"),
+("sqlite", "🗃️"),
+("dbml", "🗂️"), // Database Markup Language
+("geojson", "🗺️"),
+("parquet", "📦"),
+("pickle", "🥒"),
+("protobuf", "🔗"), // Protocol Buffers
+("avsc", "🗃️"), // Avro Schema
+("ndjson", "📄"), // Newline Delimited JSON
+("hdf5", "📁"), // Hierarchical Data Format
+
+// Config
+("toml", "⚙️"),
+("ini", "⚙️"),
+("conf", "⚙️"),
+("config", "⚙️"),
+("env", "🔒"),
+("dockerignore", "🐳"),
+("gitignore", "🔰"),
+("eslint", "🔍"),
+("prettierrc", "✨"),
+("babelrc", "🔄"),
+("tsconfig", "💠"),
+("webpack.config", "🔗"),
+("babel.config", "🔄"),
+("package.json", "📦"),
+("composer.json", "📦"),
+("requirements.txt", "📄"),
+("Pipfile", "📦"),
+("Cargo.toml", "🦀"),
+("Makefile", "🛠️"),
+
+// Documents
+("md", "📝"),
+("txt", "📄"),
+("pdf", "📕"),
+("doc", "📘"),
+("docx", "📘"),
+("rtf", "📝"),
+("odt", "📝"),
+("tex", "📜"),
+("rst", "📑"),
+("asciidoc", "📖"),
+("mmd", "📜"), // MultiMarkdown
+("epub", "📚"),
+("djvu", "📖"),
+
+    // Spreadsheets
+("xls", "📗"),
+("xlsx", "📗"),
+("ods", "📗"),
+("csv", "📊"),
+("tsv", "📈"),
+("numbers", "📊"), // Apple Numbers
+("gsheet", "📊"), // Google Sheets
+
+// Presentations
+("ppt", "📙"),
+("pptx", "📙"),
+("odp", "📙"),
+("key", "🔑"), // Apple Keynote
+("mdx", "📝"), // Markdown with JSX
+("sldx", "📊"), // Slide files
+("gslides", "📊"), // Google Slides
+
+// Images
+("png", "🖼️"),
+("jpg", "🖼️"),
+("jpeg", "🖼️"),
+("gif", "🎥"),
+("svg", "🎨"),
+("ico", "🎴"),
+("bmp", "🖼️"),
+("tiff", "🖼️"),
+("webp", "🖼️"),
+("heic", "📷"),
+("raw", "📸"),
+("psd", "🖌️"), // Photoshop
+("ai", "🖍️"), // Adobe Illustrator
+("indd", "📄"), // Adobe InDesign
+("xcf", "🎨"), // GIMP
+("eps", "📐"), // Encapsulated PostScript
+("drw", "🖊️"), // Generic Drawing
+("dxf", "📏"), // Drawing Exchange Format
+
+// Audio
+("mp3", "🎵"),
+("wav", "🎵"),
+("ogg", "🎵"),
+("flac", "🎼"),
+("m4a", "🎵"),
+("aac", "🎶"),
+("wma", "🎧"),
+("alac", "🎹"),
+("opus", "🎧"),
+("mid", "🎹"), // MIDI Files
+("midi", "🎹"),
+("aiff", "🎤"),
+
+    // Video
+("mp4", "🎬"),
+("avi", "🎬"),
+("mkv", "🎬"),
+("mov", "🎬"),
+("wmv", "🎬"),
+("flv", "📹"),
+("webm", "🌐"),
+("m4v", "📺"),
+("3gp", "📱"),
+("mpeg", "📽️"),
+("mpg", "📽️"),
+("rmvb", "🗂️"), // RealMedia Variable Bitrate
+("vob", "📀"), // DVD Video Object
+("m2ts", "🎞️"),
+
+    // Archives
+("zip", "📦"),
+("rar", "📦"),
+("7z", "📦"),
+("tar", "📦"),
+("gz", "📦"),
+("iso", "💿"),
+("bz2", "📦"),
+("xz", "📦"),
+("dmg", "🖥️"),
+("tgz", "📦"),
+("lzma", "📦"),
+("cab", "📦"),
+("arj", "📦"),
+("ace", "📦"),
+
+    // Git
+("git", "🔰"),
+("gitignore", "🔰"),
+("gitattributes", "🔰"),
+("gitmodules", "🔰"),
+("gitconfig", "🔧"),
+("gitlab-ci.yml", "🤖"), // GitLab CI Configuration
+("circleci", "🔄"), // CircleCI Config
+("travis.yml", "📈"), // Travis CI Config
+
+    // Logs
+("log", "📋"),
+("trace", "🔍"),
+("out", "📤"),
+("err", "❌"),
+("debug", "🐞"),
+("access", "🔓"),
+("server", "🌐"),
+("audit", "🔒"),
+
+    // Shell
+("sh", "🐚"),
+("bash", "🐚"),
+("zsh", "🐚"),
+("fish", "🐟"),
+("ps1", "💻"),
+("bat", "🖥️"), // Old Windows DOS icon
+("cmd", "🖥️"), // Old Windows CMD icon
+("ksh", "🐚"),
+("csh", "🐚"),
+("tcsh", "🐚"),
+
+    // Lock files
+("lock", "🔒"),
+("pem", "🔑"),
+("key", "🔑"),
+("crt", "🔒"),
+("p12", "🔐"), // PKCS#12 Certificate
+("pfx", "🔐"),
+
+    // Executables
+("exe", "💻"),
+("bin", "📦"),
+("app", "📱"),
+("msi", "📥"),
+("apk", "📱"),
+("deb", "📦"),
+("rpm", "📦"),
+("run", "🔄"),
+("sh", "🐚"),
+("out", "📤"),
+("dll", "🗄️"), // Dynamic Link Library
+("so", "🗄️"), // Shared Object
+("dylib", "🗄️"), // macOS Dynamic Library
+
+    // Scripts
+("ps1", "💻"),
+("lua", "🌙"),
+("vbs", "💾"),
+("coffee", "☕"),
+("groovy", "🌿"),
+("rb", "💎"),
+("rake", "🔨"),
+("perl", "🔮"),
+("tcl", "🔧"),
+("awk", "✂️"),
+("sed", "📝"),
+
+    // Fonts
+("ttf", "🔤"),
+("otf", "🔤"),
+("woff", "🔡"),
+("woff2", "🔡"),
+("eot", "🔡"),
+("sfnt", "🔤"),
+("fon", "🔠"),
+("pfm", "🔠"),
+("afm", "🔠"),
+
+    // Miscellaneous
+("ipynb", "📓"), // Jupyter Notebook
+("vuepress", "📚"),
+("env.example", "🔒"),
+("LICENSE", "📜"),
+("README", "📖"),
+("CHANGELOG", "🗒️"),
+("TODO", "📝"),
+("CONTRIBUTING", "🤝"),
+("CODE_OF_CONDUCT", "📜"),
+("SECURITY", "🛡️"),
+("Gulpfile", "🛠️"),
+("Gruntfile", "🛠️"),
+("LICENSE.md", "📜"),
+("README.md", "📖"),
+("Dockerfile", "🐳"),
+("Makefile", "🛠️"),
+("Procfile", "📄"), // Heroku Procfile
+("yarn.lock", "🔒"),
+("package-lock.json", "🔒"),
+("Pipfile.lock", "🔒"),
+
+    // Fonts
+("ttf", "🔤"),
+("otf", "🔤"),
+("woff", "🔡"),
+("woff2", "🔡"),
+("eot", "🔡"),
+
+    // Default
+("default", "📄"),
+];
+
+const DEFAULT_IGNORED_DIRS: &[&str] = &[
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    "coverage",
+    "target",  // Keep Rust's target dir in defaults
+];
+
+struct IgnoreConfig {
+    use_default_ignores: bool,
+    use_gitignore: bool,
+    include_binary_files: bool,
+}
+
+impl Default for IgnoreConfig {
+    fn default() -> Self {
+        Self {
+            use_default_ignores: true,
+            use_gitignore: true,
+            include_binary_files: false,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct CopyStats {
+    files: usize,
+    folders: usize,
+}
+
+struct Modal {
+    message: String,
+    timestamp: std::time::Instant,
+}
+
+struct App {
+    current_dir: PathBuf,
+    items: Vec<PathBuf>,
+    list_state: ListState,
+    selected_items: HashSet<PathBuf>,
+    quit: bool,
+    last_copy_stats: Option<CopyStats>,
+    modal: Option<Modal>,
+    ignore_config: IgnoreConfig,
+    expanded_folders: HashSet<PathBuf>,
+    search_query: String,
+    filtered_items: Vec<PathBuf>,
+    is_searching: bool,
+}
+
+fn add_items_recursive(
+    items: &mut Vec<PathBuf>,
+    dir: &PathBuf,
+    expanded_folders: &HashSet<PathBuf>,
+    ignore_config: &IgnoreConfig,
+    current_dir: &PathBuf,
+    depth: usize,
+) -> io::Result<()> {
+    let mut entries: Vec<_> = fs::read_dir(dir)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| {
+            if !ignore_config.use_default_ignores && !ignore_config.use_gitignore {
+                return true;
+            }
+
+            if ignore_config.use_default_ignores {
+                if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+                    if DEFAULT_IGNORED_DIRS.contains(&name) {
+                        return false;
+                    }
+                }
+            }
+
+            if ignore_config.use_gitignore {
+                let mut builder = GitignoreBuilder::new(current_dir);
+                let mut dir = current_dir.clone();
+                while let Some(parent) = dir.parent() {
+                    let gitignore = dir.join(".gitignore");
+                    if gitignore.exists() {
+                        match builder.add(gitignore) {
+                            None => (),
+                            Some(_) => break,
+                        }
+                    }
+                    dir = parent.to_path_buf();
+                }
+
+                if let Ok(gitignore) = builder.build() {
+                    let is_dir = p.is_dir();
+                    match gitignore.matched_path_or_any_parents(p, is_dir) {
+                        Match::Ignore(_) => return false,
+                        _ => (),
+                    }
+                }
+            }
+
+            true
+        })
+        .collect();
+
+    entries.sort_by(|a, b| {
+        let a_is_dir = a.is_dir();
+        let b_is_dir = b.is_dir();
+        match (a_is_dir, b_is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.file_name().cmp(&b.file_name()),
+        }
+    });
+
+    for entry in entries {
+        items.push(entry.clone());
+        if entry.is_dir() && expanded_folders.contains(&entry) {
+            add_items_recursive(
+                items,
+                &entry,
+                expanded_folders,
+                ignore_config,
+                current_dir,
+                depth + 1,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+impl App {
+    fn new() -> Self {
+        let mut list_state = ListState::default();
+        list_state.select(Some(0));
+        Self {
+            current_dir: env::current_dir().unwrap_or_default(),
+            items: Vec::new(),
+            list_state,
+            selected_items: HashSet::new(),
+            quit: false,
+            last_copy_stats: None,
+            modal: None,
+            ignore_config: IgnoreConfig::default(),
+            expanded_folders: HashSet::new(),
+            search_query: String::new(),
+            filtered_items: Vec::new(),
+            is_searching: false,
+        }
+    }
+
+    fn load_items(&mut self) -> io::Result<()> {
+        self.items.clear();
+        
+        if let Some(parent) = self.current_dir.parent() {
+            if !parent.as_os_str().is_empty() {
+                self.items.push(self.current_dir.join(".."));
+            }
+        }
+
+        add_items_recursive(
+            &mut self.items,
+            &self.current_dir,
+            &self.expanded_folders,
+            &self.ignore_config,
+            &self.current_dir,
+            0,
+        )?;
+
+        // Update filtered items based on search
+        self.update_search();
+        Ok(())
+    }
+
+    fn update_search(&mut self) {
+        if self.search_query.is_empty() {
+            self.filtered_items = self.items.clone();
+            return;
+        }
+
+        let query = self.search_query.to_lowercase();
+        self.filtered_items = self.items
+            .iter()
+            .filter(|path| {
+                // Get the full relative path for searching
+                if let Ok(rel_path) = path.strip_prefix(&self.current_dir) {
+                    let path_str = rel_path.to_string_lossy().to_lowercase();
+                    path_str.contains(&query)
+                } else {
+                    // Fallback to just the filename if we can't get relative path
+                    let name = path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    name.contains(&query)
+                }
+            })
+            .cloned()
+            .collect();
+
+        // Auto-expand parent folders of matches
+        let mut parents_to_expand = HashSet::new();
+        for item in &self.filtered_items {
+            let mut current = item.as_path();
+            while let Some(parent) = current.parent() {
+                if parent == self.current_dir {
+                    break;
+                }
+                parents_to_expand.insert(parent.to_path_buf());
+                current = parent;
+            }
+        }
+        self.expanded_folders.extend(parents_to_expand);
+
+        // Reset selection if current selection is not in filtered items
+        if let Some(selected) = self.list_state.selected() {
+            if selected >= self.filtered_items.len() {
+                self.list_state.select(Some(0));
+            }
+        }
+    }
+
+    fn handle_search_input(&mut self, c: char) {
+        if !self.is_searching {
+            return;
+        }
+
+        match c {
+            '\n' | '\r' | '\x1b' => { // Enter or Escape
+                self.is_searching = false;
+            }
+            '\x08' | '\x7f' => { // Backspace
+                self.search_query.pop();
+                self.update_search();
+            }
+            c if !c.is_control() => {
+                self.search_query.push(c);
+                self.update_search();
+            }
+            _ => {}
+        }
+    }
+
+    fn toggle_search(&mut self) {
+        self.is_searching = !self.is_searching;
+        if !self.is_searching {
+            self.search_query.clear();
+            self.update_search();
+        }
+    }
+
+    fn run(&mut self) -> io::Result<()> {
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen)?;
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend)?;
+
+        self.load_items()?;
+
+        while !self.quit {
+            terminal.draw(|f| self.ui(f))?;
+
+            if let Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press {
+                    if self.is_searching {
+                        match key.code {
+                            KeyCode::Char(c) => self.handle_search_input(c),
+                            KeyCode::Backspace => {
+                                self.search_query.pop();
+                                self.update_search();
+                            }
+                            KeyCode::Esc => self.toggle_search(),
+                            KeyCode::Enter => self.toggle_search(),
+                            _ => {}
+                        }
+                    } else {
+                        match key.code {
+                            KeyCode::Char('q') => {
+                                if !self.selected_items.is_empty() {
+                                    self.copy_selected_to_clipboard()?;
+                                }
+                                self.quit = true;
+                            }
+                            KeyCode::Char(' ') => self.toggle_selection(),
+                            KeyCode::Char('c') => self.copy_selected_to_clipboard()?,
+                            KeyCode::Char('i') => self.toggle_default_ignores()?,
+                            KeyCode::Char('g') => self.toggle_gitignore()?,
+                            KeyCode::Char('b') => self.toggle_binary_files()?,
+                            KeyCode::Char('/') => self.toggle_search(),
+                            KeyCode::Tab => self.toggle_folder_expansion()?,
+                            KeyCode::Up => self.move_selection(-1),
+                            KeyCode::Down => self.move_selection(1),
+                            KeyCode::Enter => self.handle_enter()?,
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+
+        // Show detailed exit message if items were copied
+        if let Some(stats) = &self.last_copy_stats {
+            if let Ok(contents) = get_clipboard_contents() {
+                let line_count = contents.lines().count();
+                let byte_size = contents.len();
+                println!("\nCopied to clipboard:");
+                println!("  Files copied: {}", stats.files);
+                println!("  Folders copied: {}", stats.folders);
+                println!("  Total lines: {}", line_count);
+                println!("  Total size: {}", human_readable_size(byte_size));
+                println!();
+            }
+        }
+
+        Ok(())
+    }
+
+    fn move_selection(&mut self, delta: i32) {
+        if self.filtered_items.is_empty() {
+            return;
+        }
+        let current = self.list_state.selected().unwrap_or(0);
+        let new_selected = (current as i32 + delta).clamp(0, self.filtered_items.len() as i32 - 1) as usize;
+        self.list_state.select(Some(new_selected));
+    }
+
+    fn handle_enter(&mut self) -> io::Result<()> {
+        if let Some(selected) = self.list_state.selected() {
+            if selected >= self.filtered_items.len() {
+                return Ok(());
+            }
+            let path = &self.filtered_items[selected];
+            if path.is_dir() {
+                if path.ends_with("..") {
+                    if let Some(parent) = self.current_dir.parent() {
+                        self.current_dir = parent.to_path_buf();
+                    }
+                } else {
+                    self.current_dir = path.clone();
+                }
+                self.load_items()?;
+                self.list_state.select(Some(0));
+            }
+        }
+        Ok(())
+    }
+
+    fn toggle_selection(&mut self) {
+        if let Some(selected) = self.list_state.selected() {
+            if selected >= self.filtered_items.len() {
+                return;
+            }
+            let path = self.filtered_items[selected].clone();
+            if !path.file_name().map_or(false, |n| n == "..") {
+                let is_selected = self.selected_items.contains(&path);
+                if path.is_dir() {
+                    self.update_folder_selection(&path, !is_selected);
+                } else {
+                    if is_selected {
+                        self.selected_items.remove(&path);
+                    } else {
+                        self.selected_items.insert(path);
+                    }
+                }
+            }
+        }
+    }
+
+    fn copy_selected_to_clipboard(&mut self) -> io::Result<()> {
+        let mut contents = String::new();
+        let mut file_count = 0;
+        let mut folder_count = 0;
+        
+        // First, collect all paths we need to process
+        let mut to_process: Vec<_> = self.selected_items.iter()
+            .filter(|path| {
+                // Only process items at the root level (direct children of current_dir)
+                // or items whose parent directory is not selected
+                if let Some(parent) = path.parent() {
+                    !self.selected_items.contains(parent)
+                } else {
+                    true
+                }
+            })
+            .collect();
+        to_process.sort(); // Sort for consistent output
+        
+        for path in to_process {
+            if let Some(rel_path) = path.strip_prefix(&self.current_dir).ok() {
+                let normalized_path = normalize_path(&rel_path.to_string_lossy());
+                
+                if path.is_file() {
+                    if Self::is_binary_file(path) {
+                        if self.ignore_config.include_binary_files {
+                            contents.push_str(&format!("<file name=\"{}\">\n</file>\n", normalized_path));
+                            file_count += 1;
+                        }
+                    } else {
+                        contents.push_str(&format!("<file name=\"{}\">\n", normalized_path));
+                        match fs::read_to_string(path) {
+                            Ok(content) => {
+                                contents.push_str(&content);
+                                if !content.ends_with('\n') {
+                                    contents.push('\n');
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Error reading file {}: {}", path.display(), e);
+                            }
+                        }
+                        contents.push_str("</file>\n");
+                        file_count += 1;
+                    }
+                } else if path.is_dir() {
+                    contents.push_str(&format!("<folder name=\"{}\">\n", normalized_path));
+                    let mut dir_contents = String::new();
+                    if let Ok((files, folders)) = self.process_directory(path, &mut dir_contents, &self.current_dir) {
+                        file_count += files;
+                        folder_count += folders;
+                    }
+                    contents.push_str(&dir_contents);
+                    contents.push_str("</folder>\n");
+                    folder_count += 1;
+                }
+            }
+        }
+
+        if !contents.is_empty() {
+            if let Ok(()) = set_clipboard_contents(&contents) {
+                // Add a small delay to ensure clipboard operation completes
+                thread::sleep(Duration::from_millis(100));
+                
+                let stats = CopyStats {
+                    files: file_count,
+                    folders: folder_count,
+                };
+                self.last_copy_stats = Some(stats.clone());
+                
+                // Count lines
+                let line_count = contents.lines().count();
+                let byte_size = contents.len();
+                
+                self.modal = Some(Modal {
+                    message: format!(
+                        "Files copied: {}\n\
+                         Folders copied: {}\n\
+                         Total lines: {}\n\
+                         Total size: {}\n",
+                        file_count,
+                        folder_count,
+                        line_count,
+                        human_readable_size(byte_size)
+                    ),
+                    timestamp: std::time::Instant::now(),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    fn process_directory(&self, dir: &PathBuf, output: &mut String, base_path: &PathBuf) -> io::Result<(usize, usize)> {
+        let mut file_count = 0;
+        let mut folder_count = 0;
+
+        let mut entries: Vec<_> = fs::read_dir(dir)?
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| !self.is_path_ignored(p))
+            .collect();
+        
+        entries.sort();
+
+        for path in entries {
+            if let Some(rel_path) = path.strip_prefix(base_path).ok() {
+                let normalized_path = normalize_path(&rel_path.to_string_lossy());
+                
+                if path.is_file() {
+                    if Self::is_binary_file(&path) {
+                        if self.ignore_config.include_binary_files {
+                            output.push_str(&format!("<file name=\"{}\">\n</file>\n", normalized_path));
+                            file_count += 1;
+                        }
+                    } else {
+                        output.push_str(&format!("<file name=\"{}\">\n", normalized_path));
+                        if let Ok(content) = fs::read_to_string(&path) {
+                            output.push_str(&content);
+                            if !content.ends_with('\n') {
+                                output.push('\n');
+                            }
+                        }
+                        output.push_str("</file>\n");
+                        file_count += 1;
+                    }
+                } else if path.is_dir() {
+                    output.push_str(&format!("<folder name=\"{}\">\n", normalized_path));
+                    if let Ok((files, folders)) = self.process_directory(&path, output, base_path) {
+                        file_count += files;
+                        folder_count += folders;
+                    }
+                    output.push_str("</folder>\n");
+                    folder_count += 1;
+                }
+            }
+        }
+        Ok((file_count, folder_count))
+    }
+
+    fn update_folder_selection(&mut self, path: &PathBuf, selected: bool) {
+        if path.is_dir() {
+            // Update the folder itself
+            if selected {
+                self.selected_items.insert(path.clone());
+            } else {
+                self.selected_items.remove(path);
+            }
+
+            // Update all children
+            if let Ok(entries) = fs::read_dir(path) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let child_path = entry.path();
+                    if child_path.is_dir() {
+                        self.update_folder_selection(&child_path, selected);
+                    } else {
+                        if selected {
+                            self.selected_items.insert(child_path);
+                        } else {
+                            self.selected_items.remove(&child_path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn get_icon(path: &PathBuf) -> &'static str {
+        if path.is_dir() {
+            return ICONS.iter().find(|(k, _)| *k == "folder").map(|(_, v)| *v).unwrap_or("📁");
+        }
+        
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .and_then(|ext| ICONS.iter().find(|(k, _)| *k == ext))
+            .map(|(_, v)| *v)
+            .unwrap_or(ICONS.iter().find(|(k, _)| *k == "default").map(|(_, v)| *v).unwrap_or("📄"))
+    }
+
+    fn ui(&mut self, f: &mut Frame) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Min(0),
+                Constraint::Length(1),
+                Constraint::Length(1),
+            ])
+            .split(f.area());
+
+        let title = Block::default()
+            .title(format!(" aiformat v{} - {} ", VERSION, self.current_dir.display()))
+            .borders(Borders::ALL);
+        f.render_widget(title, chunks[0]);
+
+        let items: Vec<ListItem> = self.filtered_items
+            .iter()
+            .map(|path| {
+                let depth = path.strip_prefix(&self.current_dir)
+                    .map(|p| p.components().count())
+                    .unwrap_or(0)
+                    .saturating_sub(1);
+                
+                let indent = "  ".repeat(depth);
+                
+                let name = if path.ends_with("..") {
+                    "../".to_string()
+                } else {
+                    path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("???")
+                        .to_string()
+                };
+
+                let icon = Self::get_icon(path);
+                let prefix = if self.selected_items.contains(path) { "[X] " } else { "[ ] " };
+                let display_name = if path.is_dir() && !path.ends_with("..") {
+                    format!("{}{}{} {}/", indent, prefix, icon, name)
+                } else {
+                    format!("{}{}{} {}", indent, prefix, icon, name)
+                };
+                ListItem::new(display_name)
+            })
+            .collect();
+
+        let list = List::new(items)
+            .block(Block::default().borders(Borders::ALL))
+            .highlight_style(Style::default().bg(Color::Gray))
+            .highlight_symbol("> ");
+
+        f.render_stateful_widget(list, chunks[1], &mut self.list_state);
+
+        let status_text = format!(
+            " {} items ({} selected) - Space: select, Enter: open dir, c: copy, i: ignores [{}], g: gitignore [{}], b: binary [{}], /: search, q: quit ",
+            self.filtered_items.len(),
+            self.selected_items.len(),
+            if self.ignore_config.use_default_ignores { "x" } else { " " },
+            if self.ignore_config.use_gitignore { "x" } else { " " },
+            if self.ignore_config.include_binary_files { "x" } else { " " },
+        );
+
+        let status = Block::default()
+            .title(status_text)
+            .borders(Borders::ALL);
+        f.render_widget(status, chunks[2]);
+
+        // Search bar
+        if self.is_searching {
+            let search_text = format!("Search: {}", self.search_query);
+            let search_bar = Paragraph::new(search_text)
+                .block(Block::default().borders(Borders::ALL));
+            f.render_widget(search_bar, chunks[3]);
+        }
+
+        // Draw modal if exists and recent
+        if let Some(modal) = &self.modal {
+            if modal.timestamp.elapsed().as_secs() < 2 {
+                let area = centered_rect(45, 8, f.area());
+                
+                let lines: Vec<&str> = modal.message.lines().collect();
+                let max_length = lines.iter()
+                    .map(|line| line.len())
+                    .max()
+                    .unwrap_or(0);
+                
+                let total_space = area.width as usize - 2;
+                let padding = (total_space - max_length) / 2;
+                let pad = " ".repeat(padding);
+                
+                let padded_lines: Vec<Line> = std::iter::once("")
+                    .chain(lines.into_iter())
+                    .map(|line| {
+                        if line.is_empty() {
+                            Line::from(line.to_string())
+                        } else {
+                            Line::from(format!("{}{}", pad, line))
+                        }
+                    })
+                    .collect();
+                
+                let text = Paragraph::new(padded_lines)
+                    .block(Block::default()
+                        .borders(Borders::ALL)
+                        .title(" Copied to clipboard: "))
+                    .alignment(Alignment::Left);
+
+                f.render_widget(Clear, area);
+                f.render_widget(text, area);
+            }
+        }
+    }
+
+    fn toggle_default_ignores(&mut self) -> io::Result<()> {
+        self.ignore_config.use_default_ignores = !self.ignore_config.use_default_ignores;
+        self.load_items()
+    }
+
+    fn toggle_gitignore(&mut self) -> io::Result<()> {
+        self.ignore_config.use_gitignore = !self.ignore_config.use_gitignore;
+        self.load_items()
+    }
+
+    fn toggle_binary_files(&mut self) -> io::Result<()> {
+        self.ignore_config.include_binary_files = !self.ignore_config.include_binary_files;
+        self.load_items()
+    }
+
+    fn is_binary_file(path: &PathBuf) -> bool {
+        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            let binary_extensions = [
+                // Git specific
+                "idx", "pack", "rev", "index",
+                // Images
+                "png", "jpg", "jpeg", "gif", "bmp", "tiff", "webp", "ico", "svg",
+                // Audio
+                "mp3", "wav", "ogg", "flac", "m4a", "aac", "wma",
+                // Video
+                "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm",
+                // Archives
+                "zip", "rar", "7z", "tar", "gz", "iso",
+                // Executables
+                "exe", "dll", "so", "dylib",
+                // Other binary formats
+                "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+                "class", "pyc", "pyd", "pyo",
+            ];
+            return binary_extensions.contains(&ext.to_lowercase().as_str());
+        }
+        
+        // Also check for files without extensions that are known to be binary
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            let binary_files = ["index"];  // Git index file
+            return binary_files.contains(&name);
+        }
+        
+        false
+    }
+
+    fn is_path_ignored(&self, path: &PathBuf) -> bool {
+        if !self.ignore_config.use_default_ignores && !self.ignore_config.use_gitignore {
+            return false;
+        }
+
+        // Check default ignores
+        if self.ignore_config.use_default_ignores {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if DEFAULT_IGNORED_DIRS.contains(&name) {
+                    return true;
+                }
+            }
+        }
+
+        // Check .gitignore if enabled
+        if self.ignore_config.use_gitignore {
+            let mut builder = GitignoreBuilder::new(&self.current_dir);
+            
+            // Try to load .gitignore from current and parent directories
+            let mut dir = self.current_dir.clone();
+            while let Some(parent) = dir.parent() {
+                let gitignore = dir.join(".gitignore");
+                if gitignore.exists() {
+                    match builder.add(gitignore) {
+                        None => (),  // Successfully added
+                        Some(_) => break,  // Error occurred, stop trying
+                    }
+                }
+                dir = parent.to_path_buf();
+            }
+
+            if let Ok(gitignore) = builder.build() {
+                let is_dir = path.is_dir();
+                match gitignore.matched_path_or_any_parents(path, is_dir) {
+                    Match::Ignore(_) => return true,
+                    _ => (),
+                }
+            }
+        }
+
+        false
+    }
+
+    fn toggle_folder_expansion(&mut self) -> io::Result<()> {
+        if let Some(selected) = self.list_state.selected() {
+            let path = &self.items[selected];
+            if path.is_dir() && !path.ends_with("..") {
+                if self.expanded_folders.contains(path) {
+                    self.expanded_folders.remove(path);
+                } else {
+                    self.expanded_folders.insert(path.clone());
+                }
+                self.load_items()?;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn normalize_path(path: &str) -> String {
+    path.replace('\\', "/")
+}
+
+fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
+    // width and height are now in characters/lines instead of percentages
+    
+    // Ensure the requested size doesn't exceed the terminal
+    let popup_width = width.min(r.width);
+    let popup_height = height.min(r.height);
+
+    // Calculate margins to center the rect
+    let x_margin = (r.width - popup_width) / 2;
+    let y_margin = (r.height - popup_height) / 2;
+
+    Rect {
+        x: r.x + x_margin,
+        y: r.y + y_margin,
+        width: popup_width,
+        height: popup_height,
+    }
+}
+
+// Add this helper function for human-readable byte sizes
+fn human_readable_size(size: usize) -> String {
+    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
+    let mut size = size as f64;
+    let mut unit_index = 0;
+
+    while size >= 1024.0 && unit_index < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit_index += 1;
+    }
+
+    if unit_index == 0 {
+        format!("{} {}", size as usize, UNITS[unit_index])
+    } else {
+        format!("{:.2} {}", size, UNITS[unit_index])
+    }
+}
+
+// Add this function to handle cross-platform clipboard operations
+fn set_clipboard_contents(contents: &str) -> io::Result<()> {
+    match OS {
+        "windows" => {
+            if let Ok(mut ctx) = ClipboardContext::new() {
+                ctx.set_contents(contents.to_owned())
+                    .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to set clipboard contents"))?;
+            }
+            Ok(())
+        }
+        _ => {
+            // First try PowerShell clip.exe (WSL2 -> Windows clipboard)
+            let clip_result = Command::new("clip.exe")
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+                .and_then(|mut child| {
+                    use std::io::Write;
+                    if let Some(mut stdin) = child.stdin.take() {
+                        stdin.write_all(contents.as_bytes())?;
+                    }
+                    child.wait().map(|_| ())
+                });
+
+            if clip_result.is_ok() {
+                // Give clip.exe time to process
+                thread::sleep(Duration::from_millis(100));
+                return Ok(());
+            }
+
+            // Try wl-copy (Wayland)
+            let wl_result = Command::new("wl-copy")
+                .arg(contents)
+                .status();
+
+            match wl_result {
+                Ok(_) => Ok(()),
+                Err(_) => {
+                    // Fall back to xclip (X11)
+                    Command::new("xclip")
+                        .arg("-selection")
+                        .arg("clipboard")
+                        .arg("-i")
+                        .spawn()
+                        .and_then(|mut child| {
+                            use std::io::Write;
+                            if let Some(mut stdin) = child.stdin.take() {
+                                stdin.write_all(contents.as_bytes())?;
+                            }
+                            child.wait().map(|_| ())
+                        })
+                }
+            }
+        }
+    }
+}
+
+// Add this function to get clipboard contents
+fn get_clipboard_contents() -> io::Result<String> {
+    match OS {
+        "windows" => {
+            if let Ok(mut ctx) = ClipboardContext::new() {
+                ctx.get_contents()
+                    .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to get clipboard contents"))
+            } else {
+                Ok(String::new())
+            }
+        }
+        _ => {
+            // First try PowerShell Get-Clipboard (WSL2 -> Windows clipboard)
+            let powershell_result = Command::new("powershell.exe")
+                .args(["-Command", "Get-Clipboard"])
+                .output();
+
+            if let Ok(output) = powershell_result {
+                if output.status.success() {
+                    return String::from_utf8(output.stdout)
+                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"));
+                }
+            }
+
+            // Try wl-paste (Wayland)
+            let wl_output = Command::new("wl-paste")
+                .output();
+
+            match wl_output {
+                Ok(output) if output.status.success() => {
+                    String::from_utf8(output.stdout)
+                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"))
+                }
+                _ => {
+                    // Fall back to xclip (X11)
+                    let output = Command::new("xclip")
+                        .arg("-selection")
+                        .arg("clipboard")
+                        .arg("-o")
+                        .output()?;
+                    String::from_utf8(output.stdout)
+                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"))
+                }
+            }
+        }
+    }
+}
+
+fn main() -> io::Result<()> {
+    let mut app = App::new();
+    enable_raw_mode()?;
+    let result = app.run();
+    disable_raw_mode()?;
+    result
+}
