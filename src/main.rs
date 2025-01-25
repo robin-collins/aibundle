@@ -21,7 +21,7 @@ use std::env::consts::OS;
 use std::thread;
 use std::time::Duration;
 
-const VERSION: &str = "0.1.0";
+const VERSION: &str = "0.4.0"; // This should always be the same as the version in the Cargo.toml file
 const ICONS: &[(&str, &str)] = &[
 // Folders
 ("folder", "📁"),
@@ -560,7 +560,7 @@ impl App {
         }
 
         match c {
-            '\n' | '\r' | '\x1b' => { // Enter or Escape
+            '/' => { // Use '/' to finish search
                 self.is_searching = false;
             }
             '\x08' | '\x7f' => { // Backspace
@@ -578,9 +578,15 @@ impl App {
     fn toggle_search(&mut self) {
         self.is_searching = !self.is_searching;
         if !self.is_searching {
-            self.search_query.clear();
+            // Don't clear search when toggling off - keep the filter
             self.update_search();
         }
+    }
+
+    fn clear_search(&mut self) {
+        self.is_searching = false;
+        self.search_query.clear();
+        self.update_search();
     }
 
     fn run(&mut self) -> io::Result<()> {
@@ -594,40 +600,37 @@ impl App {
         while !self.quit {
             terminal.draw(|f| self.ui(f))?;
 
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    if self.is_searching {
-                        match key.code {
-                            KeyCode::Char(c) => self.handle_search_input(c),
-                            KeyCode::Backspace => {
-                                self.search_query.pop();
-                                self.update_search();
+            if event::poll(Duration::from_millis(50))? {
+                if let Event::Key(key) = event::read()? {
+                    if key.kind == KeyEventKind::Press {
+                        if self.is_searching {
+                            match key.code {
+                                KeyCode::Esc => self.clear_search(),
+                                KeyCode::Char(c) => self.handle_search_input(c),
+                                _ => {}
                             }
-                            KeyCode::Esc => self.toggle_search(),
-                            KeyCode::Enter => self.toggle_search(),
-                            _ => {}
-                        }
-                    } else {
-                        match key.code {
-                            KeyCode::Char('q') => {
-                                if !self.selected_items.is_empty() {
-                                    self.copy_selected_to_clipboard()?;
+                        } else {
+                            match key.code {
+                                KeyCode::Char('q') => {
+                                    if !self.selected_items.is_empty() {
+                                        self.copy_selected_to_clipboard()?;
+                                    }
+                                    self.quit = true;
                                 }
-                                self.quit = true;
+                                KeyCode::Char(' ') => self.toggle_selection(),
+                                KeyCode::Char('c') => self.copy_selected_to_clipboard()?,
+                                KeyCode::Char('i') => self.toggle_default_ignores()?,
+                                KeyCode::Char('g') => self.toggle_gitignore()?,
+                                KeyCode::Char('b') => self.toggle_binary_files()?,
+                                KeyCode::Char('/') => self.toggle_search(),
+                                KeyCode::Tab => self.toggle_folder_expansion()?,
+                                KeyCode::Up => self.move_selection(-1),
+                                KeyCode::Down => self.move_selection(1),
+                                KeyCode::PageUp => self.move_selection(-10),
+                                KeyCode::PageDown => self.move_selection(10),
+                                KeyCode::Enter => self.handle_enter()?,
+                                _ => {}
                             }
-                            KeyCode::Char(' ') => self.toggle_selection(),
-                            KeyCode::Char('c') => self.copy_selected_to_clipboard()?,
-                            KeyCode::Char('i') => self.toggle_default_ignores()?,
-                            KeyCode::Char('g') => self.toggle_gitignore()?,
-                            KeyCode::Char('b') => self.toggle_binary_files()?,
-                            KeyCode::Char('/') => self.toggle_search(),
-                            KeyCode::Tab => self.toggle_folder_expansion()?,
-                            KeyCode::Up => self.move_selection(-1),
-                            KeyCode::Down => self.move_selection(1),
-                            KeyCode::PageUp => self.move_selection(-10),
-                            KeyCode::PageDown => self.move_selection(10),
-                            KeyCode::Enter => self.handle_enter()?,
-                            _ => {}
                         }
                     }
                 }
@@ -894,10 +897,48 @@ impl App {
             ])
             .split(f.area());
 
+        // Create a layout for the title block to split it into header and search areas
+        let title_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1),  // For the header
+                Constraint::Length(1),  // For the search
+            ])
+            .split(chunks[0]);
+
+        // Render the header
         let title = Block::default()
             .title(format!(" aiformat v{} - {} ", VERSION, self.current_dir.display()))
             .borders(Borders::ALL);
-        f.render_widget(title, chunks[0]);
+        f.render_widget(title.clone(), chunks[0]);
+
+        // Render the search area inside the title block if searching
+        if self.is_searching {
+            let cursor = if (std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() / 500) % 2 == 0
+            {
+                "█"
+            } else {
+                " "
+            };
+            
+            let search_text = format!("Search: {}{} (Press / to finish, ESC to cancel)", self.search_query, cursor);
+            let search_widget = Paragraph::new(search_text)
+                .alignment(Alignment::Left);
+            
+            // Render the search text inside the title block, with a 2-character margin
+            let inner_area = title_chunks[1];
+            let search_area = Rect {
+                x: inner_area.x + 2,
+                y: inner_area.y,
+                width: inner_area.width - 4,
+                height: inner_area.height,
+            };
+            
+            f.render_widget(search_widget, search_area);
+        }
 
         let items: Vec<ListItem> = self.filtered_items
             .iter()
@@ -949,14 +990,6 @@ impl App {
             .title(status_text)
             .borders(Borders::ALL);
         f.render_widget(status, chunks[2]);
-
-        // Search bar
-        if self.is_searching {
-            let search_text = format!("Search: {}", self.search_query);
-            let search_bar = Paragraph::new(search_text)
-                .block(Block::default().borders(Borders::ALL));
-            f.render_widget(search_bar, chunks[3]);
-        }
 
         // Draw modal if exists and recent
         if let Some(modal) = &self.modal {
