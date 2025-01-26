@@ -21,7 +21,7 @@ use std::env::consts::OS;
 use std::thread;
 use std::time::Duration;
 
-const VERSION: &str = "0.4.0"; // This should always be the same as the version in the Cargo.toml file
+const VERSION: &str = "0.4.5"; // This should always be the same as the version in the Cargo.toml file
 
 #[derive(Clone, Copy, PartialEq)]
 enum OutputFormat {
@@ -387,6 +387,136 @@ struct CopyStats {
 struct Modal {
     message: String,
     timestamp: std::time::Instant,
+    width: u16,
+    height: u16,
+    page: usize,  // Current page number
+}
+
+impl Modal {
+    fn new(message: String, width: u16, height: u16) -> Self {
+        Self {
+            message,
+            timestamp: std::time::Instant::now(),
+            width,
+            height,
+            page: 0,
+        }
+    }
+
+    fn copy_stats(file_count: usize, folder_count: usize, line_count: usize, byte_size: usize, format: &OutputFormat) -> Self {
+        Self::new(
+            format!(
+                "Files copied: {}\n\
+                 Folders copied: {}\n\
+                 Total lines: {}\n\
+                 Total size: {}\n\
+                 Format: {}\n",
+                file_count,
+                folder_count,
+                line_count,
+                human_readable_size(byte_size),
+                match format {
+                    OutputFormat::Xml => "XML",
+                    OutputFormat::Markdown => "Markdown",
+                    OutputFormat::Json => "JSON",
+                }
+            ),
+            45,
+            8,
+        )
+    }
+
+    fn help() -> Self {
+        let help_text = format!(
+            "Keyboard Shortcuts\n\
+             ═════════════════\n\
+             \n\
+             Navigation\n\
+             ──────────\n\
+             ↑/↓        - Move selection\n\
+             PgUp/PgDn  - Move by 10 items\n\
+             Enter      - Open directory\n\
+             Tab        - Expand/collapse folder\n\
+             \n\
+             Selection\n\
+             ─────────\n\
+             Space      - Select/deselect item\n\
+             *          - Select/deselect all\n\
+             \n\
+             Actions\n\
+             ───────\n\
+             c          - Copy to clipboard\n\
+             f          - Toggle format (XML/MD/JSON)\n\
+             n          - Toggle line numbers\n\
+             /          - Search (ESC to cancel)\n\
+             \n\
+             Filters\n\
+             ───────\n\
+             i          - Toggle default ignores\n\
+             g          - Toggle .gitignore\n\
+             b          - Toggle binary files\n\
+             \n\
+             Other\n\
+             ─────\n\
+             h          - Show this help\n\
+             q          - Quit (copies if items selected)\n\
+             \n\
+             Help Navigation\n\
+             ──────────────\n\
+             PgUp/PgDn  - Scroll help pages\n\
+             Any key    - Close help"
+        );
+        Self {
+            message: help_text,
+            timestamp: std::time::Instant::now(),
+            width: 60,
+            height: 30,
+            page: 0,
+        }
+    }
+
+    fn get_visible_content(&self, available_height: u16) -> (String, bool) {
+        let content_height = (available_height - 4) as usize; // Account for borders and title
+        let lines: Vec<&str> = self.message.lines().collect();
+        let total_lines = lines.len();
+        
+        // Calculate total pages based on actual content vs available height
+        let total_pages = (total_lines + content_height - 1) / content_height;
+        let has_more_pages = total_lines > content_height;
+        
+        // Get lines for current page
+        let start = self.page * content_height;
+        let end = (start + content_height).min(total_lines);
+        
+        let visible_content = lines[start..end].join("\n");
+        
+        // Add page indicator if there are multiple pages
+        let content = if has_more_pages {
+            format!("{}\n\nPage {} of {}", visible_content, self.page + 1, total_pages)
+        } else {
+            visible_content
+        };
+        
+        (content, has_more_pages)
+    }
+
+    fn next_page(&mut self, available_height: u16) {
+        let content_height = (available_height - 4) as usize;
+        let total_lines = self.message.lines().count();
+        let total_pages = (total_lines + content_height - 1) / content_height;
+        if total_pages > 1 {  // Only change page if we have multiple pages
+            self.page = (self.page + 1) % total_pages;
+        }
+    }
+
+    fn prev_page(&mut self, available_height: u16) {
+        let content_height = (available_height - 4) as usize;
+        let total_lines = self.message.lines().count();
+        let total_pages = (total_lines + content_height - 1) / content_height;
+        if total_pages > 1 {  // Only change page if we have multiple pages
+            self.page = (self.page + total_pages - 1) % total_pages;
+        }
+    }
 }
 
 struct App {
@@ -621,6 +751,25 @@ impl App {
             if event::poll(Duration::from_millis(50))? {
                 if let Event::Key(key) = event::read()? {
                     if key.kind == KeyEventKind::Press {
+                        if let Some(modal) = &mut self.modal {
+                            if modal.height > 10 { // If help modal is showing
+                                match key.code {
+                                    KeyCode::PageUp => {
+                                        modal.prev_page(terminal.size()?.height);
+                                        continue;
+                                    }
+                                    KeyCode::PageDown => {
+                                        modal.next_page(terminal.size()?.height);
+                                        continue;
+                                    }
+                                    _ => {
+                                        self.modal = None;
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                        
                         if self.is_searching {
                             match key.code {
                                 KeyCode::Esc => self.clear_search(),
@@ -654,6 +803,7 @@ impl App {
                                 KeyCode::PageUp => self.move_selection(-10),
                                 KeyCode::PageDown => self.move_selection(10),
                                 KeyCode::Enter => self.handle_enter()?,
+                                KeyCode::Char('h') => self.show_help(),
                                 _ => {}
                             }
                         }
@@ -894,25 +1044,13 @@ impl App {
                 let line_count = contents.lines().count();
                 let byte_size = contents.len();
                 
-                self.modal = Some(Modal {
-                    message: format!(
-                        "Files copied: {}\n\
-                         Folders copied: {}\n\
-                         Total lines: {}\n\
-                         Total size: {}\n\
-                         Format: {}\n",
-                        file_count,
-                        folder_count,
-                        line_count,
-                        human_readable_size(byte_size),
-                        match self.output_format {
-                            OutputFormat::Xml => "XML",
-                            OutputFormat::Markdown => "Markdown",
-                            OutputFormat::Json => "JSON",
-                        }
-                    ),
-                    timestamp: std::time::Instant::now(),
-                });
+                self.modal = Some(Modal::copy_stats(
+                    file_count,
+                    folder_count,
+                    line_count,
+                    byte_size,
+                    &self.output_format
+                ));
             }
         }
 
@@ -1116,7 +1254,7 @@ impl App {
 
         // Render the header
         let title = Block::default()
-            .title(format!(" aiformat v{} - {} ", VERSION, self.current_dir.display()))
+            .title(format!(" AIBundle v{} - {} ", VERSION, self.current_dir.display()))
             .borders(Borders::ALL);
         f.render_widget(title.clone(), chunks[0]);
 
@@ -1207,10 +1345,14 @@ impl App {
 
         // Draw modal if exists and recent
         if let Some(modal) = &self.modal {
-            if modal.timestamp.elapsed().as_secs() < 2 {
-                let area = centered_rect(45, 8, f.area());
+            let is_help = modal.height > 10; // Help modal is taller than copy modal
+            let timeout = if is_help { 30 } else { 2 }; // Help modal stays longer
+            
+            if modal.timestamp.elapsed().as_secs() < timeout {
+                let area = centered_rect(modal.width, modal.height, f.area());
                 
-                let lines: Vec<&str> = modal.message.lines().collect();
+                let (content, has_more_pages) = modal.get_visible_content(area.height);
+                let lines: Vec<&str> = content.lines().collect();
                 let max_length = lines.iter()
                     .map(|line| line.len())
                     .max()
@@ -1226,19 +1368,31 @@ impl App {
                         if line.is_empty() {
                             Line::from(line.to_string())
                         } else {
-                            Line::from(format!("{}{}", pad, line))
+                            Line::from(format!("{}{}", if is_help { "" } else { &pad }, line))
                         }
                     })
                     .collect();
                 
+                let title = if is_help {
+                    if has_more_pages {
+                        " Help (PgUp/PgDn to navigate, any other key to close) "
+                    } else {
+                        " Help (press any key to close) "
+                    }
+                } else {
+                    " Copied to clipboard: "
+                };
+
                 let text = Paragraph::new(padded_lines)
                     .block(Block::default()
                         .borders(Borders::ALL)
-                        .title(" Copied to clipboard: "))
-                    .alignment(Alignment::Left);
+                        .title(title))
+                    .alignment(if is_help { Alignment::Left } else { Alignment::Center });
 
                 f.render_widget(Clear, area);
                 f.render_widget(text, area);
+            } else {
+                self.modal = None;
             }
         }
     }
@@ -1380,6 +1534,10 @@ impl App {
                 }
             }
         }
+    }
+
+    fn show_help(&mut self) {
+        self.modal = Some(Modal::help());
     }
 }
 

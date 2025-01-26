@@ -1,11 +1,17 @@
 [package]
-name = "aiformat"
-version = "0.4.0"
+name = "aibundle"
+version = "0.4.5"
 edition = "2021"
+description = "A TUI tool for bundling files and directories into AI/LLM-friendly formats (AIBundle format)"
+authors = ["AIBundle Team"]
+license = "MIT"
+repository = "https://github.com/robin-collins/aibundle"
+keywords = ["ai", "llm", "bundle", "tui", "development"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 crossterm = "0.28.1"
 ratatui = "0.29.0"
 walkdir = "2.4"
-cli-clipboard = "0.4"
-ignore = "0.4" 
+cli-clipboard = "0.4.0"
+ignore = "0.4.20" 
