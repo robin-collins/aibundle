@@ -4,10 +4,9 @@
 /// This version modifies `count_selection_items` so that it bails out early
 /// once the total count exceeds the SELECTION_LIMIT, potentially saving time
 /// and resources in large directories. The rest of the file remains the same
-/// as your previous version, except for the highlighted changes in the
-/// `count_selection_items` function.
+/// as your previous version.
 ///
-/// Version incremented to 0.5.0 to reflect this update.
+/// Version incremented to 0.5.6 to reflect this update.
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -31,11 +30,89 @@ use cli_clipboard::{ClipboardContext, ClipboardProvider};
 use ignore::{gitignore::GitignoreBuilder, Match};
 use std::process::Command;
 use std::env::consts::OS;
-use std::thread;
 use std::time::Duration;
+use clap::Parser;
+use serde::{Serialize, Deserialize};
 
-const VERSION: &str = "0.5.0";
+const VERSION: &str = "0.5.6";
 const SELECTION_LIMIT: usize = 400;
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+struct AppConfig {
+    default_format: Option<String>,
+    default_gitignore: Option<bool>,
+    default_ignore: Option<Vec<String>>,
+    default_line_numbers: Option<bool>,
+    default_recursive: Option<bool>,
+}
+
+/// Command-line options parsed via clap.
+#[derive(Parser, Debug)]
+#[command(name = "aibundle")]
+#[command(version = VERSION)]
+#[command(about = "AIBUNDLE: A CLI & TUI file aggregator and formatter")]
+#[command(long_about = "A powerful tool for aggregating and formatting files with both CLI and TUI modes.
+
+EXAMPLES:
+    # TUI mode (default)
+    aibundle
+    # CLI: XML format to clipboard
+    aibundle --cli --files \"*.rs\"
+    # CLI: Markdown to file
+    aibundle --cli --files \"*.rs *.toml\" --format markdown --output-file out.md
+    # CLI: JSON to console
+    aibundle --cli --files \"*test*\" --format json --output-console
+    # CLI: Non-recursive
+    aibundle --cli --files \"*.rs\" --recursive false")]
+struct CliOptions {
+    /// Use CLI mode without UI
+    #[arg(long, default_value = "false", action=clap::ArgAction::SetTrue)]
+    cli: bool,
+
+    /// Write output to file
+    #[arg(long, help = "Write output to specified file")]
+    output_file: Option<String>,
+
+    /// Write output to console
+    #[arg(long, default_value = "false", action=clap::ArgAction::SetTrue)]
+    output_console: bool,
+
+    /// File pattern (e.g., "*.rs" or "*.{rs,toml}")
+    #[arg(long)]
+    files: Option<String>,
+
+    /// Search pattern (e.g., "test" to match files containing 'test')
+    #[arg(long)]
+    search: Option<String>,
+
+    /// Output format [possible values: markdown, xml, json]
+    #[arg(long, default_value = "xml", value_parser = ["markdown", "xml", "json"])]
+    format: String,
+
+    /// Source directory [default: .]
+    #[arg(long, default_value = ".")]
+    source_dir: String,
+
+    /// Include subfolders [default: true]
+    #[arg(long, default_value = "true", action=clap::ArgAction::Set)]
+    recursive: bool,
+
+    /// Show line numbers [default: false]
+    #[arg(long, default_value = "false", action=clap::ArgAction::Set)]
+    line_numbers: bool,
+
+    /// Use .gitignore [default: true]
+    #[arg(long, default_value = "true", action=clap::ArgAction::Set)]
+    gitignore: bool,
+
+    /// Ignore patterns (comma-separated)
+    #[arg(long, use_value_delimiter = true, default_value = "default")]
+    ignore: Vec<String>,
+
+    /// Save settings to .aibundle.config
+    #[arg(long, default_value = "false", action=clap::ArgAction::SetTrue)]
+    save_config: bool,
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum OutputFormat {
@@ -55,316 +132,309 @@ impl OutputFormat {
 }
 
 const ICONS: &[(&str, &str)] = &[
-// Folders
-("folder", "📁"),
-("folder_open", "📂"),
-("archive_folder", "🗄️"), // For archive or special folders
+    // Folders
+    ("folder", "📁"),
+    ("folder_open", "📂"),
+    ("archive_folder", "🗄️"), // For archive or special folders
 
-// Development
-("rs", "🦀"), // Rust
-("ts", "💠"), // TypeScript
-("js", "📜"), // JavaScript
-("py", "🐍"), // Python
-("java", "☕"), // Java
-("class", "☕"), // Java Class Files
-("cpp", "⚡"), // C++
-("c", "🔌"), // C
-("h", "📐"), // C Header
-("hpp", "📐"), // C++ Header
-("go", "🐹"), // Go
-("rb", "💎"), // Ruby
-("php", "🐘"), // PHP
-("scala", "💫"), // Scala
-("swift", "🕊️"), // Swift
-("kotlin", "🎯"), // Kotlin
-("dart", "🦋"), // Dart
-("lua", "🌙"), // Lua
-("sh", "🐚"), // Shell Script
-("pl", "🔮"), // Perl
-("r", "📊"), // R
-("erl", "🐘"), // Erlang
-("hs", "☯️"), // Haskell
-("sql", "🗃️"), // SQL
-("m", "🔧"), // Objective-C / MATLAB (context-dependent)
-("adb", "📱"), // Android Debug Bridge Scripts
-("gradle", "🛠️"), // Gradle Build Scripts
-("pom", "📦"), // Maven POM Files
-("sbt", "📚"), // Scala Build Tool
-("makefile", "🛠️"), // Makefile
-("Dockerfile", "🐳"), // Dockerfile
-("Vagrantfile", "🔧"), // Vagrant Configuration
-("gulpfile", "🛠️"), // Gulp Build Scripts
-("webpack.config", "🔗"), // Webpack Configuration
+    // Development
+    ("rs", "🦀"), // Rust
+    ("ts", "💠"), // TypeScript
+    ("js", "📜"), // JavaScript
+    ("py", "🐍"), // Python
+    ("java", "☕"), // Java
+    ("class", "☕"), // Java Class Files
+    ("cpp", "⚡"), // C++
+    ("c", "🔌"), // C
+    ("h", "📐"), // C Header
+    ("hpp", "📐"), // C++ Header
+    ("go", "🐹"), // Go
+    ("rb", "💎"), // Ruby
+    ("php", "🐘"), // PHP
+    ("scala", "💫"), // Scala
+    ("swift", "🕊️"), // Swift
+    ("kotlin", "🎯"), // Kotlin
+    ("dart", "🦋"), // Dart
+    ("lua", "🌙"), // Lua
+    ("sh", "🐚"), // Shell Script
+    ("pl", "🔮"), // Perl
+    ("r", "📊"), // R
+    ("erl", "🐘"), // Erlang
+    ("hs", "☯️"), // Haskell
+    ("sql", "🗃️"), // SQL
+    ("m", "🔧"), // Objective-C / MATLAB (context-dependent)
+    ("adb", "📱"), // Android Debug Bridge Scripts
+    ("gradle", "🛠️"), // Gradle Build Scripts
+    ("pom", "📦"), // Maven POM Files
+    ("sbt", "📚"), // Scala Build Tool
+    ("makefile", "🛠️"), // Makefile
+    ("Dockerfile", "🐳"), // Dockerfile
+    ("Vagrantfile", "🔧"), // Vagrant Configuration
+    ("gulpfile", "🛠️"), // Gulp Build Scripts
+    ("webpack.config", "🔗"), // Webpack Configuration
 
-// Web
-("html", "🌐"),
-("htm", "🌐"),
-("css", "🎨"),
-("scss", "🎨"),
-("sass", "🎨"),
-("less", "🎨"),
-("jsx", "⚛️"),
-("tsx", "⚛️"),
-("vue", "💚"),
-("svelte", "🔥"),
-("twig", "🧵"), // Twig Templates
-("asp", "🖥️"),
-("aspx", "🖥️"),
-("jsp", "🖥️"),
-("erb", "🌸"), // Embedded Ruby
-("handlebars", "🪡"), // Handlebars Templates
-("ejs", "🖥️"), // Embedded JavaScript
-("phphtml", "🐘"), // PHP Embedded in HTML
-("jade", "🌿"), // Jade/Pug Templates
+    // Web
+    ("html", "🌐"),
+    ("htm", "🌐"),
+    ("css", "🎨"),
+    ("scss", "🎨"),
+    ("sass", "🎨"),
+    ("less", "🎨"),
+    ("jsx", "⚛️"),
+    ("tsx", "⚛️"),
+    ("vue", "💚"),
+    ("svelte", "🔥"),
+    ("twig", "🧵"), // Twig Templates
+    ("asp", "🖥️"),
+    ("aspx", "🖥️"),
+    ("jsp", "🖥️"),
+    ("erb", "🌸"), // Embedded Ruby
+    ("handlebars", "🪡"), // Handlebars Templates
+    ("ejs", "🖥️"), // Embedded JavaScript
+    ("phphtml", "🐘"), // PHP Embedded in HTML
+    ("jade", "🌿"), // Jade/Pug Templates
 
-// Data
-("json", "📋"),
-("yaml", "⚙️"),
-("yml", "⚙️"),
-("xml", "📰"),
-("csv", "📊"),
-("sql", "🗃️"),
-("db", "🗃️"),
-("sqlite", "🗃️"),
-("dbml", "🗂️"), // Database Markup Language
-("geojson", "🗺️"),
-("parquet", "📦"),
-("pickle", "🥒"),
-("protobuf", "🔗"), // Protocol Buffers
-("avsc", "🗃️"), // Avro Schema
-("ndjson", "📄"), // Newline Delimited JSON
-("hdf5", "📁"), // Hierarchical Data Format
+    // Data
+    ("json", "📋"),
+    ("yaml", "⚙️"),
+    ("yml", "⚙️"),
+    ("xml", "📰"),
+    ("csv", "📊"),
+    ("db", "🗃️"),
+    ("sqlite", "🗃️"),
+    ("dbml", "🗂️"), // Database Markup Language
+    ("geojson", "🗺️"),
+    ("parquet", "📦"),
+    ("pickle", "🥒"),
+    ("protobuf", "🔗"), // Protocol Buffers
+    ("avsc", "🗃️"), // Avro Schema
+    ("ndjson", "📄"), // Newline Delimited JSON
+    ("hdf5", "📁"), // Hierarchical Data Format
 
-// Config
-("toml", "⚙️"),
-("ini", "⚙️"),
-("conf", "⚙️"),
-("config", "⚙️"),
-("env", "🔒"),
-("dockerignore", "🐳"),
-("gitignore", "🔰"),
-("eslint", "🔍"),
-("prettierrc", "✨"),
-("babelrc", "🔄"),
-("tsconfig", "💠"),
-("webpack.config", "🔗"),
-("babel.config", "🔄"),
-("package.json", "📦"),
-("composer.json", "📦"),
-("requirements.txt", "📄"),
-("Pipfile", "📦"),
-("Cargo.toml", "🦀"),
-("Makefile", "🛠️"),
+    // Config
+    ("toml", "⚙️"),
+    ("ini", "⚙️"),
+    ("conf", "⚙️"),
+    ("config", "⚙️"),
+    ("env", "🔒"),
+    ("dockerignore", "🐳"),
+    ("gitignore", "🔰"),
+    ("eslint", "🔍"),
+    ("prettierrc", "✨"),
+    ("babelrc", "🔄"),
+    ("tsconfig", "💠"),
+    ("webpack.config", "🔗"),
+    ("babel.config", "🔄"),
+    ("package.json", "📦"),
+    ("composer.json", "📦"),
+    ("requirements.txt", "📄"),
+    ("Pipfile", "📦"),
+    ("Cargo.toml", "🦀"),
+    ("Makefile", "🛠️"),
 
-// Documents
-("md", "📝"),
-("txt", "📄"),
-("pdf", "📕"),
-("doc", "📘"),
-("docx", "📘"),
-("rtf", "📝"),
-("odt", "📝"),
-("tex", "📜"),
-("rst", "📑"),
-("asciidoc", "📖"),
-("mmd", "📜"), // MultiMarkdown
-("epub", "📚"),
-("djvu", "📖"),
+    // Documents
+    ("md", "📝"),
+    ("txt", "📄"),
+    ("pdf", "📕"),
+    ("doc", "📘"),
+    ("docx", "📘"),
+    ("rtf", "📝"),
+    ("odt", "📝"),
+    ("tex", "📜"),
+    ("rst", "📑"),
+    ("asciidoc", "📖"),
+    ("mmd", "📜"), // MultiMarkdown
+    ("epub", "📚"),
+    ("djvu", "📖"),
 
-// Spreadsheets
-("xls", "📗"),
-("xlsx", "📗"),
-("ods", "📗"),
-("csv", "📊"),
-("tsv", "📈"),
-("numbers", "📊"), // Apple Numbers
-("gsheet", "📊"), // Google Sheets
+    // Spreadsheets
+    ("xls", "📗"),
+    ("xlsx", "📗"),
+    ("ods", "📗"),
+    ("csv", "📊"),
+    ("tsv", "📈"),
+    ("numbers", "📊"), // Apple Numbers
+    ("gsheet", "📊"), // Google Sheets
 
-// Presentations
-("ppt", "📙"),
-("pptx", "📙"),
-("odp", "📙"),
-("key", "🔑"), // Apple Keynote
-("mdx", "📝"), // Markdown with JSX
-("sldx", "📊"), // Slide files
-("gslides", "📊"), // Google Slides
+    // Presentations
+    ("ppt", "📙"),
+    ("pptx", "📙"),
+    ("odp", "📙"),
+    ("key", "🔑"), // Apple Keynote
+    ("mdx", "📝"), // Markdown with JSX
+    ("sldx", "📊"), // Slide files
+    ("gslides", "📊"), // Google Slides
 
-// Images
-("png", "🖼️"),
-("jpg", "🖼️"),
-("jpeg", "🖼️"),
-("gif", "🎥"),
-("svg", "🎨"),
-("ico", "🎴"),
-("bmp", "🖼️"),
-("tiff", "🖼️"),
-("webp", "🖼️"),
-("heic", "📷"),
-("raw", "📸"),
-("psd", "🖌️"), // Photoshop
-("ai", "🖍️"), // Adobe Illustrator
-("indd", "📄"), // Adobe InDesign
-("xcf", "🎨"), // GIMP
-("eps", "📐"), // Encapsulated PostScript
-("drw", "🖊️"), // Generic Drawing
-("dxf", "📏"), // Drawing Exchange Format
+    // Images
+    ("png", "🖼️"),
+    ("jpg", "🖼️"),
+    ("jpeg", "🖼️"),
+    ("gif", "🎥"),
+    ("svg", "🎨"),
+    ("ico", "🎴"),
+    ("bmp", "🖼️"),
+    ("tiff", "🖼️"),
+    ("webp", "🖼️"),
+    ("heic", "📷"),
+    ("raw", "📸"),
+    ("psd", "🖌️"), // Photoshop
+    ("ai", "🖍️"), // Adobe Illustrator
+    ("indd", "📄"), // Adobe InDesign
+    ("xcf", "🎨"), // GIMP
+    ("eps", "📐"), // Encapsulated PostScript
+    ("drw", "🖊️"), // Generic Drawing
+    ("dxf", "📏"), // Drawing Exchange Format
 
-// Audio
-("mp3", "🎵"),
-("wav", "🎵"),
-("ogg", "🎵"),
-("flac", "🎼"),
-("m4a", "🎵"),
-("aac", "🎶"),
-("wma", "🎧"),
-("alac", "🎹"),
-("opus", "🎧"),
-("mid", "🎹"), // MIDI Files
-("midi", "🎹"),
-("aiff", "🎤"),
+    // Audio
+    ("mp3", "🎵"),
+    ("wav", "🎵"),
+    ("ogg", "🎵"),
+    ("flac", "🎼"),
+    ("m4a", "🎵"),
+    ("aac", "🎶"),
+    ("wma", "🎧"),
+    ("alac", "🎹"),
+    ("opus", "🎧"),
+    ("mid", "🎹"), // MIDI Files
+    ("midi", "🎹"),
+    ("aiff", "🎤"),
 
-// Video
-("mp4", "🎬"),
-("avi", "🎬"),
-("mkv", "🎬"),
-("mov", "🎬"),
-("wmv", "🎬"),
-("flv", "📹"),
-("webm", "🌐"),
-("m4v", "📺"),
-("3gp", "📱"),
-("mpeg", "📽️"),
-("mpg", "📽️"),
-("rmvb", "🗂️"), // RealMedia Variable Bitrate
-("vob", "📀"), // DVD Video Object
-("m2ts", "🎞️"),
+    // Video
+    ("mp4", "🎬"),
+    ("avi", "🎬"),
+    ("mkv", "🎬"),
+    ("mov", "🎬"),
+    ("wmv", "🎬"),
+    ("flv", "📹"),
+    ("webm", "🌐"),
+    ("m4v", "📺"),
+    ("3gp", "📱"),
+    ("mpeg", "📽️"),
+    ("mpg", "📽️"),
+    ("rmvb", "🗂️"), // RealMedia Variable Bitrate
+    ("vob", "📀"), // DVD Video Object
+    ("m2ts", "🎞️"),
 
-// Archives
-("zip", "📦"),
-("rar", "📦"),
-("7z", "📦"),
-("tar", "📦"),
-("gz", "📦"),
-("iso", "💿"),
-("bz2", "📦"),
-("xz", "📦"),
-("dmg", "🖥️"),
-("tgz", "📦"),
-("lzma", "📦"),
-("cab", "📦"),
-("arj", "📦"),
-("ace", "📦"),
+    // Archives
+    ("zip", "📦"),
+    ("rar", "📦"),
+    ("7z", "📦"),
+    ("tar", "📦"),
+    ("gz", "📦"),
+    ("iso", "💿"),
+    ("bz2", "📦"),
+    ("xz", "📦"),
+    ("dmg", "🖥️"),
+    ("tgz", "📦"),
+    ("lzma", "📦"),
+    ("cab", "📦"),
+    ("arj", "📦"),
+    ("ace", "📦"),
 
-// Git
-("git", "🔰"),
-("gitignore", "🔰"),
-("gitattributes", "🔰"),
-("gitmodules", "🔰"),
-("gitconfig", "🔧"),
-("gitlab-ci.yml", "🤖"), // GitLab CI Configuration
-("circleci", "🔄"), // CircleCI Config
-("travis.yml", "📈"), // Travis CI Config
+    // Git
+    ("git", "🔰"),
+    ("gitignore", "🔰"),
+    ("gitattributes", "🔰"),
+    ("gitmodules", "🔰"),
+    ("gitconfig", "🔧"),
+    ("gitlab-ci.yml", "🤖"), // GitLab CI Configuration
+    ("circleci", "🔄"), // CircleCI Config
+    ("travis.yml", "📈"), // Travis CI Config
 
-// Logs
-("log", "📋"),
-("trace", "🔍"),
-("out", "📤"),
-("err", "❌"),
-("debug", "🐞"),
-("access", "🔓"),
-("server", "🌐"),
-("audit", "🔒"),
+    // Logs
+    ("log", "📋"),
+    ("trace", "🔍"),
+    ("out", "📤"),
+    ("err", "❌"),
+    ("debug", "🐞"),
+    ("access", "🔓"),
+    ("server", "🌐"),
+    ("audit", "🔒"),
 
-// Shell
-("sh", "🐚"),
-("bash", "🐚"),
-("zsh", "🐚"),
-("fish", "🐟"),
-("ps1", "💻"),
-("bat", "🖥️"), // Old Windows DOS icon
-("cmd", "🖥️"), // Old Windows CMD icon
-("ksh", "🐚"),
-("csh", "🐚"),
-("tcsh", "🐚"),
+    // Shell
+    ("sh", "🐚"),
+    ("bash", "🐚"),
+    ("zsh", "🐚"),
+    ("fish", "🐟"),
+    ("ps1", "💻"),
+    ("bat", "🖥️"), // Old Windows DOS icon
+    ("cmd", "🖥️"), // Old Windows CMD icon
+    ("ksh", "🐚"),
+    ("csh", "🐚"),
+    ("tcsh", "🐚"),
 
-// Lock files
-("lock", "🔒"),
-("pem", "🔑"),
-("key", "🔑"),
-("crt", "🔒"),
-("p12", "🔐"), // PKCS#12 Certificate
-("pfx", "🔐"),
+    // Lock files
+    ("lock", "🔒"),
+    ("pem", "🔑"),
+    ("key", "🔑"),
+    ("crt", "🔒"),
+    ("p12", "🔐"), // PKCS#12 Certificate
+    ("pfx", "🔐"),
 
-// Executables
-("exe", "💻"),
-("bin", "📦"),
-("app", "📱"),
-("msi", "📥"),
-("apk", "📱"),
-("deb", "📦"),
-("rpm", "📦"),
-("run", "🔄"),
-("sh", "🐚"),
-("out", "📤"),
-("dll", "🗄️"), // Dynamic Link Library
-("so", "🗄️"), // Shared Object
-("dylib", "🗄️"), // macOS Dynamic Library
+    // Executables
+    ("exe", "💻"),
+    ("bin", "📦"),
+    ("app", "📱"),
+    ("msi", "📥"),
+    ("apk", "📱"),
+    ("deb", "📦"),
+    ("rpm", "📦"),
+    ("run", "🔄"),
+    ("sh", "🐚"),
+    ("out", "📤"),
+    ("dll", "🗄️"), // Dynamic Link Library
+    ("so", "🗄️"), // Shared Object
+    ("dylib", "🗄️"), // macOS Dynamic Library
 
-// Scripts
-("ps1", "💻"),
-("lua", "🌙"),
-("vbs", "💾"),
-("coffee", "☕"),
-("groovy", "🌿"),
-("rb", "💎"),
-("rake", "🔨"),
-("perl", "🔮"),
-("tcl", "🔧"),
-("awk", "✂️"),
-("sed", "📝"),
+    // Scripts
+    ("ps1", "💻"),
+    ("lua", "🌙"),
+    ("vbs", "💾"),
+    ("coffee", "☕"),
+    ("groovy", "🌿"),
+    ("rb", "💎"),
+    ("rake", "🔨"),
+    ("perl", "🔮"),
+    ("tcl", "🔧"),
+    ("awk", "✂️"),
+    ("sed", "📝"),
 
-// Fonts
-("ttf", "🔤"),
-("otf", "🔤"),
-("woff", "🔡"),
-("woff2", "🔡"),
-("eot", "🔡"),
-("sfnt", "🔤"),
-("fon", "🔠"),
-("pfm", "🔠"),
-("afm", "🔠"),
+    // Fonts
+    ("ttf", "🔤"),
+    ("otf", "🔤"),
+    ("woff", "🔡"),
+    ("woff2", "🔡"),
+    ("eot", "🔡"),
+    ("sfnt", "🔤"),
+    ("fon", "🔠"),
+    ("pfm", "🔠"),
+    ("afm", "🔠"),
 
-// Miscellaneous
-("ipynb", "📓"), // Jupyter Notebook
-("vuepress", "📚"),
-("env.example", "🔒"),
-("LICENSE", "📜"),
-("README", "📖"),
-("CHANGELOG", "🗒️"),
-("TODO", "📝"),
-("CONTRIBUTING", "🤝"),
-("CODE_OF_CONDUCT", "📜"),
-("SECURITY", "🛡️"),
-("Gulpfile", "🛠️"),
-("Gruntfile", "🛠️"),
-("LICENSE.md", "📜"),
-("README.md", "📖"),
-("Dockerfile", "🐳"),
-("Makefile", "🛠️"),
-("Procfile", "📄"), // Heroku Procfile
-("yarn.lock", "🔒"),
-("package-lock.json", "🔒"),
-("Pipfile.lock", "🔒"),
+    // Miscellaneous
+    ("ipynb", "📓"), // Jupyter Notebook
+    ("vuepress", "📚"),
+    ("env.example", "🔒"),
+    ("LICENSE", "📜"),
+    ("README", "📖"),
+    ("CHANGELOG", "🗒️"),
+    ("TODO", "📝"),
+    ("CONTRIBUTING", "🤝"),
+    ("CODE_OF_CONDUCT", "📜"),
+    ("SECURITY", "🛡️"),
+    ("Gulpfile", "🛠️"),
+    ("Gruntfile", "🛠️"),
+    ("LICENSE.md", "📜"),
+    ("README.md", "📖"),
+    ("Dockerfile", "🐳"),
+    ("Makefile", "🛠️"),
+    ("Procfile", "📄"), // Heroku Procfile
+    ("yarn.lock", "🔒"),
+    ("package-lock.json", "🔒"),
+    ("Pipfile.lock", "🔒"),
 
-// Fonts
-("ttf", "🔤"),
-("otf", "🔤"),
-("woff", "🔡"),
-("woff2", "��"),
-("eot", "🔡"),
-
-// Default
-("default", "📄"),
+    // Fonts (duplicates omitted; left once if encountered)
+    // Default
+    ("default", "📄"),
 ];
 
 const DEFAULT_IGNORED_DIRS: &[&str] = &[
@@ -550,6 +620,7 @@ struct App {
     pending_count: Option<std::sync::mpsc::Receiver<io::Result<usize>>>,
     counting_path: Option<PathBuf>,
     is_counting: bool,
+    config: AppConfig,
 }
 
 impl App {
@@ -574,6 +645,7 @@ impl App {
             pending_count: None,
             counting_path: None,
             is_counting: false,
+            config: AppConfig::default(),
         }
     }
 
@@ -595,6 +667,41 @@ impl App {
         )?;
 
         self.update_search();
+        Ok(())
+    }
+
+    fn load_items_nonrecursive(&mut self) -> io::Result<()> {
+        self.items.clear();
+        self.filtered_items.clear();
+
+        // Add parent directory entry if applicable
+        if let Some(parent) = self.current_dir.parent() {
+            if !parent.as_os_str().is_empty() {
+                self.items.push(self.current_dir.join(".."));
+            }
+        }
+
+        // Read only the current directory, no recursion
+        let entries = fs::read_dir(&self.current_dir)?
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| !is_path_ignored_for_iterative(p, &self.current_dir, &self.ignore_config))
+            .collect::<Vec<_>>();
+
+        // Sort entries (directories first, then files)
+        let mut sorted_entries = entries;
+        sorted_entries.sort_by(|a, b| {
+            let a_is_dir = a.is_dir();
+            let b_is_dir = b.is_dir();
+            match (a_is_dir, b_is_dir) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.file_name().cmp(&b.file_name()),
+            }
+        });
+
+        self.items.extend(sorted_entries);
+        self.filtered_items = self.items.clone();
         Ok(())
     }
 
@@ -683,11 +790,40 @@ impl App {
         self.load_items()?;
 
         while !self.quit {
+            // Check for pending selection count results
+            if self.is_counting {
+                if let Some(rx) = &self.pending_count {
+                    if let Ok(Ok(count)) = rx.try_recv() {
+                        if count <= SELECTION_LIMIT {
+                            if let Some(path) = self.counting_path.take() {
+                                if path.is_dir() {
+                                    self.update_folder_selection(&path, true);
+                                } else {
+                                    self.selected_items.insert(path);
+                                }
+                            }
+                        } else {
+                            self.modal = Some(Modal::new(
+                                format!(
+                                    "Cannot select: would exceed limit of {} items\nTried to add {} items",
+                                    SELECTION_LIMIT, count
+                                ),
+                                50,
+                                4,
+                            ));
+                        }
+                        self.is_counting = false;
+                        self.pending_count = None;
+                    }
+                }
+            }
+
             terminal.draw(|f| self.ui(f))?;
 
             if event::poll(Duration::from_millis(50))? {
                 if let Event::Key(key) = event::read()? {
                     if key.kind == KeyEventKind::Press {
+                        // If a modal is open, handle modal key events first
                         if let Some(modal) = &mut self.modal {
                             if modal.height > 10 {
                                 match key.code {
@@ -707,6 +843,7 @@ impl App {
                             }
                         }
 
+                        // If search mode is active, handle search input
                         if self.is_searching {
                             match key.code {
                                 KeyCode::Esc => self.clear_search(),
@@ -718,6 +855,7 @@ impl App {
                                 _ => {}
                             }
                         } else {
+                            // Normal mode key handling
                             match key.code {
                                 KeyCode::Char('q') => {
                                     if !self.selected_items.is_empty() {
@@ -733,6 +871,7 @@ impl App {
                                 KeyCode::Char('b') => self.toggle_binary_files()?,
                                 KeyCode::Char('f') => self.toggle_output_format(),
                                 KeyCode::Char('n') => self.toggle_line_numbers(),
+                                KeyCode::Char('s') => self.save_config()?,
                                 KeyCode::Char('/') => self.toggle_search(),
                                 KeyCode::Tab => self.toggle_folder_expansion()?,
                                 KeyCode::Up => self.move_selection(-1),
@@ -811,7 +950,7 @@ impl App {
             }
 
             let is_selected = self.selected_items.contains(&path);
-            // If it's already selected, we can unselect it immediately (no counting needed)
+            // If it's already selected, unselect it immediately (no counting needed)
             if is_selected {
                 if path.is_dir() {
                     self.update_folder_selection(&path, false);
@@ -821,7 +960,7 @@ impl App {
                 return;
             }
 
-            // If we aren't counting yet, let's start it
+            // If not selected, start an async count to see if we can add it without exceeding limit
             if !self.is_counting {
                 let (tx, rx) = mpsc::channel();
                 let base_path = self.current_dir.clone();
@@ -829,9 +968,7 @@ impl App {
                 let path_clone = path.clone();
 
                 thread::spawn(move || {
-                    // We'll replicate the counting logic:
                     let result = count_selection_items_async(&path_clone, &base_path, &ignore_config);
-                    // Send it
                     let _ = tx.send(result);
                 });
 
@@ -895,239 +1032,77 @@ impl App {
     }
 
     fn copy_selected_to_clipboard(&mut self) -> io::Result<()> {
-        let mut contents = String::new();
-        let mut file_count = 0;
-        let mut folder_count = 0;
+        let contents = self.format_selected_items()?;
+        let mut ctx = ClipboardContext::new()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to create clipboard context: {}", e)))?;
+        ctx.set_contents(contents.to_owned())
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to set clipboard contents: {}", e)))?;
 
-        if self.output_format == OutputFormat::Json {
-            contents.push_str("[");
-        }
-
-        let mut to_process: Vec<_> = self
-            .selected_items
-            .iter()
-            .filter(|path| {
-                if let Some(parent) = path.parent() {
-                    !self.selected_items.contains(parent)
-                } else {
-                    true
-                }
-            })
-            .collect();
-        to_process.sort();
-
-        let mut first_item = true;
-        for path in to_process {
-            if let Some(rel_path) = path.strip_prefix(&self.current_dir).ok() {
-                let normalized_path = normalize_path(&rel_path.to_string_lossy());
-
-                if self.output_format == OutputFormat::Json && !first_item {
-                    contents.push(',');
-                }
-                first_item = false;
-
-                if path.is_file() {
-                    if Self::is_binary_file(path) {
-                        if self.ignore_config.include_binary_files {
-                            match self.output_format {
-                                OutputFormat::Xml => {
-                                    contents.push_str(&format!("<file name=\"{}\">\n</file>\n", normalized_path));
-                                }
-                                OutputFormat::Markdown => {
-                                    contents.push_str(&format!("```{}\n<binary file>\n```\n\n", normalized_path));
-                                }
-                                OutputFormat::Json => {
-                                    contents.push_str(&format!(
-                                        "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":true}}",
-                                        normalized_path
-                                    ));
-                                }
-                            }
-                            file_count += 1;
-                        }
-                    } else {
-                        match self.output_format {
-                            OutputFormat::Xml => {
-                                contents.push_str(&format!("<file name=\"{}\">\n", normalized_path));
-                                if let Ok(content) = fs::read_to_string(path) {
-                                    if self.show_line_numbers {
-                                        for (i, line) in content.lines().enumerate() {
-                                            contents
-                                                .push_str(&format!("{:>6} | {}\n", i + 1, line));
-                                        }
-                                    } else {
-                                        contents.push_str(&content);
-                                    }
-                                    if !content.ends_with('\n') {
-                                        contents.push('\n');
-                                    }
-                                }
-                                contents.push_str("</file>\n");
-                            }
-                            OutputFormat::Markdown => {
-                                contents.push_str(&format!("```{}\n", normalized_path));
-                                if let Ok(content) = fs::read_to_string(path) {
-                                    if self.show_line_numbers {
-                                        for (i, line) in content.lines().enumerate() {
-                                            contents
-                                                .push_str(&format!("{:>6} | {}\n", i + 1, line));
-                                        }
-                                    } else {
-                                        contents.push_str(&content);
-                                    }
-                                    if !content.ends_with('\n') {
-                                        contents.push('\n');
-                                    }
-                                }
-                                contents.push_str("```\n\n");
-                            }
-                            OutputFormat::Json => {
-                                if let Ok(content) = fs::read_to_string(path) {
-                                    let escaped_content = content
-                                        .replace('\\', "\\\\")
-                                        .replace('\"', "\\\"")
-                                        .replace('\n', "\\n")
-                                        .replace('\r', "\\r");
-                                    if self.show_line_numbers {
-                                        let lines: Vec<String> = content
-                                            .lines()
-                                            .enumerate()
-                                            .map(|(i, line)| format!("{:>6} | {}", i + 1, line))
-                                            .collect();
-                                        let numbered_content = lines.join("\\n");
-                                        contents.push_str(&format!(
-                                            "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
-                                            normalized_path,
-                                            numbered_content.replace('\"', "\\\"")
-                                        ));
-                                    } else {
-                                        contents.push_str(&format!(
-                                            "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
-                                            normalized_path,
-                                            escaped_content
-                                        ));
-                                    }
-                                }
-                            }
-                        }
-                        file_count += 1;
-                    }
-                } else if path.is_dir() {
-                    match self.output_format {
-                        OutputFormat::Xml => {
-                            contents.push_str(&format!("<folder name=\"{}\">\n", normalized_path));
-                            let mut dir_contents = String::new();
-                            if let Ok((files, folders)) =
-                                self.process_directory(path, &mut dir_contents, &self.current_dir)
-                            {
-                                file_count += files;
-                                folder_count += folders;
-                            }
-                            contents.push_str(&dir_contents);
-                            contents.push_str("</folder>\n");
-                        }
-                        OutputFormat::Markdown => {
-                            let mut dir_contents = String::new();
-                            if let Ok((files, folders)) =
-                                self.process_directory(path, &mut dir_contents, &self.current_dir)
-                            {
-                                file_count += files;
-                                folder_count += folders;
-                            }
-                            contents.push_str(&dir_contents);
-                        }
-                        OutputFormat::Json => {
-                            let mut dir_contents = String::new();
-                            contents.push_str(&format!(
-                                "{{\"type\":\"directory\",\"path\":\"{}\",\"contents\":[",
-                                normalized_path
-                            ));
-                            if let Ok((files, folders)) =
-                                self.process_directory(path, &mut dir_contents, &self.current_dir)
-                            {
-                                contents.push_str(&dir_contents);
-                                file_count += files;
-                                folder_count += folders;
-                            }
-                            contents.push(']');
-                            contents.push('}');
-                        }
-                    }
-                    folder_count += 1;
-                }
-            }
-        }
-
-        if self.output_format == OutputFormat::Json {
-            contents.push(']');
-        }
-
-        if !contents.is_empty() {
-            if let Ok(()) = set_clipboard_contents(&contents) {
-                thread::sleep(Duration::from_millis(100));
-
-                let stats = CopyStats {
-                    files: file_count,
-                    folders: folder_count,
-                };
-                self.last_copy_stats = Some(stats.clone());
-
-                let line_count = contents.lines().count();
-                let byte_size = contents.len();
-
-                self.modal = Some(Modal::copy_stats(
-                    file_count,
-                    folder_count,
-                    line_count,
-                    byte_size,
-                    &self.output_format,
-                ));
-            }
-        }
+        // Update copy stats
+        let line_count = contents.lines().count();
+        let byte_size = contents.len();
+        let (file_count, folder_count) = self.count_selected_items();
+        self.last_copy_stats = Some(CopyStats { files: file_count, folders: folder_count });
+        self.modal = Some(Modal::copy_stats(
+            file_count,
+            folder_count,
+            line_count,
+            byte_size,
+            &self.output_format,
+        ));
 
         Ok(())
     }
 
-    fn process_directory(
-        &self,
-        dir: &PathBuf,
-        output: &mut String,
-        base_path: &PathBuf,
-    ) -> io::Result<(usize, usize)> {
+    fn count_selected_items(&self) -> (usize, usize) {
         let mut file_count = 0;
         let mut folder_count = 0;
 
-        let mut entries: Vec<_> = fs::read_dir(dir)?
+        for path in &self.selected_items {
+            if path.is_file() {
+                file_count += 1;
+            } else if path.is_dir() {
+                folder_count += 1;
+            }
+        }
+
+        (file_count, folder_count)
+    }
+
+    fn process_directory(&self, path: &PathBuf, output: &mut String, base_path: &PathBuf) -> io::Result<(usize, usize)> {
+        let mut file_count = 0;
+        let mut folder_count = 0;
+
+        let mut entries: Vec<PathBuf> = fs::read_dir(path)?
             .filter_map(|e| e.ok())
             .map(|e| e.path())
-            .filter(|p| !self.is_path_ignored(p))
             .collect();
 
-        entries.sort();
-        let mut first_item = true;
-        for path in entries {
-            if let Some(rel_path) = path.strip_prefix(base_path).ok() {
-                let normalized_path = normalize_path(&rel_path.to_string_lossy());
-                if self.output_format == OutputFormat::Json && !first_item {
-                    output.push(',');
-                }
-                first_item = false;
+        entries.retain(|p| !is_path_ignored_for_iterative(p, base_path, &self.ignore_config));
+        entries.sort_by(|a, b| {
+            let a_is_dir = a.is_dir();
+            let b_is_dir = b.is_dir();
+            match (a_is_dir, b_is_dir) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.file_name().cmp(&b.file_name()),
+            }
+        });
 
-                if path.is_file() {
-                    if Self::is_binary_file(&path) {
+        for entry in entries.iter() {
+            let entry_clone = entry.clone();
+            if let Some(rel_path) = entry_clone.strip_prefix(base_path).ok() {
+                let normalized_path = normalize_path(&rel_path.to_string_lossy());
+
+                if entry_clone.is_file() {
+                    if Self::is_binary_file(&entry_clone) {
                         if self.ignore_config.include_binary_files {
                             match self.output_format {
                                 OutputFormat::Xml => {
-                                    output.push_str(&format!(
-                                        "<file name=\"{}\">\n</file>\n",
-                                        normalized_path
-                                    ));
+                                    output.push_str(&format!("<file name=\"{}\">\n</file>\n", normalized_path));
                                 }
                                 OutputFormat::Markdown => {
-                                    output.push_str(&format!(
-                                        "```{}\n<binary file>\n```\n\n",
-                                        normalized_path
-                                    ));
+                                    output.push_str(&format!("```{}\n<binary file>\n```\n\n", normalized_path));
                                 }
                                 OutputFormat::Json => {
                                     output.push_str(&format!(
@@ -1142,7 +1117,7 @@ impl App {
                         match self.output_format {
                             OutputFormat::Xml => {
                                 output.push_str(&format!("<file name=\"{}\">\n", normalized_path));
-                                if let Ok(content) = fs::read_to_string(&path) {
+                                if let Ok(content) = fs::read_to_string(&entry_clone) {
                                     if self.show_line_numbers {
                                         for (i, line) in content.lines().enumerate() {
                                             output.push_str(&format!("{:>6} | {}\n", i + 1, line));
@@ -1158,7 +1133,7 @@ impl App {
                             }
                             OutputFormat::Markdown => {
                                 output.push_str(&format!("```{}\n", normalized_path));
-                                if let Ok(content) = fs::read_to_string(&path) {
+                                if let Ok(content) = fs::read_to_string(&entry_clone) {
                                     if self.show_line_numbers {
                                         for (i, line) in content.lines().enumerate() {
                                             output.push_str(&format!("{:>6} | {}\n", i + 1, line));
@@ -1173,7 +1148,7 @@ impl App {
                                 output.push_str("```\n\n");
                             }
                             OutputFormat::Json => {
-                                if let Ok(content) = fs::read_to_string(&path) {
+                                if let Ok(content) = fs::read_to_string(&entry_clone) {
                                     let escaped_content = content
                                         .replace('\\', "\\\\")
                                         .replace('\"', "\\\"")
@@ -1203,13 +1178,13 @@ impl App {
                         }
                         file_count += 1;
                     }
-                } else if path.is_dir() {
+                } else if entry_clone.is_dir() {
                     match self.output_format {
                         OutputFormat::Xml => {
                             output.push_str(&format!("<folder name=\"{}\">\n", normalized_path));
                             let mut dir_contents = String::new();
                             if let Ok((files, folders)) =
-                                self.process_directory(&path, &mut dir_contents, base_path)
+                                self.process_directory(&entry_clone, &mut dir_contents, base_path)
                             {
                                 file_count += files;
                                 folder_count += folders;
@@ -1220,7 +1195,7 @@ impl App {
                         OutputFormat::Markdown => {
                             let mut dir_contents = String::new();
                             if let Ok((files, folders)) =
-                                self.process_directory(&path, &mut dir_contents, base_path)
+                                self.process_directory(&entry_clone, &mut dir_contents, base_path)
                             {
                                 file_count += files;
                                 folder_count += folders;
@@ -1234,7 +1209,7 @@ impl App {
                                 normalized_path
                             ));
                             if let Ok((files, folders)) =
-                                self.process_directory(&path, &mut dir_contents, base_path)
+                                self.process_directory(&entry_clone, &mut dir_contents, base_path)
                             {
                                 output.push_str(&dir_contents);
                                 file_count += files;
@@ -1248,11 +1223,15 @@ impl App {
                 }
             }
         }
+
+        if self.output_format == OutputFormat::Json {
+            output.push(']');
+        }
+
         Ok((file_count, folder_count))
     }
 
-    /// This updated method now **bails early** when the partial count exceeds
-    /// SELECTION_LIMIT, saving time in large directories.
+    /// Updated method that **bails early** when partial count exceeds SELECTION_LIMIT.
     fn count_selection_items(&self, path: &PathBuf) -> io::Result<usize> {
         if path.is_file() {
             return Ok(1);
@@ -1270,7 +1249,7 @@ impl App {
                 } else if current.is_dir() {
                     count += 1;
                     if count > SELECTION_LIMIT {
-                        // Bail as soon as we exceed the limit
+                        // Bail as soon as limit is exceeded
                         return Ok(count);
                     }
                     let entries = fs::read_dir(&current)?
@@ -1281,7 +1260,6 @@ impl App {
                     }
                 }
                 if count > SELECTION_LIMIT {
-                    // Bail out
                     return Ok(count);
                 }
             }
@@ -1613,6 +1591,196 @@ impl App {
         }
         Ok(())
     }
+
+    fn save_config(&self) -> io::Result<()> {
+        let config = AppConfig {
+            default_format: Some(match self.output_format {
+                OutputFormat::Xml => "xml".to_string(),
+                OutputFormat::Markdown => "markdown".to_string(),
+                OutputFormat::Json => "json".to_string(),
+            }),
+            default_gitignore: Some(self.ignore_config.use_gitignore),
+            default_ignore: self.config.default_ignore.clone(),
+            default_line_numbers: Some(self.show_line_numbers),
+            default_recursive: Some(true), // Always true in TUI mode
+        };
+        let toml_str = toml::to_string_pretty(&config)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}")))?;
+        fs::write(".aibundle.config", toml_str)?;
+        Ok(())
+    }
+
+    fn format_selected_items(&mut self) -> io::Result<String> {
+        let mut output = String::new();
+        let mut stats = CopyStats { files: 0, folders: 0 };
+
+        if self.output_format == OutputFormat::Json {
+            output.push_str("[");
+        }
+
+        // Process only items whose parent is not also selected (avoid duplication)
+        let mut to_process: Vec<_> = self
+            .selected_items
+            .iter()
+            .filter(|path| {
+                if let Some(parent) = path.parent() {
+                    !self.selected_items.contains(parent)
+                } else {
+                    true
+                }
+            })
+            .collect();
+        to_process.sort();
+
+        let mut first_item = true;
+        for path in to_process {
+            if let Some(rel_path) = path.strip_prefix(&self.current_dir).ok() {
+                let normalized_path = normalize_path(&rel_path.to_string_lossy());
+
+                if self.output_format == OutputFormat::Json && !first_item {
+                    output.push(',');
+                }
+                first_item = false;
+
+                if path.is_file() {
+                    if Self::is_binary_file(path) {
+                        if self.ignore_config.include_binary_files {
+                            match self.output_format {
+                                OutputFormat::Xml => {
+                                    output.push_str(&format!("<file name=\"{}\">\n</file>\n", normalized_path));
+                                }
+                                OutputFormat::Markdown => {
+                                    output.push_str(&format!("```{}\n<binary file>\n```\n\n", normalized_path));
+                                }
+                                OutputFormat::Json => {
+                                    output.push_str(&format!(
+                                        "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":true}}",
+                                        normalized_path
+                                    ));
+                                }
+                            }
+                            stats.files += 1;
+                        }
+                    } else {
+                        match self.output_format {
+                            OutputFormat::Xml => {
+                                output.push_str(&format!("<file name=\"{}\">\n", normalized_path));
+                                if let Ok(content) = fs::read_to_string(path) {
+                                    if self.show_line_numbers {
+                                        for (i, line) in content.lines().enumerate() {
+                                            output.push_str(&format!("{:>6} | {}\n", i + 1, line));
+                                        }
+                                    } else {
+                                        output.push_str(&content);
+                                    }
+                                    if !content.ends_with('\n') {
+                                        output.push('\n');
+                                    }
+                                }
+                                output.push_str("</file>\n");
+                            }
+                            OutputFormat::Markdown => {
+                                output.push_str(&format!("```{}\n", normalized_path));
+                                if let Ok(content) = fs::read_to_string(path) {
+                                    if self.show_line_numbers {
+                                        for (i, line) in content.lines().enumerate() {
+                                            output.push_str(&format!("{:>6} | {}\n", i + 1, line));
+                                        }
+                                    } else {
+                                        output.push_str(&content);
+                                    }
+                                    if !content.ends_with('\n') {
+                                        output.push('\n');
+                                    }
+                                }
+                                output.push_str("```\n\n");
+                            }
+                            OutputFormat::Json => {
+                                if let Ok(content) = fs::read_to_string(path) {
+                                    let escaped_content = content
+                                        .replace('\\', "\\\\")
+                                        .replace('\"', "\\\"")
+                                        .replace('\n', "\\n")
+                                        .replace('\r', "\\r");
+                                    if self.show_line_numbers {
+                                        let lines: Vec<String> = content
+                                            .lines()
+                                            .enumerate()
+                                            .map(|(i, line)| format!("{:>6} | {}", i + 1, line))
+                                            .collect();
+                                        let numbered_content = lines.join("\\n");
+                                        output.push_str(&format!(
+                                            "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
+                                            normalized_path,
+                                            numbered_content.replace('\"', "\\\"")
+                                        ));
+                                    } else {
+                                        output.push_str(&format!(
+                                            "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
+                                            normalized_path,
+                                            escaped_content
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                        stats.files += 1;
+                    }
+                } else if path.is_dir() {
+                    match self.output_format {
+                        OutputFormat::Xml => {
+                            output.push_str(&format!("<folder name=\"{}\">\n", normalized_path));
+                            let mut dir_contents = String::new();
+                            if let Ok((files, folders)) =
+                                self.process_directory(path, &mut dir_contents, &self.current_dir)
+                            {
+                                stats.files += files;
+                                stats.folders += folders;
+                            }
+                            output.push_str(&dir_contents);
+                            output.push_str("</folder>\n");
+                        }
+                        OutputFormat::Markdown => {
+                            let mut dir_contents = String::new();
+                            if let Ok((files, folders)) =
+                                self.process_directory(path, &mut dir_contents, &self.current_dir)
+                            {
+                                stats.files += files;
+                                stats.folders += folders;
+                            }
+                            output.push_str(&dir_contents);
+                        }
+                        OutputFormat::Json => {
+                            let mut dir_contents = String::new();
+                            output.push_str(&format!(
+                                "{{\"type\":\"directory\",\"path\":\"{}\",\"contents\":[",
+                                normalized_path
+                            ));
+                            if let Ok((files, folders)) =
+                                self.process_directory(path, &mut dir_contents, &self.current_dir)
+                            {
+                                output.push_str(&dir_contents);
+                                stats.files += files;
+                                stats.folders += folders;
+                            }
+                            output.push(']');
+                            output.push('}');
+                        }
+                    }
+                    stats.folders += 1;
+                }
+            }
+        }
+
+        if self.output_format == OutputFormat::Json {
+            output.push(']');
+        }
+
+        // Update last_copy_stats before returning
+        self.last_copy_stats = Some(stats);
+
+        Ok(output)
+    }
 }
 
 fn add_items_iterative(
@@ -1643,12 +1811,10 @@ fn add_items_iterative(
         });
 
         for entry in &entries {
-            items.push(entry.clone());
-        }
-
-        for entry in entries.into_iter().rev() {
-            if entry.is_dir() && expanded_folders.contains(&entry) {
-                stack.push(entry);
+            let entry_clone = entry.clone();
+            items.push(entry_clone.clone());
+            if entry_clone.is_dir() && expanded_folders.contains(&entry_clone) {
+                stack.push(entry_clone.clone());
             }
         }
     }
@@ -1726,53 +1892,6 @@ fn human_readable_size(size: usize) -> String {
         format!("{} {}", size as usize, UNITS[unit_index])
     } else {
         format!("{:.2} {}", size, UNITS[unit_index])
-    }
-}
-
-fn set_clipboard_contents(contents: &str) -> io::Result<()> {
-    match OS {
-        "windows" => {
-            if let Ok(mut ctx) = ClipboardContext::new() {
-                ctx.set_contents(contents.to_owned())
-                    .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to set clipboard contents"))?;
-            }
-            Ok(())
-        }
-        _ => {
-            let clip_result = Command::new("clip.exe")
-                .stdin(std::process::Stdio::piped())
-                .spawn()
-                .and_then(|mut child| {
-                    use std::io::Write;
-                    if let Some(mut stdin) = child.stdin.take() {
-                        stdin.write_all(contents.as_bytes())?;
-                    }
-                    child.wait().map(|_| ())
-                });
-            if clip_result.is_ok() {
-                thread::sleep(Duration::from_millis(100));
-                return Ok(());
-            }
-            let wl_result = Command::new("wl-copy").arg(contents).status();
-            match wl_result {
-                Ok(_) => Ok(()),
-                Err(_) => {
-                    let output = Command::new("xclip")
-                        .arg("-selection")
-                        .arg("clipboard")
-                        .arg("-i")
-                        .spawn()
-                        .and_then(|mut child| {
-                            use std::io::Write;
-                            if let Some(mut stdin) = child.stdin.take() {
-                                stdin.write_all(contents.as_bytes())?;
-                            }
-                            child.wait().map(|_| ())
-                        })?;
-                    Ok(output)
-                }
-            }
-        }
     }
 }
 
@@ -1856,10 +1975,148 @@ fn count_selection_items_async(
     }
 }
 
-fn main() -> io::Result<()> {
+/// Loads `.aibundle.config` from disk if present.
+fn load_config(path: &str) -> io::Result<AppConfig> {
+    if std::path::Path::new(path).exists() {
+        let contents = fs::read_to_string(path)?;
+        let parsed: AppConfig = toml::from_str(&contents)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML parse error: {e}")))?;
+        Ok(parsed)
+    } else {
+        Ok(AppConfig::default())
+    }
+}
+
+/// This function runs the tool in CLI mode, bypassing the TUI entirely.
+fn run_cli_mode(
+    files_pattern: Option<&str>,
+    search_pattern: Option<&str>,
+    source_dir: &str,
+    format: &str,
+    gitignore: bool,
+    line_numbers: bool,
+    recursive: bool,
+    ignore_list: &[String],
+    output_file: Option<&str>,
+    output_console: bool,
+) -> io::Result<()> {
     let mut app = App::new();
-    enable_raw_mode()?;
-    let result = app.run();
-    disable_raw_mode()?;
-    result
+    app.current_dir = PathBuf::from(source_dir);
+    app.ignore_config.use_gitignore = gitignore;
+    app.show_line_numbers = line_numbers;
+    app.output_format = match format.to_lowercase().as_str() {
+        "markdown" => OutputFormat::Markdown,
+        "json" => OutputFormat::Json,
+        _ => OutputFormat::Xml,
+    };
+
+    // Set up ignore patterns
+    app.config.default_ignore = Some(ignore_list.to_vec());
+
+    // Load items based on patterns and recursion setting
+    if recursive {
+        app.load_items()?;
+    } else {
+        app.load_items_nonrecursive()?;
+    }
+
+    // Apply file pattern and search filters
+    if let Some(pattern) = files_pattern {
+        app.search_query = pattern.to_string();
+        app.update_search();
+    }
+    if let Some(pattern) = search_pattern {
+        if !app.search_query.is_empty() {
+            app.search_query.push_str(" ");
+        }
+        app.search_query.push_str(pattern);
+        app.update_search();
+    }
+
+    // Select all filtered items
+    app.selected_items.extend(app.filtered_items.iter().cloned());
+
+    // Generate output
+    let output = app.format_selected_items()?;
+
+    // Handle output
+    if let Some(file_path) = output_file {
+        fs::write(file_path, output)?;
+        println!("Output written to file: {file_path}");
+    } else if output_console {
+        println!("{output}");
+    } else {
+        // Copy to clipboard
+        let mut ctx = ClipboardContext::new()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to create clipboard context: {}", e)))?;
+        ctx.set_contents(output)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to set clipboard contents: {}", e)))?;
+        println!("Output copied to clipboard");
+    }
+
+    Ok(())
+}
+
+fn main() -> io::Result<()> {
+    let cli_args = CliOptions::parse();
+
+    // Load existing config
+    let config = load_config(".aibundle.config")?;
+
+    // If in CLI mode and files pattern is provided, run in CLI mode
+    if cli_args.cli && cli_args.files.is_some() {
+        // Save config if requested
+        if cli_args.save_config {
+            let config = AppConfig {
+                default_format: Some(cli_args.format.clone()),
+                default_gitignore: Some(cli_args.gitignore),
+                default_ignore: config.default_ignore.clone(),
+                default_line_numbers: Some(cli_args.line_numbers),
+                default_recursive: Some(cli_args.recursive),
+            };
+            let toml_str = toml::to_string_pretty(&config)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}")))?;
+            fs::write(".aibundle.config", toml_str)?;
+        }
+
+        // Run in CLI mode
+        run_cli_mode(
+            cli_args.files.as_deref(),
+            cli_args.search.as_deref(),
+            &cli_args.source_dir,
+            &cli_args.format,
+            cli_args.gitignore,
+            cli_args.line_numbers,
+            cli_args.recursive,
+            &cli_args.ignore,
+            cli_args.output_file.as_deref(),
+            cli_args.output_console,
+        )
+    } else {
+        // Run in TUI mode
+        let mut app = App::new();
+
+        // Apply config if present
+        if let Some(format) = config.default_format {
+            app.output_format = match format.to_lowercase().as_str() {
+                "markdown" => OutputFormat::Markdown,
+                "json" => OutputFormat::Json,
+                _ => OutputFormat::Xml,
+            };
+        }
+        if let Some(gitignore) = config.default_gitignore {
+            app.ignore_config.use_gitignore = gitignore;
+        }
+        if let Some(ignore) = config.default_ignore {
+            app.config.default_ignore = Some(ignore.clone());
+        }
+        if let Some(line_numbers) = config.default_line_numbers {
+            app.show_line_numbers = line_numbers;
+        }
+
+        enable_raw_mode()?;
+        let result = app.run();
+        disable_raw_mode()?;
+        result
+    }
 }
