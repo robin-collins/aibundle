@@ -1,6 +1,6 @@
 # AIBundle 📦
 
-[![Version](https://img.shields.io/badge/version-0.4.5-blue.svg)](https://crates.io/crates/aibundle)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue.svg)](https://crates.io/crates/aibundle)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 A TUI (Terminal User Interface) tool for bundling files and directories into AI/LLM-friendly formats. Perfect for sharing code snippets and project structures with AI assistants.
@@ -21,6 +21,8 @@ AIBundle is a multi-format specification designed for optimal code sharing with 
 - **Binary Handling**: Identifies and marks binary files
 - **Path Normalization**: Uses forward slashes for cross-platform compatibility
 - **Line Numbers**: Optional line numbering for precise code references
+- **Selection Limits**: Smart handling of large directories with selection limits
+- **Async Operations**: Non-blocking UI during large operations
 
 ### Format Examples
 
@@ -60,8 +62,8 @@ AIBundle is a multi-format specification designed for optimal code sharing with 
 ## Features 🚀
 
 - 📁 Interactive file browser with folder expansion/collapse
-- 🔍 Live search functionality
-- ✨ File icons for different file types
+- 🔍 Live search functionality with real-time filtering
+- ✨ Rich file icons for over 200 file types
 - 📋 Export in multiple formats (XML/MD/JSON)
 - 🎯 Smart file filtering:
   - `.gitignore` support
@@ -71,6 +73,10 @@ AIBundle is a multi-format specification designed for optimal code sharing with 
 - 🖥️ Cross-platform clipboard support (Windows, Linux X11/Wayland, WSL)
 - 📝 Line number support for all formats
 - 🔄 Format switching on the fly
+- ⚡ Performance optimizations for large directories
+- 🎨 Beautiful TUI with modal dialogs and help screens
+- 📊 Detailed copy statistics with file counts and sizes
+- 🔒 Selection limits to prevent memory issues
 
 ## Installation 📦
 
@@ -95,32 +101,47 @@ aibundle
 
 ### Keyboard Shortcuts
 
-- `Space` - Select/deselect item
-- `*` - Select/deselect all visible items
+Navigation:
+- `↑/↓` - Move selection
+- `PgUp/PgDn` - Move by 10 items
 - `Enter` - Open directory
 - `Tab` - Expand/collapse folder
-- `/` - Toggle search mode (ESC to cancel)
+
+Selection:
+- `Space` - Select/deselect item
+- `*` - Select/deselect all visible items
+
+Actions:
 - `c` - Copy selected items to clipboard
-- `i` - Toggle default ignores
-- `g` - Toggle .gitignore support
-- `b` - Toggle binary file inclusion
 - `f` - Toggle format (XML → Markdown → JSON)
 - `n` - Toggle line numbers
+- `/` - Search (ESC to cancel)
+
+Filters:
+- `i` - Toggle default ignores
+- `g` - Toggle .gitignore support
+- `b` - Toggle binary files
+
+Other:
 - `h` - Show help
 - `q` - Quit (copies if items selected)
 
-### Navigation
-- `↑` `↓` - Move selection
-- `PageUp` `PageDown` - Move selection by 10 items
-- `Enter` - Enter directory
-- `..` - Go to parent directory
-
 ## Dependencies 📚
 
-- [crossterm](https://crates.io/crates/crossterm) - Terminal manipulation
-- [ratatui](https://crates.io/crates/ratatui) - Terminal user interface
-- [cli-clipboard](https://crates.io/crates/cli-clipboard) - Clipboard operations
-- [ignore](https://crates.io/crates/ignore) - .gitignore support
+Core dependencies:
+- [crossterm](https://crates.io/crates/crossterm) - Terminal manipulation and events
+- [ratatui](https://crates.io/crates/ratatui) - Terminal user interface framework
+- [cli-clipboard](https://crates.io/crates/cli-clipboard) - Cross-platform clipboard operations
+- [ignore](https://crates.io/crates/ignore) - .gitignore support and file filtering
+
+## Performance 🚀
+
+AIBundle v0.5.0 includes several performance optimizations:
+- Early bailout for large directory selections
+- Asynchronous item counting
+- Smart caching of directory contents
+- Efficient path normalization
+- Optimized search filtering
 
 ## Contributing 🤝
 

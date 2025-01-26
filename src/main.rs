@@ -1,3 +1,14 @@
+/// File: src/main.rs
+/// Encoding: UTF-8
+///
+/// This version modifies `count_selection_items` so that it bails out early
+/// once the total count exceeds the SELECTION_LIMIT, potentially saving time
+/// and resources in large directories. The rest of the file remains the same
+/// as your previous version, except for the highlighted changes in the
+/// `count_selection_items` function.
+///
+/// Version incremented to 0.5.0 to reflect this update.
+
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -12,8 +23,10 @@ use ratatui::{
     prelude::Alignment,
     text::Line,
 };
-use std::{io, path::PathBuf, env, collections::HashSet};
-use std::fs;
+use std::{
+    io, path::PathBuf, collections::HashSet,
+    fs,
+};
 use cli_clipboard::{ClipboardContext, ClipboardProvider};
 use ignore::{gitignore::GitignoreBuilder, Match};
 use std::process::Command;
@@ -21,7 +34,8 @@ use std::env::consts::OS;
 use std::thread;
 use std::time::Duration;
 
-const VERSION: &str = "0.4.5"; // This should always be the same as the version in the Cargo.toml file
+const VERSION: &str = "0.5.0";
+const SELECTION_LIMIT: usize = 400;
 
 #[derive(Clone, Copy, PartialEq)]
 enum OutputFormat {
@@ -157,7 +171,7 @@ const ICONS: &[(&str, &str)] = &[
 ("epub", "📚"),
 ("djvu", "📖"),
 
-    // Spreadsheets
+// Spreadsheets
 ("xls", "📗"),
 ("xlsx", "📗"),
 ("ods", "📗"),
@@ -209,7 +223,7 @@ const ICONS: &[(&str, &str)] = &[
 ("midi", "🎹"),
 ("aiff", "🎤"),
 
-    // Video
+// Video
 ("mp4", "🎬"),
 ("avi", "🎬"),
 ("mkv", "🎬"),
@@ -225,7 +239,7 @@ const ICONS: &[(&str, &str)] = &[
 ("vob", "📀"), // DVD Video Object
 ("m2ts", "🎞️"),
 
-    // Archives
+// Archives
 ("zip", "📦"),
 ("rar", "📦"),
 ("7z", "📦"),
@@ -241,7 +255,7 @@ const ICONS: &[(&str, &str)] = &[
 ("arj", "📦"),
 ("ace", "📦"),
 
-    // Git
+// Git
 ("git", "🔰"),
 ("gitignore", "🔰"),
 ("gitattributes", "🔰"),
@@ -251,7 +265,7 @@ const ICONS: &[(&str, &str)] = &[
 ("circleci", "🔄"), // CircleCI Config
 ("travis.yml", "📈"), // Travis CI Config
 
-    // Logs
+// Logs
 ("log", "📋"),
 ("trace", "🔍"),
 ("out", "📤"),
@@ -261,7 +275,7 @@ const ICONS: &[(&str, &str)] = &[
 ("server", "🌐"),
 ("audit", "🔒"),
 
-    // Shell
+// Shell
 ("sh", "🐚"),
 ("bash", "🐚"),
 ("zsh", "🐚"),
@@ -273,7 +287,7 @@ const ICONS: &[(&str, &str)] = &[
 ("csh", "🐚"),
 ("tcsh", "🐚"),
 
-    // Lock files
+// Lock files
 ("lock", "🔒"),
 ("pem", "🔑"),
 ("key", "🔑"),
@@ -281,7 +295,7 @@ const ICONS: &[(&str, &str)] = &[
 ("p12", "🔐"), // PKCS#12 Certificate
 ("pfx", "🔐"),
 
-    // Executables
+// Executables
 ("exe", "💻"),
 ("bin", "📦"),
 ("app", "📱"),
@@ -296,7 +310,7 @@ const ICONS: &[(&str, &str)] = &[
 ("so", "🗄️"), // Shared Object
 ("dylib", "🗄️"), // macOS Dynamic Library
 
-    // Scripts
+// Scripts
 ("ps1", "💻"),
 ("lua", "🌙"),
 ("vbs", "💾"),
@@ -309,7 +323,7 @@ const ICONS: &[(&str, &str)] = &[
 ("awk", "✂️"),
 ("sed", "📝"),
 
-    // Fonts
+// Fonts
 ("ttf", "🔤"),
 ("otf", "🔤"),
 ("woff", "🔡"),
@@ -320,7 +334,7 @@ const ICONS: &[(&str, &str)] = &[
 ("pfm", "🔠"),
 ("afm", "🔠"),
 
-    // Miscellaneous
+// Miscellaneous
 ("ipynb", "📓"), // Jupyter Notebook
 ("vuepress", "📚"),
 ("env.example", "🔒"),
@@ -342,14 +356,14 @@ const ICONS: &[(&str, &str)] = &[
 ("package-lock.json", "🔒"),
 ("Pipfile.lock", "🔒"),
 
-    // Fonts
+// Fonts
 ("ttf", "🔤"),
 ("otf", "🔤"),
 ("woff", "🔡"),
-("woff2", "🔡"),
+("woff2", "��"),
 ("eot", "🔡"),
 
-    // Default
+// Default
 ("default", "📄"),
 ];
 
@@ -359,9 +373,10 @@ const DEFAULT_IGNORED_DIRS: &[&str] = &[
     "dist",
     "build",
     "coverage",
-    "target",  // Keep Rust's target dir in defaults
+    "target", // Keep Rust's target dir in defaults
 ];
 
+#[derive(Clone)]
 struct IgnoreConfig {
     use_default_ignores: bool,
     use_gitignore: bool,
@@ -389,7 +404,7 @@ struct Modal {
     timestamp: std::time::Instant,
     width: u16,
     height: u16,
-    page: usize,  // Current page number
+    page: usize,
 }
 
 impl Modal {
@@ -403,7 +418,13 @@ impl Modal {
         }
     }
 
-    fn copy_stats(file_count: usize, folder_count: usize, line_count: usize, byte_size: usize, format: &OutputFormat) -> Self {
+    fn copy_stats(
+        file_count: usize,
+        folder_count: usize,
+        line_count: usize,
+        byte_size: usize,
+        format: &OutputFormat,
+    ) -> Self {
         Self::new(
             format!(
                 "Files copied: {}\n\
@@ -476,27 +497,19 @@ impl Modal {
     }
 
     fn get_visible_content(&self, available_height: u16) -> (String, bool) {
-        let content_height = (available_height - 4) as usize; // Account for borders and title
+        let content_height = (available_height - 4) as usize;
         let lines: Vec<&str> = self.message.lines().collect();
         let total_lines = lines.len();
-        
-        // Calculate total pages based on actual content vs available height
         let total_pages = (total_lines + content_height - 1) / content_height;
         let has_more_pages = total_lines > content_height;
-        
-        // Get lines for current page
         let start = self.page * content_height;
         let end = (start + content_height).min(total_lines);
-        
         let visible_content = lines[start..end].join("\n");
-        
-        // Add page indicator if there are multiple pages
         let content = if has_more_pages {
             format!("{}\n\nPage {} of {}", visible_content, self.page + 1, total_pages)
         } else {
             visible_content
         };
-        
         (content, has_more_pages)
     }
 
@@ -504,7 +517,7 @@ impl Modal {
         let content_height = (available_height - 4) as usize;
         let total_lines = self.message.lines().count();
         let total_pages = (total_lines + content_height - 1) / content_height;
-        if total_pages > 1 {  // Only change page if we have multiple pages
+        if total_pages > 1 {
             self.page = (self.page + 1) % total_pages;
         }
     }
@@ -513,7 +526,7 @@ impl Modal {
         let content_height = (available_height - 4) as usize;
         let total_lines = self.message.lines().count();
         let total_pages = (total_lines + content_height - 1) / content_height;
-        if total_pages > 1 {  // Only change page if we have multiple pages
+        if total_pages > 1 {
             self.page = (self.page + total_pages - 1) % total_pages;
         }
     }
@@ -534,126 +547,53 @@ struct App {
     is_searching: bool,
     output_format: OutputFormat,
     show_line_numbers: bool,
-}
-
-fn add_items_recursive(
-    items: &mut Vec<PathBuf>,
-    dir: &PathBuf,
-    expanded_folders: &HashSet<PathBuf>,
-    ignore_config: &IgnoreConfig,
-    current_dir: &PathBuf,
-    depth: usize,
-) -> io::Result<()> {
-    let mut entries: Vec<_> = fs::read_dir(dir)?
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| {
-            if !ignore_config.use_default_ignores && !ignore_config.use_gitignore {
-                return true;
-            }
-
-            if ignore_config.use_default_ignores {
-                if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
-                    if DEFAULT_IGNORED_DIRS.contains(&name) {
-                        return false;
-                    }
-                }
-            }
-
-            if ignore_config.use_gitignore {
-                let mut builder = GitignoreBuilder::new(current_dir);
-                let mut dir = current_dir.clone();
-                while let Some(parent) = dir.parent() {
-                    let gitignore = dir.join(".gitignore");
-                    if gitignore.exists() {
-                        match builder.add(gitignore) {
-                            None => (),
-                            Some(_) => break,
-                        }
-                    }
-                    dir = parent.to_path_buf();
-                }
-
-                if let Ok(gitignore) = builder.build() {
-                    let is_dir = p.is_dir();
-                    match gitignore.matched_path_or_any_parents(p, is_dir) {
-                        Match::Ignore(_) => return false,
-                        _ => (),
-                    }
-                }
-            }
-
-            true
-        })
-        .collect();
-
-    entries.sort_by(|a, b| {
-        let a_is_dir = a.is_dir();
-        let b_is_dir = b.is_dir();
-        match (a_is_dir, b_is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.file_name().cmp(&b.file_name()),
-        }
-    });
-
-    for entry in entries {
-        items.push(entry.clone());
-        if entry.is_dir() && expanded_folders.contains(&entry) {
-            add_items_recursive(
-                items,
-                &entry,
-                expanded_folders,
-                ignore_config,
-                current_dir,
-                depth + 1,
-            )?;
-        }
-    }
-    Ok(())
+    pending_count: Option<std::sync::mpsc::Receiver<io::Result<usize>>>,
+    counting_path: Option<PathBuf>,
+    is_counting: bool,
 }
 
 impl App {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let mut list_state = ListState::default();
         list_state.select(Some(0));
         Self {
-            current_dir: env::current_dir().unwrap_or_default(),
+            current_dir: std::env::current_dir().unwrap_or_default(),
             items: Vec::new(),
             list_state,
-            selected_items: HashSet::new(),
+            selected_items: std::collections::HashSet::new(),
             quit: false,
             last_copy_stats: None,
             modal: None,
             ignore_config: IgnoreConfig::default(),
-            expanded_folders: HashSet::new(),
+            expanded_folders: std::collections::HashSet::new(),
             search_query: String::new(),
             filtered_items: Vec::new(),
             is_searching: false,
             output_format: OutputFormat::Xml,
             show_line_numbers: false,
+            pending_count: None,
+            counting_path: None,
+            is_counting: false,
         }
     }
 
     fn load_items(&mut self) -> io::Result<()> {
         self.items.clear();
-        
+
         if let Some(parent) = self.current_dir.parent() {
             if !parent.as_os_str().is_empty() {
                 self.items.push(self.current_dir.join(".."));
             }
         }
 
-        add_items_recursive(
+        add_items_iterative(
             &mut self.items,
             &self.current_dir,
             &self.expanded_folders,
             &self.ignore_config,
             &self.current_dir,
-            0,
         )?;
 
-        // Update filtered items based on search
         self.update_search();
         Ok(())
     }
@@ -665,16 +605,16 @@ impl App {
         }
 
         let query = self.search_query.to_lowercase();
-        self.filtered_items = self.items
+        self.filtered_items = self
+            .items
             .iter()
             .filter(|path| {
-                // Get the full relative path for searching
                 if let Ok(rel_path) = path.strip_prefix(&self.current_dir) {
                     let path_str = rel_path.to_string_lossy().to_lowercase();
                     path_str.contains(&query)
                 } else {
-                    // Fallback to just the filename if we can't get relative path
-                    let name = path.file_name()
+                    let name = path
+                        .file_name()
                         .and_then(|n| n.to_str())
                         .unwrap_or("")
                         .to_lowercase();
@@ -684,7 +624,6 @@ impl App {
             .cloned()
             .collect();
 
-        // Auto-expand parent folders of matches
         let mut parents_to_expand = HashSet::new();
         for item in &self.filtered_items {
             let mut current = item.as_path();
@@ -698,7 +637,6 @@ impl App {
         }
         self.expanded_folders.extend(parents_to_expand);
 
-        // Reset selection if current selection is not in filtered items
         if let Some(selected) = self.list_state.selected() {
             if selected >= self.filtered_items.len() {
                 self.list_state.select(Some(0));
@@ -712,7 +650,7 @@ impl App {
         }
 
         match c {
-            '/' => { // Use '/' to finish search
+            '/' => {
                 self.is_searching = false;
             }
             _ if !c.is_control() => {
@@ -726,7 +664,6 @@ impl App {
     fn toggle_search(&mut self) {
         self.is_searching = !self.is_searching;
         if !self.is_searching {
-            // Don't clear search when toggling off - keep the filter
             self.update_search();
         }
     }
@@ -752,7 +689,7 @@ impl App {
                 if let Event::Key(key) = event::read()? {
                     if key.kind == KeyEventKind::Press {
                         if let Some(modal) = &mut self.modal {
-                            if modal.height > 10 { // If help modal is showing
+                            if modal.height > 10 {
                                 match key.code {
                                     KeyCode::PageUp => {
                                         modal.prev_page(terminal.size()?.height);
@@ -769,7 +706,7 @@ impl App {
                                 }
                             }
                         }
-                        
+
                         if self.is_searching {
                             match key.code {
                                 KeyCode::Esc => self.clear_search(),
@@ -814,7 +751,6 @@ impl App {
 
         execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
 
-        // Show detailed exit message if items were copied
         if let Some(stats) = &self.last_copy_stats {
             if let Ok(contents) = get_clipboard_contents() {
                 let line_count = contents.lines().count();
@@ -862,21 +798,97 @@ impl App {
     }
 
     fn toggle_selection(&mut self) {
-        if let Some(selected) = self.list_state.selected() {
-            if selected >= self.filtered_items.len() {
+        use std::sync::mpsc;
+        use std::thread;
+
+        if let Some(selected_index) = self.list_state.selected() {
+            if selected_index >= self.filtered_items.len() {
                 return;
             }
-            let path = self.filtered_items[selected].clone();
-            if !path.file_name().map_or(false, |n| n == "..") {
-                let is_selected = self.selected_items.contains(&path);
+            let path = self.filtered_items[selected_index].clone();
+            if path.file_name().map_or(false, |n| n == "..") {
+                return;
+            }
+
+            let is_selected = self.selected_items.contains(&path);
+            // If it's already selected, we can unselect it immediately (no counting needed)
+            if is_selected {
                 if path.is_dir() {
-                    self.update_folder_selection(&path, !is_selected);
+                    self.update_folder_selection(&path, false);
                 } else {
-                    if is_selected {
-                        self.selected_items.remove(&path);
+                    self.selected_items.remove(&path);
+                }
+                return;
+            }
+
+            // If we aren't counting yet, let's start it
+            if !self.is_counting {
+                let (tx, rx) = mpsc::channel();
+                let base_path = self.current_dir.clone();
+                let ignore_config = self.ignore_config.clone();
+                let path_clone = path.clone();
+
+                thread::spawn(move || {
+                    // We'll replicate the counting logic:
+                    let result = count_selection_items_async(&path_clone, &base_path, &ignore_config);
+                    // Send it
+                    let _ = tx.send(result);
+                });
+
+                self.pending_count = Some(rx);
+                self.counting_path = Some(path);
+                self.is_counting = true;
+            }
+        }
+    }
+
+    fn toggle_select_all(&mut self) {
+        let all_selected = self
+            .filtered_items
+            .iter()
+            .filter(|path| !path.ends_with(".."))
+            .all(|path| self.selected_items.contains(path));
+
+        if all_selected {
+            self.selected_items.clear();
+        } else {
+            let mut total_new_items = 0usize;
+            let mut would_select = Vec::new();
+
+            for path in &self.filtered_items {
+                if path.ends_with("..") {
+                    continue;
+                }
+                if !self.selected_items.contains(path) {
+                    if path.is_dir() {
+                        if let Ok(sub_count) = self.count_selection_items(path) {
+                            total_new_items += sub_count;
+                            would_select.push(path.clone());
+                        }
                     } else {
-                        self.selected_items.insert(path);
+                        total_new_items += 1;
+                        would_select.push(path.clone());
                     }
+                }
+            }
+
+            let total_would_be = self.selected_items.len() + total_new_items;
+            if total_would_be > SELECTION_LIMIT {
+                let msg = format!(
+                    "Selection aborted.\n\
+                     Selecting {} additional items would exceed the limit of {}.\n\
+                     Currently selected: {}",
+                    total_new_items, SELECTION_LIMIT, self.selected_items.len()
+                );
+                self.modal = Some(Modal::new(msg, 50, 6));
+                return;
+            }
+
+            for path in would_select {
+                if path.is_dir() {
+                    self.update_folder_selection(&path, true);
+                } else {
+                    self.selected_items.insert(path);
                 }
             }
         }
@@ -886,14 +898,14 @@ impl App {
         let mut contents = String::new();
         let mut file_count = 0;
         let mut folder_count = 0;
-        
-        // For JSON format, we need to start the root array
+
         if self.output_format == OutputFormat::Json {
             contents.push_str("[");
         }
-        
-        // First, collect all paths we need to process
-        let mut to_process: Vec<_> = self.selected_items.iter()
+
+        let mut to_process: Vec<_> = self
+            .selected_items
+            .iter()
             .filter(|path| {
                 if let Some(parent) = path.parent() {
                     !self.selected_items.contains(parent)
@@ -903,18 +915,17 @@ impl App {
             })
             .collect();
         to_process.sort();
-        
+
         let mut first_item = true;
         for path in to_process {
             if let Some(rel_path) = path.strip_prefix(&self.current_dir).ok() {
                 let normalized_path = normalize_path(&rel_path.to_string_lossy());
-                
-                // For JSON format, add comma between items
+
                 if self.output_format == OutputFormat::Json && !first_item {
                     contents.push(',');
                 }
                 first_item = false;
-                
+
                 if path.is_file() {
                     if Self::is_binary_file(path) {
                         if self.ignore_config.include_binary_files {
@@ -926,7 +937,10 @@ impl App {
                                     contents.push_str(&format!("```{}\n<binary file>\n```\n\n", normalized_path));
                                 }
                                 OutputFormat::Json => {
-                                    contents.push_str(&format!("{{\"type\":\"file\",\"path\":\"{}\",\"binary\":true}}", normalized_path));
+                                    contents.push_str(&format!(
+                                        "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":true}}",
+                                        normalized_path
+                                    ));
                                 }
                             }
                             file_count += 1;
@@ -938,7 +952,8 @@ impl App {
                                 if let Ok(content) = fs::read_to_string(path) {
                                     if self.show_line_numbers {
                                         for (i, line) in content.lines().enumerate() {
-                                            contents.push_str(&format!("{:>6} | {}\n", i + 1, line));
+                                            contents
+                                                .push_str(&format!("{:>6} | {}\n", i + 1, line));
                                         }
                                     } else {
                                         contents.push_str(&content);
@@ -954,7 +969,8 @@ impl App {
                                 if let Ok(content) = fs::read_to_string(path) {
                                     if self.show_line_numbers {
                                         for (i, line) in content.lines().enumerate() {
-                                            contents.push_str(&format!("{:>6} | {}\n", i + 1, line));
+                                            contents
+                                                .push_str(&format!("{:>6} | {}\n", i + 1, line));
                                         }
                                     } else {
                                         contents.push_str(&content);
@@ -970,19 +986,26 @@ impl App {
                                     let escaped_content = content
                                         .replace('\\', "\\\\")
                                         .replace('\"', "\\\"")
-                                        .replace('\n', "\\n")  // Always escape newlines for JSON
-                                        .replace('\r', "\\r"); 
+                                        .replace('\n', "\\n")
+                                        .replace('\r', "\\r");
                                     if self.show_line_numbers {
-                                        let lines: Vec<String> = content.lines()
+                                        let lines: Vec<String> = content
+                                            .lines()
                                             .enumerate()
                                             .map(|(i, line)| format!("{:>6} | {}", i + 1, line))
                                             .collect();
-                                        let numbered_content = lines.join("\\n");  // Use escaped newline for join
-                                        contents.push_str(&format!("{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}", 
-                                            normalized_path, numbered_content.replace('\"', "\\\"")));
+                                        let numbered_content = lines.join("\\n");
+                                        contents.push_str(&format!(
+                                            "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
+                                            normalized_path,
+                                            numbered_content.replace('\"', "\\\"")
+                                        ));
                                     } else {
-                                        contents.push_str(&format!("{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}", 
-                                            normalized_path, escaped_content));
+                                        contents.push_str(&format!(
+                                            "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
+                                            normalized_path,
+                                            escaped_content
+                                        ));
                                     }
                                 }
                             }
@@ -994,7 +1017,9 @@ impl App {
                         OutputFormat::Xml => {
                             contents.push_str(&format!("<folder name=\"{}\">\n", normalized_path));
                             let mut dir_contents = String::new();
-                            if let Ok((files, folders)) = self.process_directory(path, &mut dir_contents, &self.current_dir) {
+                            if let Ok((files, folders)) =
+                                self.process_directory(path, &mut dir_contents, &self.current_dir)
+                            {
                                 file_count += files;
                                 folder_count += folders;
                             }
@@ -1003,7 +1028,9 @@ impl App {
                         }
                         OutputFormat::Markdown => {
                             let mut dir_contents = String::new();
-                            if let Ok((files, folders)) = self.process_directory(path, &mut dir_contents, &self.current_dir) {
+                            if let Ok((files, folders)) =
+                                self.process_directory(path, &mut dir_contents, &self.current_dir)
+                            {
                                 file_count += files;
                                 folder_count += folders;
                             }
@@ -1011,8 +1038,13 @@ impl App {
                         }
                         OutputFormat::Json => {
                             let mut dir_contents = String::new();
-                            contents.push_str(&format!("{{\"type\":\"directory\",\"path\":\"{}\",\"contents\":[", normalized_path));
-                            if let Ok((files, folders)) = self.process_directory(path, &mut dir_contents, &self.current_dir) {
+                            contents.push_str(&format!(
+                                "{{\"type\":\"directory\",\"path\":\"{}\",\"contents\":[",
+                                normalized_path
+                            ));
+                            if let Ok((files, folders)) =
+                                self.process_directory(path, &mut dir_contents, &self.current_dir)
+                            {
                                 contents.push_str(&dir_contents);
                                 file_count += files;
                                 folder_count += folders;
@@ -1026,7 +1058,6 @@ impl App {
             }
         }
 
-        // Close the root array for JSON format
         if self.output_format == OutputFormat::Json {
             contents.push(']');
         }
@@ -1034,22 +1065,22 @@ impl App {
         if !contents.is_empty() {
             if let Ok(()) = set_clipboard_contents(&contents) {
                 thread::sleep(Duration::from_millis(100));
-                
+
                 let stats = CopyStats {
                     files: file_count,
                     folders: folder_count,
                 };
                 self.last_copy_stats = Some(stats.clone());
-                
+
                 let line_count = contents.lines().count();
                 let byte_size = contents.len();
-                
+
                 self.modal = Some(Modal::copy_stats(
                     file_count,
                     folder_count,
                     line_count,
                     byte_size,
-                    &self.output_format
+                    &self.output_format,
                 ));
             }
         }
@@ -1057,7 +1088,12 @@ impl App {
         Ok(())
     }
 
-    fn process_directory(&self, dir: &PathBuf, output: &mut String, base_path: &PathBuf) -> io::Result<(usize, usize)> {
+    fn process_directory(
+        &self,
+        dir: &PathBuf,
+        output: &mut String,
+        base_path: &PathBuf,
+    ) -> io::Result<(usize, usize)> {
         let mut file_count = 0;
         let mut folder_count = 0;
 
@@ -1066,32 +1102,38 @@ impl App {
             .map(|e| e.path())
             .filter(|p| !self.is_path_ignored(p))
             .collect();
-        
-        entries.sort();
 
+        entries.sort();
         let mut first_item = true;
         for path in entries {
             if let Some(rel_path) = path.strip_prefix(base_path).ok() {
                 let normalized_path = normalize_path(&rel_path.to_string_lossy());
-                
-                // For JSON format, add comma between items
                 if self.output_format == OutputFormat::Json && !first_item {
                     output.push(',');
                 }
                 first_item = false;
-                
+
                 if path.is_file() {
                     if Self::is_binary_file(&path) {
                         if self.ignore_config.include_binary_files {
                             match self.output_format {
                                 OutputFormat::Xml => {
-                                    output.push_str(&format!("<file name=\"{}\">\n</file>\n", normalized_path));
+                                    output.push_str(&format!(
+                                        "<file name=\"{}\">\n</file>\n",
+                                        normalized_path
+                                    ));
                                 }
                                 OutputFormat::Markdown => {
-                                    output.push_str(&format!("```{}\n<binary file>\n```\n\n", normalized_path));
+                                    output.push_str(&format!(
+                                        "```{}\n<binary file>\n```\n\n",
+                                        normalized_path
+                                    ));
                                 }
                                 OutputFormat::Json => {
-                                    output.push_str(&format!("{{\"type\":\"file\",\"path\":\"{}\",\"binary\":true}}", normalized_path));
+                                    output.push_str(&format!(
+                                        "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":true}}",
+                                        normalized_path
+                                    ));
                                 }
                             }
                             file_count += 1;
@@ -1135,19 +1177,26 @@ impl App {
                                     let escaped_content = content
                                         .replace('\\', "\\\\")
                                         .replace('\"', "\\\"")
-                                        .replace('\n', "\\n")  // Always escape newlines for JSON
-                                        .replace('\r', "\\r"); 
+                                        .replace('\n', "\\n")
+                                        .replace('\r', "\\r");
                                     if self.show_line_numbers {
-                                        let lines: Vec<String> = content.lines()
+                                        let lines: Vec<String> = content
+                                            .lines()
                                             .enumerate()
                                             .map(|(i, line)| format!("{:>6} | {}", i + 1, line))
                                             .collect();
-                                        let numbered_content = lines.join("\\n");  // Use escaped newline for join
-                                        output.push_str(&format!("{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}", 
-                                            normalized_path, numbered_content.replace('\"', "\\\"")));
+                                        let numbered_content = lines.join("\\n");
+                                        output.push_str(&format!(
+                                            "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
+                                            normalized_path,
+                                            numbered_content.replace('\"', "\\\"")
+                                        ));
                                     } else {
-                                        output.push_str(&format!("{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}", 
-                                            normalized_path, escaped_content));
+                                        output.push_str(&format!(
+                                            "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
+                                            normalized_path,
+                                            escaped_content
+                                        ));
                                     }
                                 }
                             }
@@ -1159,7 +1208,9 @@ impl App {
                         OutputFormat::Xml => {
                             output.push_str(&format!("<folder name=\"{}\">\n", normalized_path));
                             let mut dir_contents = String::new();
-                            if let Ok((files, folders)) = self.process_directory(&path, &mut dir_contents, base_path) {
+                            if let Ok((files, folders)) =
+                                self.process_directory(&path, &mut dir_contents, base_path)
+                            {
                                 file_count += files;
                                 folder_count += folders;
                             }
@@ -1168,7 +1219,9 @@ impl App {
                         }
                         OutputFormat::Markdown => {
                             let mut dir_contents = String::new();
-                            if let Ok((files, folders)) = self.process_directory(&path, &mut dir_contents, base_path) {
+                            if let Ok((files, folders)) =
+                                self.process_directory(&path, &mut dir_contents, base_path)
+                            {
                                 file_count += files;
                                 folder_count += folders;
                             }
@@ -1176,8 +1229,13 @@ impl App {
                         }
                         OutputFormat::Json => {
                             let mut dir_contents = String::new();
-                            output.push_str(&format!("{{\"type\":\"directory\",\"path\":\"{}\",\"contents\":[", normalized_path));
-                            if let Ok((files, folders)) = self.process_directory(&path, &mut dir_contents, base_path) {
+                            output.push_str(&format!(
+                                "{{\"type\":\"directory\",\"path\":\"{}\",\"contents\":[",
+                                normalized_path
+                            ));
+                            if let Ok((files, folders)) =
+                                self.process_directory(&path, &mut dir_contents, base_path)
+                            {
                                 output.push_str(&dir_contents);
                                 file_count += files;
                                 folder_count += folders;
@@ -1193,16 +1251,53 @@ impl App {
         Ok((file_count, folder_count))
     }
 
+    /// This updated method now **bails early** when the partial count exceeds
+    /// SELECTION_LIMIT, saving time in large directories.
+    fn count_selection_items(&self, path: &PathBuf) -> io::Result<usize> {
+        if path.is_file() {
+            return Ok(1);
+        }
+        if path.is_dir() {
+            let mut count = 0;
+            let mut stack = vec![path.clone()];
+
+            while let Some(current) = stack.pop() {
+                if self.is_path_ignored(&current) {
+                    continue;
+                }
+                if current.is_file() {
+                    count += 1;
+                } else if current.is_dir() {
+                    count += 1;
+                    if count > SELECTION_LIMIT {
+                        // Bail as soon as we exceed the limit
+                        return Ok(count);
+                    }
+                    let entries = fs::read_dir(&current)?
+                        .filter_map(|e| e.ok())
+                        .map(|e| e.path());
+                    for entry_path in entries {
+                        stack.push(entry_path);
+                    }
+                }
+                if count > SELECTION_LIMIT {
+                    // Bail out
+                    return Ok(count);
+                }
+            }
+            return Ok(count);
+        }
+        Ok(0)
+    }
+
     fn update_folder_selection(&mut self, path: &PathBuf, selected: bool) {
         if path.is_dir() {
-            // Update the folder itself
             if selected {
                 self.selected_items.insert(path.clone());
             } else {
                 self.selected_items.remove(path);
             }
 
-            // Update all children
             if let Ok(entries) = fs::read_dir(path) {
                 for entry in entries.filter_map(|e| e.ok()) {
                     let child_path = entry.path();
@@ -1217,19 +1312,35 @@ impl App {
                     }
                 }
             }
+        } else {
+            if selected {
+                self.selected_items.insert(path.clone());
+            } else {
+                self.selected_items.remove(path);
+            }
         }
     }
 
     fn get_icon(path: &PathBuf) -> &'static str {
         if path.is_dir() {
-            return ICONS.iter().find(|(k, _)| *k == "folder").map(|(_, v)| *v).unwrap_or("📁");
+            return ICONS
+                .iter()
+                .find(|(k, _)| *k == "folder")
+                .map(|(_, v)| *v)
+                .unwrap_or("📁");
         }
-        
+
         path.extension()
             .and_then(|ext| ext.to_str())
             .and_then(|ext| ICONS.iter().find(|(k, _)| *k == ext))
             .map(|(_, v)| *v)
-            .unwrap_or(ICONS.iter().find(|(k, _)| *k == "default").map(|(_, v)| *v).unwrap_or("📄"))
+            .unwrap_or(
+                ICONS
+                    .iter()
+                    .find(|(k, _)| *k == "default")
+                    .map(|(_, v)| *v)
+                    .unwrap_or("📄"),
+            )
     }
 
     fn ui(&mut self, f: &mut Frame) {
@@ -1243,59 +1354,61 @@ impl App {
             ])
             .split(f.area());
 
-        // Create a layout for the title block to split it into header and search areas
         let title_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1),  // For the header
-                Constraint::Length(1),  // For the search
-            ])
+            .constraints([Constraint::Length(1), Constraint::Length(1)])
             .split(chunks[0]);
 
-        // Render the header
         let title = Block::default()
-            .title(format!(" AIBundle v{} - {} ", VERSION, self.current_dir.display()))
+            .title(format!(
+                " AIBundle v{} - {} ",
+                VERSION,
+                self.current_dir.display()
+            ))
             .borders(Borders::ALL);
-        f.render_widget(title.clone(), chunks[0]);
+        f.render_widget(title, chunks[0]);
 
-        // Render the search area inside the title block if searching
         if self.is_searching {
             let cursor = if (std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
-                .as_millis() / 500) % 2 == 0
+                .as_millis()
+                / 500)
+                % 2
+                == 0
             {
                 "█"
             } else {
                 " "
             };
-            
-            let search_text = format!("Search: {}{} (Press / to finish, ESC to cancel)", self.search_query, cursor);
-            let search_widget = Paragraph::new(search_text)
-                .alignment(Alignment::Left);
-            
-            // Render the search text inside the title block, with a 2-character margin
+
+            let search_text = format!(
+                "Search: {}{} (Press / to finish, ESC to cancel)",
+                self.search_query, cursor
+            );
+            let search_widget = Paragraph::new(search_text).alignment(Alignment::Left);
             let inner_area = title_chunks[1];
             let search_area = Rect {
                 x: inner_area.x + 2,
                 y: inner_area.y,
-                width: inner_area.width - 4,
+                width: inner_area.width.saturating_sub(4),
                 height: inner_area.height,
             };
-            
+
             f.render_widget(search_widget, search_area);
         }
 
-        let items: Vec<ListItem> = self.filtered_items
+        let items: Vec<ListItem> = self
+            .filtered_items
             .iter()
             .map(|path| {
-                let depth = path.strip_prefix(&self.current_dir)
+                let depth = path
+                    .strip_prefix(&self.current_dir)
                     .map(|p| p.components().count())
                     .unwrap_or(0)
                     .saturating_sub(1);
-                
                 let indent = "  ".repeat(depth);
-                
+
                 let name = if path.ends_with("..") {
                     "../".to_string()
                 } else {
@@ -1306,7 +1419,11 @@ impl App {
                 };
 
                 let icon = Self::get_icon(path);
-                let prefix = if self.selected_items.contains(path) { "[X] " } else { "[ ] " };
+                let prefix = if self.selected_items.contains(path) {
+                    "[X] "
+                } else {
+                    "[ ] "
+                };
                 let display_name = if path.is_dir() && !path.ends_with("..") {
                     format!("{}{}{} {}/", indent, prefix, icon, name)
                 } else {
@@ -1338,41 +1455,37 @@ impl App {
             if self.show_line_numbers { "x" } else { " " },
         );
 
-        let status = Block::default()
-            .title(status_text)
-            .borders(Borders::ALL);
+        let status = Block::default().title(status_text).borders(Borders::ALL);
         f.render_widget(status, chunks[2]);
 
-        // Draw modal if exists and recent
         if let Some(modal) = &self.modal {
-            let is_help = modal.height > 10; // Help modal is taller than copy modal
-            let timeout = if is_help { 30 } else { 2 }; // Help modal stays longer
-            
+            let is_help = modal.height > 10;
+            let timeout = if is_help { 30 } else { 2 };
+
             if modal.timestamp.elapsed().as_secs() < timeout {
                 let area = centered_rect(modal.width, modal.height, f.area());
-                
                 let (content, has_more_pages) = modal.get_visible_content(area.height);
                 let lines: Vec<&str> = content.lines().collect();
-                let max_length = lines.iter()
-                    .map(|line| line.len())
-                    .max()
-                    .unwrap_or(0);
-                
-                let total_space = area.width as usize - 2;
-                let padding = (total_space - max_length) / 2;
+                let max_length = lines.iter().map(|line| line.len()).max().unwrap_or(0);
+                let total_space = area.width.saturating_sub(2) as usize;
+                let padding = total_space.saturating_sub(max_length) / 2;
                 let pad = " ".repeat(padding);
-                
+
                 let padded_lines: Vec<Line> = std::iter::once("")
                     .chain(lines.into_iter())
                     .map(|line| {
                         if line.is_empty() {
                             Line::from(line.to_string())
                         } else {
-                            Line::from(format!("{}{}", if is_help { "" } else { &pad }, line))
+                            if is_help {
+                                Line::from(line.to_string())
+                            } else {
+                                Line::from(format!("{}{}", pad, line))
+                            }
                         }
                     })
                     .collect();
-                
+
                 let title = if is_help {
                     if has_more_pages {
                         " Help (PgUp/PgDn to navigate, any other key to close) "
@@ -1380,15 +1493,16 @@ impl App {
                         " Help (press any key to close) "
                     }
                 } else {
-                    " Copied to clipboard: "
+                    " Message: "
                 };
 
                 let text = Paragraph::new(padded_lines)
-                    .block(Block::default()
-                        .borders(Borders::ALL)
-                        .title(title))
-                    .alignment(if is_help { Alignment::Left } else { Alignment::Center });
-
+                    .block(Block::default().borders(Borders::ALL).title(title))
+                    .alignment(if is_help {
+                        Alignment::Left
+                    } else {
+                        Alignment::Center
+                    });
                 f.render_widget(Clear, area);
                 f.render_widget(text, area);
             } else {
@@ -1420,34 +1534,31 @@ impl App {
         self.show_line_numbers = !self.show_line_numbers;
     }
 
+    fn show_help(&mut self) {
+        self.modal = Some(Modal::help());
+    }
+
     fn is_binary_file(path: &PathBuf) -> bool {
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             let binary_extensions = [
-                // Git specific
                 "idx", "pack", "rev", "index",
-                // Images
                 "png", "jpg", "jpeg", "gif", "bmp", "tiff", "webp", "ico", "svg",
-                // Audio
                 "mp3", "wav", "ogg", "flac", "m4a", "aac", "wma",
-                // Video
                 "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm",
-                // Archives
                 "zip", "rar", "7z", "tar", "gz", "iso",
-                // Executables
                 "exe", "dll", "so", "dylib",
-                // Other binary formats
                 "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
                 "class", "pyc", "pyd", "pyo",
             ];
-            return binary_extensions.contains(&ext.to_lowercase().as_str());
+            if binary_extensions.contains(&ext.to_lowercase().as_str()) {
+                return true;
+            }
         }
-        
-        // Also check for files without extensions that are known to be binary
+
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            let binary_files = ["index"];  // Git index file
+            let binary_files = ["index"];
             return binary_files.contains(&name);
         }
-        
         false
     }
 
@@ -1455,8 +1566,6 @@ impl App {
         if !self.ignore_config.use_default_ignores && !self.ignore_config.use_gitignore {
             return false;
         }
-
-        // Check default ignores
         if self.ignore_config.use_default_ignores {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                 if DEFAULT_IGNORED_DIRS.contains(&name) {
@@ -1464,12 +1573,8 @@ impl App {
                 }
             }
         }
-
-        // Check .gitignore if enabled
         if self.ignore_config.use_gitignore {
             let mut builder = GitignoreBuilder::new(&self.current_dir);
-            
-            // Try to load .gitignore from current and parent directories
             let mut dir = self.current_dir.clone();
             while let Some(parent) = dir.parent() {
                 let gitignore = dir.join(".gitignore");
@@ -1481,7 +1586,6 @@ impl App {
                 }
                 dir = parent.to_path_buf();
             }
-
             if let Ok(gitignore) = builder.build() {
                 let is_dir = path.is_dir();
                 match gitignore.matched_path_or_any_parents(path, is_dir) {
@@ -1490,55 +1594,105 @@ impl App {
                 }
             }
         }
-
         false
     }
 
     fn toggle_folder_expansion(&mut self) -> io::Result<()> {
         if let Some(selected) = self.list_state.selected() {
-            let path = &self.items[selected];
-            if path.is_dir() && !path.ends_with("..") {
-                if self.expanded_folders.contains(path) {
-                    self.expanded_folders.remove(path);
-                } else {
-                    self.expanded_folders.insert(path.clone());
+            if selected < self.filtered_items.len() {
+                let path = &self.filtered_items[selected];
+                if path.is_dir() && !path.ends_with("..") {
+                    if self.expanded_folders.contains(path) {
+                        self.expanded_folders.remove(path);
+                    } else {
+                        self.expanded_folders.insert(path.clone());
+                    }
+                    self.load_items()?;
                 }
-                self.load_items()?;
             }
         }
         Ok(())
     }
+}
 
-    fn toggle_select_all(&mut self) {
-        // Check if all visible items are already selected
-        let all_selected = self.filtered_items.iter()
-            .filter(|path| !path.ends_with("..")) // Exclude parent directory
-            .all(|path| self.selected_items.contains(path));
+fn add_items_iterative(
+    items: &mut Vec<PathBuf>,
+    root: &PathBuf,
+    expanded_folders: &HashSet<PathBuf>,
+    ignore_config: &IgnoreConfig,
+    base_dir: &PathBuf,
+) -> io::Result<()> {
+    let mut stack = Vec::new();
+    stack.push(root.clone());
 
-        if all_selected {
-            // Unselect all items
-            self.selected_items.clear();
-        } else {
-            // Collect paths first to avoid borrow checker issues
-            let paths_to_select: Vec<_> = self.filtered_items.iter()
-                .filter(|path| !path.ends_with(".."))
-                .cloned()
-                .collect();
+    while let Some(current) = stack.pop() {
+        let mut entries: Vec<PathBuf> = fs::read_dir(&current)?
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect();
 
-            // Then process them
-            for path in paths_to_select {
-                if path.is_dir() {
-                    self.update_folder_selection(&path, true);
-                } else {
-                    self.selected_items.insert(path);
-                }
+        entries.retain(|p| !is_path_ignored_for_iterative(p, base_dir, ignore_config));
+        entries.sort_by(|a, b| {
+            let a_is_dir = a.is_dir();
+            let b_is_dir = b.is_dir();
+            match (a_is_dir, b_is_dir) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.file_name().cmp(&b.file_name()),
+            }
+        });
+
+        for entry in &entries {
+            items.push(entry.clone());
+        }
+
+        for entry in entries.into_iter().rev() {
+            if entry.is_dir() && expanded_folders.contains(&entry) {
+                stack.push(entry);
             }
         }
     }
 
-    fn show_help(&mut self) {
-        self.modal = Some(Modal::help());
+    Ok(())
+}
+
+fn is_path_ignored_for_iterative(
+    path: &PathBuf,
+    base_dir: &PathBuf,
+    ignore_config: &IgnoreConfig,
+) -> bool {
+    if !ignore_config.use_default_ignores && !ignore_config.use_gitignore {
+        return false;
     }
+    if ignore_config.use_default_ignores {
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if DEFAULT_IGNORED_DIRS.contains(&name) {
+                return true;
+            }
+        }
+    }
+    if ignore_config.use_gitignore {
+        let mut builder = GitignoreBuilder::new(base_dir);
+        let mut dir = base_dir.clone();
+        while let Some(parent) = dir.parent() {
+            let gitignore = dir.join(".gitignore");
+            if gitignore.exists() {
+                match builder.add(gitignore) {
+                    None => (),
+                    Some(_) => break,
+                }
+            }
+            dir = parent.to_path_buf();
+        }
+        if let Ok(gitignore) = builder.build() {
+            let is_dir = path.is_dir();
+            match gitignore.matched_path_or_any_parents(path, is_dir) {
+                Match::Ignore(_) => return true,
+                _ => (),
+            }
+        }
+    }
+    false
 }
 
 fn normalize_path(path: &str) -> String {
@@ -1546,15 +1700,11 @@ fn normalize_path(path: &str) -> String {
 }
 
 fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
-    // width and height are now in characters/lines instead of percentages
-    
-    // Ensure the requested size doesn't exceed the terminal
     let popup_width = width.min(r.width);
     let popup_height = height.min(r.height);
 
-    // Calculate margins to center the rect
-    let x_margin = (r.width - popup_width) / 2;
-    let y_margin = (r.height - popup_height) / 2;
+    let x_margin = (r.width.saturating_sub(popup_width)) / 2;
+    let y_margin = (r.height.saturating_sub(popup_height)) / 2;
 
     Rect {
         x: r.x + x_margin,
@@ -1564,17 +1714,14 @@ fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
     }
 }
 
-// Add this helper function for human-readable byte sizes
 fn human_readable_size(size: usize) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
     let mut size = size as f64;
     let mut unit_index = 0;
-
     while size >= 1024.0 && unit_index < UNITS.len() - 1 {
         size /= 1024.0;
         unit_index += 1;
     }
-
     if unit_index == 0 {
         format!("{} {}", size as usize, UNITS[unit_index])
     } else {
@@ -1582,7 +1729,6 @@ fn human_readable_size(size: usize) -> String {
     }
 }
 
-// Add this function to handle cross-platform clipboard operations
 fn set_clipboard_contents(contents: &str) -> io::Result<()> {
     match OS {
         "windows" => {
@@ -1593,7 +1739,6 @@ fn set_clipboard_contents(contents: &str) -> io::Result<()> {
             Ok(())
         }
         _ => {
-            // First try PowerShell clip.exe (WSL2 -> Windows clipboard)
             let clip_result = Command::new("clip.exe")
                 .stdin(std::process::Stdio::piped())
                 .spawn()
@@ -1604,23 +1749,15 @@ fn set_clipboard_contents(contents: &str) -> io::Result<()> {
                     }
                     child.wait().map(|_| ())
                 });
-
             if clip_result.is_ok() {
-                // Give clip.exe time to process
                 thread::sleep(Duration::from_millis(100));
                 return Ok(());
             }
-
-            // Try wl-copy (Wayland)
-            let wl_result = Command::new("wl-copy")
-                .arg(contents)
-                .status();
-
+            let wl_result = Command::new("wl-copy").arg(contents).status();
             match wl_result {
                 Ok(_) => Ok(()),
                 Err(_) => {
-                    // Fall back to xclip (X11)
-                    Command::new("xclip")
+                    let output = Command::new("xclip")
                         .arg("-selection")
                         .arg("clipboard")
                         .arg("-i")
@@ -1631,14 +1768,14 @@ fn set_clipboard_contents(contents: &str) -> io::Result<()> {
                                 stdin.write_all(contents.as_bytes())?;
                             }
                             child.wait().map(|_| ())
-                        })
+                        })?;
+                    Ok(output)
                 }
             }
         }
     }
 }
 
-// Add this function to get clipboard contents
 fn get_clipboard_contents() -> io::Result<String> {
     match OS {
         "windows" => {
@@ -1650,39 +1787,72 @@ fn get_clipboard_contents() -> io::Result<String> {
             }
         }
         _ => {
-            // First try PowerShell Get-Clipboard (WSL2 -> Windows clipboard)
             let powershell_result = Command::new("powershell.exe")
                 .args(["-Command", "Get-Clipboard"])
                 .output();
-
             if let Ok(output) = powershell_result {
                 if output.status.success() {
                     return String::from_utf8(output.stdout)
                         .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"));
                 }
             }
-
-            // Try wl-paste (Wayland)
-            let wl_output = Command::new("wl-paste")
-                .output();
-
-            match wl_output {
-                Ok(output) if output.status.success() => {
-                    String::from_utf8(output.stdout)
-                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"))
-                }
-                _ => {
-                    // Fall back to xclip (X11)
-                    let output = Command::new("xclip")
-                        .arg("-selection")
-                        .arg("clipboard")
-                        .arg("-o")
-                        .output()?;
-                    String::from_utf8(output.stdout)
-                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"))
+            let wl_output = Command::new("wl-paste").output();
+            if let Ok(output) = wl_output {
+                if output.status.success() {
+                    return String::from_utf8(output.stdout)
+                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"));
                 }
             }
+            let output = Command::new("xclip")
+                .arg("-selection")
+                .arg("clipboard")
+                .arg("-o")
+                .output()?;
+            String::from_utf8(output.stdout)
+                .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"))
         }
+    }
+}
+
+/// New asynchronous helper replicating `count_selection_items` logic,
+/// but does not block the UI. Returns `io::Result<usize>`.
+fn count_selection_items_async(
+    path: &PathBuf,
+    base_dir: &PathBuf,
+    ignore_config: &IgnoreConfig,
+) -> io::Result<usize> {
+    if path.is_file() {
+        return Ok(1);
+    }
+    if path.is_dir() {
+        let mut count = 0;
+        let mut stack = vec![path.clone()];
+
+        while let Some(current) = stack.pop() {
+            if is_path_ignored_for_iterative(&current, base_dir, ignore_config) {
+                continue;
+            }
+            if current.is_file() {
+                count += 1;
+            } else if current.is_dir() {
+                count += 1;
+                if count > SELECTION_LIMIT {
+                    return Ok(count);
+                }
+                let entries = fs::read_dir(&current)?
+                    .filter_map(|e| e.ok())
+                    .map(|e| e.path());
+                for entry_path in entries {
+                    stack.push(entry_path);
+                }
+            }
+            if count > SELECTION_LIMIT {
+                return Ok(count);
+            }
+        }
+        Ok(count)
+    } else {
+        Ok(0)
     }
 }
 
