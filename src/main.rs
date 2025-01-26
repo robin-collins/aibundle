@@ -27,13 +27,15 @@ const VERSION: &str = "0.4.0"; // This should always be the same as the version 
 enum OutputFormat {
     Xml,
     Markdown,
+    Json,
 }
 
 impl OutputFormat {
     fn toggle(&self) -> Self {
         match self {
             OutputFormat::Xml => OutputFormat::Markdown,
-            OutputFormat::Markdown => OutputFormat::Xml,
+            OutputFormat::Markdown => OutputFormat::Json,
+            OutputFormat::Json => OutputFormat::Xml,
         }
     }
 }
@@ -401,6 +403,7 @@ struct App {
     filtered_items: Vec<PathBuf>,
     is_searching: bool,
     output_format: OutputFormat,
+    show_line_numbers: bool,
 }
 
 fn add_items_recursive(
@@ -498,6 +501,7 @@ impl App {
             filtered_items: Vec::new(),
             is_searching: false,
             output_format: OutputFormat::Xml,
+            show_line_numbers: false,
         }
     }
 
@@ -642,6 +646,7 @@ impl App {
                                 KeyCode::Char('g') => self.toggle_gitignore()?,
                                 KeyCode::Char('b') => self.toggle_binary_files()?,
                                 KeyCode::Char('f') => self.toggle_output_format(),
+                                KeyCode::Char('n') => self.toggle_line_numbers(),
                                 KeyCode::Char('/') => self.toggle_search(),
                                 KeyCode::Tab => self.toggle_folder_expansion()?,
                                 KeyCode::Up => self.move_selection(-1),
@@ -732,6 +737,11 @@ impl App {
         let mut file_count = 0;
         let mut folder_count = 0;
         
+        // For JSON format, we need to start the root array
+        if self.output_format == OutputFormat::Json {
+            contents.push_str("[");
+        }
+        
         // First, collect all paths we need to process
         let mut to_process: Vec<_> = self.selected_items.iter()
             .filter(|path| {
@@ -744,9 +754,16 @@ impl App {
             .collect();
         to_process.sort();
         
+        let mut first_item = true;
         for path in to_process {
             if let Some(rel_path) = path.strip_prefix(&self.current_dir).ok() {
                 let normalized_path = normalize_path(&rel_path.to_string_lossy());
+                
+                // For JSON format, add comma between items
+                if self.output_format == OutputFormat::Json && !first_item {
+                    contents.push(',');
+                }
+                first_item = false;
                 
                 if path.is_file() {
                     if Self::is_binary_file(path) {
@@ -758,6 +775,9 @@ impl App {
                                 OutputFormat::Markdown => {
                                     contents.push_str(&format!("```{}\n<binary file>\n```\n\n", normalized_path));
                                 }
+                                OutputFormat::Json => {
+                                    contents.push_str(&format!("{{\"type\":\"file\",\"path\":\"{}\",\"binary\":true}}", normalized_path));
+                                }
                             }
                             file_count += 1;
                         }
@@ -766,7 +786,13 @@ impl App {
                             OutputFormat::Xml => {
                                 contents.push_str(&format!("<file name=\"{}\">\n", normalized_path));
                                 if let Ok(content) = fs::read_to_string(path) {
-                                    contents.push_str(&content);
+                                    if self.show_line_numbers {
+                                        for (i, line) in content.lines().enumerate() {
+                                            contents.push_str(&format!("{:>6} | {}\n", i + 1, line));
+                                        }
+                                    } else {
+                                        contents.push_str(&content);
+                                    }
                                     if !content.ends_with('\n') {
                                         contents.push('\n');
                                     }
@@ -776,12 +802,39 @@ impl App {
                             OutputFormat::Markdown => {
                                 contents.push_str(&format!("```{}\n", normalized_path));
                                 if let Ok(content) = fs::read_to_string(path) {
-                                    contents.push_str(&content);
+                                    if self.show_line_numbers {
+                                        for (i, line) in content.lines().enumerate() {
+                                            contents.push_str(&format!("{:>6} | {}\n", i + 1, line));
+                                        }
+                                    } else {
+                                        contents.push_str(&content);
+                                    }
                                     if !content.ends_with('\n') {
                                         contents.push('\n');
                                     }
                                 }
                                 contents.push_str("```\n\n");
+                            }
+                            OutputFormat::Json => {
+                                if let Ok(content) = fs::read_to_string(path) {
+                                    let escaped_content = content
+                                        .replace('\\', "\\\\")
+                                        .replace('\"', "\\\"")
+                                        .replace('\n', "\\n")  // Always escape newlines for JSON
+                                        .replace('\r', "\\r"); 
+                                    if self.show_line_numbers {
+                                        let lines: Vec<String> = content.lines()
+                                            .enumerate()
+                                            .map(|(i, line)| format!("{:>6} | {}", i + 1, line))
+                                            .collect();
+                                        let numbered_content = lines.join("\\n");  // Use escaped newline for join
+                                        contents.push_str(&format!("{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}", 
+                                            normalized_path, numbered_content.replace('\"', "\\\"")));
+                                    } else {
+                                        contents.push_str(&format!("{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}", 
+                                            normalized_path, escaped_content));
+                                    }
+                                }
                             }
                         }
                         file_count += 1;
@@ -806,10 +859,26 @@ impl App {
                             }
                             contents.push_str(&dir_contents);
                         }
+                        OutputFormat::Json => {
+                            let mut dir_contents = String::new();
+                            contents.push_str(&format!("{{\"type\":\"directory\",\"path\":\"{}\",\"contents\":[", normalized_path));
+                            if let Ok((files, folders)) = self.process_directory(path, &mut dir_contents, &self.current_dir) {
+                                contents.push_str(&dir_contents);
+                                file_count += files;
+                                folder_count += folders;
+                            }
+                            contents.push(']');
+                            contents.push('}');
+                        }
                     }
                     folder_count += 1;
                 }
             }
+        }
+
+        // Close the root array for JSON format
+        if self.output_format == OutputFormat::Json {
+            contents.push(']');
         }
 
         if !contents.is_empty() {
@@ -839,6 +908,7 @@ impl App {
                         match self.output_format {
                             OutputFormat::Xml => "XML",
                             OutputFormat::Markdown => "Markdown",
+                            OutputFormat::Json => "JSON",
                         }
                     ),
                     timestamp: std::time::Instant::now(),
@@ -861,9 +931,16 @@ impl App {
         
         entries.sort();
 
+        let mut first_item = true;
         for path in entries {
             if let Some(rel_path) = path.strip_prefix(base_path).ok() {
                 let normalized_path = normalize_path(&rel_path.to_string_lossy());
+                
+                // For JSON format, add comma between items
+                if self.output_format == OutputFormat::Json && !first_item {
+                    output.push(',');
+                }
+                first_item = false;
                 
                 if path.is_file() {
                     if Self::is_binary_file(&path) {
@@ -875,6 +952,9 @@ impl App {
                                 OutputFormat::Markdown => {
                                     output.push_str(&format!("```{}\n<binary file>\n```\n\n", normalized_path));
                                 }
+                                OutputFormat::Json => {
+                                    output.push_str(&format!("{{\"type\":\"file\",\"path\":\"{}\",\"binary\":true}}", normalized_path));
+                                }
                             }
                             file_count += 1;
                         }
@@ -883,7 +963,13 @@ impl App {
                             OutputFormat::Xml => {
                                 output.push_str(&format!("<file name=\"{}\">\n", normalized_path));
                                 if let Ok(content) = fs::read_to_string(&path) {
-                                    output.push_str(&content);
+                                    if self.show_line_numbers {
+                                        for (i, line) in content.lines().enumerate() {
+                                            output.push_str(&format!("{:>6} | {}\n", i + 1, line));
+                                        }
+                                    } else {
+                                        output.push_str(&content);
+                                    }
                                     if !content.ends_with('\n') {
                                         output.push('\n');
                                     }
@@ -893,12 +979,39 @@ impl App {
                             OutputFormat::Markdown => {
                                 output.push_str(&format!("```{}\n", normalized_path));
                                 if let Ok(content) = fs::read_to_string(&path) {
-                                    output.push_str(&content);
+                                    if self.show_line_numbers {
+                                        for (i, line) in content.lines().enumerate() {
+                                            output.push_str(&format!("{:>6} | {}\n", i + 1, line));
+                                        }
+                                    } else {
+                                        output.push_str(&content);
+                                    }
                                     if !content.ends_with('\n') {
                                         output.push('\n');
                                     }
                                 }
                                 output.push_str("```\n\n");
+                            }
+                            OutputFormat::Json => {
+                                if let Ok(content) = fs::read_to_string(&path) {
+                                    let escaped_content = content
+                                        .replace('\\', "\\\\")
+                                        .replace('\"', "\\\"")
+                                        .replace('\n', "\\n")  // Always escape newlines for JSON
+                                        .replace('\r', "\\r"); 
+                                    if self.show_line_numbers {
+                                        let lines: Vec<String> = content.lines()
+                                            .enumerate()
+                                            .map(|(i, line)| format!("{:>6} | {}", i + 1, line))
+                                            .collect();
+                                        let numbered_content = lines.join("\\n");  // Use escaped newline for join
+                                        output.push_str(&format!("{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}", 
+                                            normalized_path, numbered_content.replace('\"', "\\\"")));
+                                    } else {
+                                        output.push_str(&format!("{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}", 
+                                            normalized_path, escaped_content));
+                                    }
+                                }
                             }
                         }
                         file_count += 1;
@@ -922,6 +1035,17 @@ impl App {
                                 folder_count += folders;
                             }
                             output.push_str(&dir_contents);
+                        }
+                        OutputFormat::Json => {
+                            let mut dir_contents = String::new();
+                            output.push_str(&format!("{{\"type\":\"directory\",\"path\":\"{}\",\"contents\":[", normalized_path));
+                            if let Ok((files, folders)) = self.process_directory(&path, &mut dir_contents, base_path) {
+                                output.push_str(&dir_contents);
+                                file_count += files;
+                                folder_count += folders;
+                            }
+                            output.push(']');
+                            output.push('}');
                         }
                     }
                     folder_count += 1;
@@ -1062,7 +1186,7 @@ impl App {
         f.render_stateful_widget(list, chunks[1], &mut self.list_state);
 
         let status_text = format!(
-            " {} items ({} selected) - Space: select, Enter: open dir, c: copy, i: ignores [{}], g: gitignore [{}], b: binary [{}], f: format [{}], /: search, q: quit ",
+            " {} items ({} selected) - Space: select, Enter: open dir, c: copy, i: ignores [{}], g: gitignore [{}], b: binary [{}], f: format [{}], n: line numbers [{}], /: search, q: quit ",
             self.filtered_items.len(),
             self.selected_items.len(),
             if self.ignore_config.use_default_ignores { "x" } else { " " },
@@ -1071,7 +1195,9 @@ impl App {
             match self.output_format {
                 OutputFormat::Xml => "XML",
                 OutputFormat::Markdown => "Markdown",
+                OutputFormat::Json => "JSON",
             },
+            if self.show_line_numbers { "x" } else { " " },
         );
 
         let status = Block::default()
@@ -1136,6 +1262,10 @@ impl App {
         self.output_format = self.output_format.toggle();
     }
 
+    fn toggle_line_numbers(&mut self) {
+        self.show_line_numbers = !self.show_line_numbers;
+    }
+
     fn is_binary_file(path: &PathBuf) -> bool {
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             let binary_extensions = [
@@ -1191,8 +1321,8 @@ impl App {
                 let gitignore = dir.join(".gitignore");
                 if gitignore.exists() {
                     match builder.add(gitignore) {
-                        None => (),  // Successfully added
-                        Some(_) => break,  // Error occurred, stop trying
+                        None => (),
+                        Some(_) => break,
                     }
                 }
                 dir = parent.to_path_buf();
