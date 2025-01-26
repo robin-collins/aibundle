@@ -22,6 +22,22 @@ use std::thread;
 use std::time::Duration;
 
 const VERSION: &str = "0.4.0"; // This should always be the same as the version in the Cargo.toml file
+
+#[derive(Clone, Copy, PartialEq)]
+enum OutputFormat {
+    Xml,
+    Markdown,
+}
+
+impl OutputFormat {
+    fn toggle(&self) -> Self {
+        match self {
+            OutputFormat::Xml => OutputFormat::Markdown,
+            OutputFormat::Markdown => OutputFormat::Xml,
+        }
+    }
+}
+
 const ICONS: &[(&str, &str)] = &[
 // Folders
 ("folder", "📁"),
@@ -384,6 +400,7 @@ struct App {
     search_query: String,
     filtered_items: Vec<PathBuf>,
     is_searching: bool,
+    output_format: OutputFormat,
 }
 
 fn add_items_recursive(
@@ -480,6 +497,7 @@ impl App {
             search_query: String::new(),
             filtered_items: Vec::new(),
             is_searching: false,
+            output_format: OutputFormat::Xml,
         }
     }
 
@@ -623,6 +641,7 @@ impl App {
                                 KeyCode::Char('i') => self.toggle_default_ignores()?,
                                 KeyCode::Char('g') => self.toggle_gitignore()?,
                                 KeyCode::Char('b') => self.toggle_binary_files()?,
+                                KeyCode::Char('f') => self.toggle_output_format(),
                                 KeyCode::Char('/') => self.toggle_search(),
                                 KeyCode::Tab => self.toggle_folder_expansion()?,
                                 KeyCode::Up => self.move_selection(-1),
@@ -716,8 +735,6 @@ impl App {
         // First, collect all paths we need to process
         let mut to_process: Vec<_> = self.selected_items.iter()
             .filter(|path| {
-                // Only process items at the root level (direct children of current_dir)
-                // or items whose parent directory is not selected
                 if let Some(parent) = path.parent() {
                     !self.selected_items.contains(parent)
                 } else {
@@ -725,7 +742,7 @@ impl App {
                 }
             })
             .collect();
-        to_process.sort(); // Sort for consistent output
+        to_process.sort();
         
         for path in to_process {
             if let Some(rel_path) = path.strip_prefix(&self.current_dir).ok() {
@@ -734,34 +751,62 @@ impl App {
                 if path.is_file() {
                     if Self::is_binary_file(path) {
                         if self.ignore_config.include_binary_files {
-                            contents.push_str(&format!("<file name=\"{}\">\n</file>\n", normalized_path));
+                            match self.output_format {
+                                OutputFormat::Xml => {
+                                    contents.push_str(&format!("<file name=\"{}\">\n</file>\n", normalized_path));
+                                }
+                                OutputFormat::Markdown => {
+                                    contents.push_str(&format!("```{}\n<binary file>\n```\n\n", normalized_path));
+                                }
+                            }
                             file_count += 1;
                         }
                     } else {
-                        contents.push_str(&format!("<file name=\"{}\">\n", normalized_path));
-                        match fs::read_to_string(path) {
-                            Ok(content) => {
-                                contents.push_str(&content);
-                                if !content.ends_with('\n') {
-                                    contents.push('\n');
+                        match self.output_format {
+                            OutputFormat::Xml => {
+                                contents.push_str(&format!("<file name=\"{}\">\n", normalized_path));
+                                if let Ok(content) = fs::read_to_string(path) {
+                                    contents.push_str(&content);
+                                    if !content.ends_with('\n') {
+                                        contents.push('\n');
+                                    }
                                 }
+                                contents.push_str("</file>\n");
                             }
-                            Err(e) => {
-                                eprintln!("Error reading file {}: {}", path.display(), e);
+                            OutputFormat::Markdown => {
+                                contents.push_str(&format!("```{}\n", normalized_path));
+                                if let Ok(content) = fs::read_to_string(path) {
+                                    contents.push_str(&content);
+                                    if !content.ends_with('\n') {
+                                        contents.push('\n');
+                                    }
+                                }
+                                contents.push_str("```\n\n");
                             }
                         }
-                        contents.push_str("</file>\n");
                         file_count += 1;
                     }
                 } else if path.is_dir() {
-                    contents.push_str(&format!("<folder name=\"{}\">\n", normalized_path));
-                    let mut dir_contents = String::new();
-                    if let Ok((files, folders)) = self.process_directory(path, &mut dir_contents, &self.current_dir) {
-                        file_count += files;
-                        folder_count += folders;
+                    match self.output_format {
+                        OutputFormat::Xml => {
+                            contents.push_str(&format!("<folder name=\"{}\">\n", normalized_path));
+                            let mut dir_contents = String::new();
+                            if let Ok((files, folders)) = self.process_directory(path, &mut dir_contents, &self.current_dir) {
+                                file_count += files;
+                                folder_count += folders;
+                            }
+                            contents.push_str(&dir_contents);
+                            contents.push_str("</folder>\n");
+                        }
+                        OutputFormat::Markdown => {
+                            let mut dir_contents = String::new();
+                            if let Ok((files, folders)) = self.process_directory(path, &mut dir_contents, &self.current_dir) {
+                                file_count += files;
+                                folder_count += folders;
+                            }
+                            contents.push_str(&dir_contents);
+                        }
                     }
-                    contents.push_str(&dir_contents);
-                    contents.push_str("</folder>\n");
                     folder_count += 1;
                 }
             }
@@ -769,7 +814,6 @@ impl App {
 
         if !contents.is_empty() {
             if let Ok(()) = set_clipboard_contents(&contents) {
-                // Add a small delay to ensure clipboard operation completes
                 thread::sleep(Duration::from_millis(100));
                 
                 let stats = CopyStats {
@@ -778,7 +822,6 @@ impl App {
                 };
                 self.last_copy_stats = Some(stats.clone());
                 
-                // Count lines
                 let line_count = contents.lines().count();
                 let byte_size = contents.len();
                 
@@ -787,11 +830,16 @@ impl App {
                         "Files copied: {}\n\
                          Folders copied: {}\n\
                          Total lines: {}\n\
-                         Total size: {}\n",
+                         Total size: {}\n\
+                         Format: {}\n",
                         file_count,
                         folder_count,
                         line_count,
-                        human_readable_size(byte_size)
+                        human_readable_size(byte_size),
+                        match self.output_format {
+                            OutputFormat::Xml => "XML",
+                            OutputFormat::Markdown => "Markdown",
+                        }
                     ),
                     timestamp: std::time::Instant::now(),
                 });
@@ -820,27 +868,62 @@ impl App {
                 if path.is_file() {
                     if Self::is_binary_file(&path) {
                         if self.ignore_config.include_binary_files {
-                            output.push_str(&format!("<file name=\"{}\">\n</file>\n", normalized_path));
+                            match self.output_format {
+                                OutputFormat::Xml => {
+                                    output.push_str(&format!("<file name=\"{}\">\n</file>\n", normalized_path));
+                                }
+                                OutputFormat::Markdown => {
+                                    output.push_str(&format!("```{}\n<binary file>\n```\n\n", normalized_path));
+                                }
+                            }
                             file_count += 1;
                         }
                     } else {
-                        output.push_str(&format!("<file name=\"{}\">\n", normalized_path));
-                        if let Ok(content) = fs::read_to_string(&path) {
-                            output.push_str(&content);
-                            if !content.ends_with('\n') {
-                                output.push('\n');
+                        match self.output_format {
+                            OutputFormat::Xml => {
+                                output.push_str(&format!("<file name=\"{}\">\n", normalized_path));
+                                if let Ok(content) = fs::read_to_string(&path) {
+                                    output.push_str(&content);
+                                    if !content.ends_with('\n') {
+                                        output.push('\n');
+                                    }
+                                }
+                                output.push_str("</file>\n");
+                            }
+                            OutputFormat::Markdown => {
+                                output.push_str(&format!("```{}\n", normalized_path));
+                                if let Ok(content) = fs::read_to_string(&path) {
+                                    output.push_str(&content);
+                                    if !content.ends_with('\n') {
+                                        output.push('\n');
+                                    }
+                                }
+                                output.push_str("```\n\n");
                             }
                         }
-                        output.push_str("</file>\n");
                         file_count += 1;
                     }
                 } else if path.is_dir() {
-                    output.push_str(&format!("<folder name=\"{}\">\n", normalized_path));
-                    if let Ok((files, folders)) = self.process_directory(&path, output, base_path) {
-                        file_count += files;
-                        folder_count += folders;
+                    match self.output_format {
+                        OutputFormat::Xml => {
+                            output.push_str(&format!("<folder name=\"{}\">\n", normalized_path));
+                            let mut dir_contents = String::new();
+                            if let Ok((files, folders)) = self.process_directory(&path, &mut dir_contents, base_path) {
+                                file_count += files;
+                                folder_count += folders;
+                            }
+                            output.push_str(&dir_contents);
+                            output.push_str("</folder>\n");
+                        }
+                        OutputFormat::Markdown => {
+                            let mut dir_contents = String::new();
+                            if let Ok((files, folders)) = self.process_directory(&path, &mut dir_contents, base_path) {
+                                file_count += files;
+                                folder_count += folders;
+                            }
+                            output.push_str(&dir_contents);
+                        }
                     }
-                    output.push_str("</folder>\n");
                     folder_count += 1;
                 }
             }
@@ -979,12 +1062,16 @@ impl App {
         f.render_stateful_widget(list, chunks[1], &mut self.list_state);
 
         let status_text = format!(
-            " {} items ({} selected) - Space: select, Enter: open dir, c: copy, i: ignores [{}], g: gitignore [{}], b: binary [{}], /: search, q: quit ",
+            " {} items ({} selected) - Space: select, Enter: open dir, c: copy, i: ignores [{}], g: gitignore [{}], b: binary [{}], f: format [{}], /: search, q: quit ",
             self.filtered_items.len(),
             self.selected_items.len(),
             if self.ignore_config.use_default_ignores { "x" } else { " " },
             if self.ignore_config.use_gitignore { "x" } else { " " },
             if self.ignore_config.include_binary_files { "x" } else { " " },
+            match self.output_format {
+                OutputFormat::Xml => "XML",
+                OutputFormat::Markdown => "Markdown",
+            },
         );
 
         let status = Block::default()
@@ -1043,6 +1130,10 @@ impl App {
     fn toggle_binary_files(&mut self) -> io::Result<()> {
         self.ignore_config.include_binary_files = !self.ignore_config.include_binary_files;
         self.load_items()
+    }
+
+    fn toggle_output_format(&mut self) {
+        self.output_format = self.output_format.toggle();
     }
 
     fn is_binary_file(path: &PathBuf) -> bool {
