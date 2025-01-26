@@ -563,11 +563,7 @@ impl App {
             '/' => { // Use '/' to finish search
                 self.is_searching = false;
             }
-            '\x08' | '\x7f' => { // Backspace
-                self.search_query.pop();
-                self.update_search();
-            }
-            c if !c.is_control() => {
+            _ if !c.is_control() => {
                 self.search_query.push(c);
                 self.update_search();
             }
@@ -606,6 +602,10 @@ impl App {
                         if self.is_searching {
                             match key.code {
                                 KeyCode::Esc => self.clear_search(),
+                                KeyCode::Backspace => {
+                                    self.search_query.pop();
+                                    self.update_search();
+                                }
                                 KeyCode::Char(c) => self.handle_search_input(c),
                                 _ => {}
                             }
@@ -617,6 +617,7 @@ impl App {
                                     }
                                     self.quit = true;
                                 }
+                                KeyCode::Char('*') => self.toggle_select_all(),
                                 KeyCode::Char(' ') => self.toggle_selection(),
                                 KeyCode::Char('c') => self.copy_selected_to_clipboard()?,
                                 KeyCode::Char('i') => self.toggle_default_ignores()?,
@@ -1131,6 +1132,33 @@ impl App {
             }
         }
         Ok(())
+    }
+
+    fn toggle_select_all(&mut self) {
+        // Check if all visible items are already selected
+        let all_selected = self.filtered_items.iter()
+            .filter(|path| !path.ends_with("..")) // Exclude parent directory
+            .all(|path| self.selected_items.contains(path));
+
+        if all_selected {
+            // Unselect all items
+            self.selected_items.clear();
+        } else {
+            // Collect paths first to avoid borrow checker issues
+            let paths_to_select: Vec<_> = self.filtered_items.iter()
+                .filter(|path| !path.ends_with(".."))
+                .cloned()
+                .collect();
+
+            // Then process them
+            for path in paths_to_select {
+                if path.is_dir() {
+                    self.update_folder_selection(&path, true);
+                } else {
+                    self.selected_items.insert(path);
+                }
+            }
+        }
     }
 }
 
