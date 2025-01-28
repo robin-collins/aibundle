@@ -1080,7 +1080,7 @@ impl App {
 
         for entry in entries.iter() {
             let entry_clone = entry.clone();
-            if let Some(rel_path) = entry_clone.strip_prefix(base_path).ok() {
+            if let Ok(rel_path) = entry_clone.strip_prefix(base_path) {
                 let normalized_path = normalize_path(&rel_path.to_string_lossy());
 
                 if entry_clone.is_file() {
@@ -1441,16 +1441,14 @@ impl App {
                 let pad = " ".repeat(padding);
 
                 let padded_lines: Vec<Line> = std::iter::once("")
-                    .chain(lines.into_iter())
+                    .chain(lines)
                     .map(|line| {
                         if line.is_empty() {
                             Line::from(line.to_string())
+                        } else if is_help {
+                            Line::from(line.to_string())
                         } else {
-                            if is_help {
-                                Line::from(line.to_string())
-                            } else {
-                                Line::from(format!("{}{}", pad, line))
-                            }
+                            Line::from(format!("{}{}", pad, line))
                         }
                     })
                     .collect();
@@ -1544,10 +1542,8 @@ impl App {
             let mut dir = self.current_dir.clone();
             while let Some(parent) = dir.parent() {
                 let gitignore = dir.join(".gitignore");
-                if gitignore.exists() {
-                    if builder.add(gitignore).is_some() {
-                        break;
-                    }
+                if gitignore.exists() && builder.add(gitignore).is_some() {
+                    break;
                 }
                 dir = parent.to_path_buf();
             }
@@ -1847,10 +1843,7 @@ fn is_path_ignored_for_iterative(
         }
         if let Ok(gitignore) = builder.build() {
             let is_dir = path.is_dir();
-            match gitignore.matched_path_or_any_parents(path, is_dir) {
-                Match::Ignore(_) => return true,
-                _ => (),
-            }
+            if let Match::Ignore(_) = gitignore.matched_path_or_any_parents(path, is_dir) { return true }
         }
     }
     false
@@ -2025,7 +2018,7 @@ fn run_cli_mode(
     }
     if let Some(pattern) = search_pattern {
         if !app.search_query.is_empty() {
-            app.search_query.push_str(" ");
+            app.search_query.push(' ');
         }
         app.search_query.push_str(pattern);
         app.update_search();
