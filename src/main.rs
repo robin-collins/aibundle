@@ -53,7 +53,7 @@ EXAMPLES:
     aibundle                                                # TUI mode (default)
     aibundle --cli --files \"*.rs\"                         # XML to clipboard
     aibundle --cli --files \"*.rs\" --format md --out out.md # MD to file
-    aibundle --cli --files \"*test*\" --format json -c      # JSON to console
+    aibundle --cli --files \"*test*\" --format json -p      # JSON to console
     aibundle --cli --files \"*.rs\" --no-recursive         # Non-recursive")]
 struct CliOptions {
     /// Use CLI mode without UI
@@ -63,7 +63,7 @@ struct CliOptions {
     #[arg(short = 'o', long)]
     output_file: Option<String>,
     /// Write output to console
-    #[arg(short = 'c', long)]
+    #[arg(short = 'p', long)]
     output_console: bool,
     /// File pattern (e.g., "*.rs" or "*.{rs,toml}")
     #[arg(short = 'f', long)]
@@ -72,7 +72,7 @@ struct CliOptions {
     #[arg(short = 's', long)]
     search: Option<String>,
     /// Output format [markdown|xml|json] [default: xml]
-    #[arg(short = 'm', long, value_parser = ["markdown", "xml", "json"])]
+    #[arg(short = 'm', long, value_parser = ["markdown", "xml", "json"], default_value = "xml", required_if_eq("cli", "true"))]
     format: String,
     /// Source directory [default: .]
     #[arg(short = 'd', long, default_value = ".")]
@@ -1781,32 +1781,37 @@ fn add_items_iterative(
     ignore_config: &IgnoreConfig,
     base_dir: &PathBuf,
 ) -> io::Result<()> {
-    let mut stack = Vec::new();
-    stack.push(root.clone());
-
-    while let Some(current) = stack.pop() {
-        let mut entries: Vec<PathBuf> = fs::read_dir(&current)?
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .collect();
-
-        entries.retain(|p| !is_path_ignored_for_iterative(p, base_dir, ignore_config));
-        entries.sort_by(|a, b| {
-            let a_is_dir = a.is_dir();
-            let b_is_dir = b.is_dir();
-            match (a_is_dir, b_is_dir) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => a.file_name().cmp(&b.file_name()),
+    // Only add ".." for the root directory (not for expanded subdirectories)
+    if items.is_empty() && root == base_dir {
+        if let Some(parent) = root.parent() {
+            if !parent.as_os_str().is_empty() {
+                items.push(root.join(".."));
             }
-        });
+        }
+    }
 
-        for entry in &entries {
-            let entry_clone = entry.clone();
-            items.push(entry_clone.clone());
-            if entry_clone.is_dir() && expanded_folders.contains(&entry_clone) {
-                stack.push(entry_clone);
-            }
+    // Process current directory
+    let mut entries: Vec<PathBuf> = fs::read_dir(root)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .collect();
+
+    entries.retain(|p| !is_path_ignored_for_iterative(p, base_dir, ignore_config));
+    entries.sort_by(|a, b| {
+        let a_is_dir = a.is_dir();
+        let b_is_dir = b.is_dir();
+        match (a_is_dir, b_is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.file_name().cmp(&b.file_name()),
+        }
+    });
+
+    // Add entries and recursively process expanded folders
+    for entry in entries {
+        items.push(entry.clone());
+        if entry.is_dir() && expanded_folders.contains(&entry) {
+            add_items_iterative(items, &entry, expanded_folders, ignore_config, base_dir)?;
         }
     }
 
