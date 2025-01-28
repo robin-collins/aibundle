@@ -56,37 +56,47 @@ EXAMPLES:
     aibundle --cli --files \"*test*\" --format json -p      # JSON to console
     aibundle --cli --files \"*.rs\" --no-recursive         # Non-recursive")]
 struct CliOptions {
-    /// Use CLI mode without UI
+    /// Enable CLI mode (disables TUI interface)
     #[arg(short, long)]
     cli: bool,
-    /// Write output to file
+
+    /// Write output to file instead of clipboard
     #[arg(short = 'o', long)]
     output_file: Option<String>,
-    /// Write output to console
+
+    /// Write output to console instead of clipboard
     #[arg(short = 'p', long)]
     output_console: bool,
-    /// File pattern (e.g., "*.rs" or "*.{rs,toml}")
+
+    /// File pattern to match (e.g., "*.rs" or "*.{rs,toml}")
     #[arg(short = 'f', long)]
     files: Option<String>,
-    /// Search pattern (e.g., "test" to match files containing 'test')
+
+    /// Search pattern to match file contents (e.g., "test" to match files containing 'test')
     #[arg(short = 's', long)]
     search: Option<String>,
-    /// Output format [markdown|xml|json] [default: xml]
+
+    /// Output format to use [possible values: markdown, xml, json]
     #[arg(short = 'm', long, value_parser = ["markdown", "xml", "json"], default_value = "xml", required_if_eq("cli", "true"))]
     format: String,
-    /// Source directory [default: .]
+
+    /// Source directory to start from
     #[arg(short = 'd', long, default_value = ".")]
     source_dir: String,
-    /// Include subfolders [default: true]
+
+    /// Include subfolders in search
     #[arg(short = 'r', long, default_value = "true")]
     recursive: bool,
-    /// Show line numbers [default: false]
+
+    /// Show line numbers in output (ignored in JSON format)
     #[arg(short = 'n', long)]
     line_numbers: bool,
-    /// Use .gitignore [default: true]
+
+    /// Use .gitignore files for filtering
     #[arg(short = 'g', long, default_value = "true")]
     gitignore: bool,
-    /// Ignore patterns (comma-separated) [default: default]
+
+    /// Ignore patterns (comma-separated list)
     #[arg(
         short = 'i',
         long,
@@ -94,7 +104,8 @@ struct CliOptions {
         default_value = "default"
     )]
     ignore: Vec<String>,
-    /// Save settings to .aibundle.config
+
+    /// Save current settings to .aibundle.config
     #[arg(short = 'S', long)]
     save_config: bool,
 }
@@ -1498,7 +1509,10 @@ impl App {
     }
 
     fn toggle_line_numbers(&mut self) {
-        self.show_line_numbers = !self.show_line_numbers;
+        // Don't toggle line numbers if we're in JSON mode
+        if self.output_format != OutputFormat::Json {
+            self.show_line_numbers = !self.show_line_numbers;
+        }
     }
 
     fn show_help(&mut self) {
@@ -1600,7 +1614,7 @@ impl App {
             folders: 0,
         };
 
-        output.push('['); // Fix single character push_str
+        output.push('[');
 
         // Process only items whose parent is not also selected (avoid duplication)
         let mut to_process: Vec<_> = self
@@ -1619,7 +1633,6 @@ impl App {
         let mut first_item = true;
         for path in to_process {
             if let Ok(rel_path) = path.strip_prefix(&self.current_dir) {
-                // Fix redundant Some/ok()
                 let normalized_path = normalize_path(&rel_path.to_string_lossy());
 
                 if self.output_format == OutputFormat::Json && !first_item {
@@ -1693,25 +1706,11 @@ impl App {
                                         .replace('\"', "\\\"")
                                         .replace('\n', "\\n")
                                         .replace('\r', "\\r");
-                                    if self.show_line_numbers {
-                                        let lines: Vec<String> = content
-                                            .lines()
-                                            .enumerate()
-                                            .map(|(i, line)| format!("{:>6} | {}", i + 1, line))
-                                            .collect();
-                                        let numbered_content = lines.join("\\n");
-                                        output.push_str(&format!(
-                                            "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
-                                            normalized_path,
-                                            numbered_content.replace('\"', "\\\"")
-                                        ));
-                                    } else {
-                                        output.push_str(&format!(
-                                            "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
-                                            normalized_path,
-                                            escaped_content
-                                        ));
-                                    }
+                                    output.push_str(&format!(
+                                        "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
+                                        normalized_path,
+                                        escaped_content
+                                    ));
                                 }
                             }
                         }
@@ -1767,9 +1766,7 @@ impl App {
             output.push(']');
         }
 
-        // Update last_copy_stats before returning
         self.last_copy_stats = Some(stats);
-
         Ok(output)
     }
 }
@@ -1999,12 +1996,13 @@ fn run_cli_mode(
     let mut app = App::new();
     app.current_dir = PathBuf::from(source_dir);
     app.ignore_config.use_gitignore = gitignore;
-    app.show_line_numbers = line_numbers;
     app.output_format = match format.to_lowercase().as_str() {
         "markdown" => OutputFormat::Markdown,
         "json" => OutputFormat::Json,
         _ => OutputFormat::Xml,
     };
+    // Only set line numbers if not using JSON format
+    app.show_line_numbers = line_numbers && app.output_format != OutputFormat::Json;
 
     // Set up ignore patterns
     app.config.default_ignore = Some(ignore_list.to_vec());
