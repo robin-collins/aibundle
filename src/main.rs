@@ -1,3 +1,5 @@
+use clap::Parser;
+use cli_clipboard::{ClipboardContext, ClipboardProvider};
 /// File: src/main.rs
 /// Encoding: UTF-8
 ///
@@ -7,32 +9,26 @@
 /// as your previous version.
 ///
 /// Version incremented to 0.5.6 to reflect this update.
-
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
-    terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use ignore::{gitignore::GitignoreBuilder, Match};
 use ratatui::{
     backend::CrosstermBackend,
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Clear},
-    Terminal, Frame,
-    layout::{Layout, Constraint, Direction, Rect},
-    style::{Style, Color},
+    layout::{Constraint, Direction, Layout, Rect},
     prelude::Alignment,
+    style::{Color, Style},
     text::Line,
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
+    Frame, Terminal,
 };
-use std::{
-    io, path::PathBuf, collections::HashSet,
-    fs,
-};
-use cli_clipboard::{ClipboardContext, ClipboardProvider};
-use ignore::{gitignore::GitignoreBuilder, Match};
-use std::process::Command;
+use serde::{Deserialize, Serialize};
 use std::env::consts::OS;
+use std::process::Command;
 use std::time::Duration;
-use clap::Parser;
-use serde::{Serialize, Deserialize};
+use std::{collections::HashSet, fs, io, path::Path, path::PathBuf};
 
 const VERSION: &str = "0.5.6";
 const SELECTION_LIMIT: usize = 400;
@@ -48,59 +44,58 @@ struct AppConfig {
 
 /// Command-line options parsed via clap.
 #[derive(Parser, Debug)]
-#[command(name = "aibundle")]
-#[command(version = VERSION)]
+#[command(name = "aibundle", version = VERSION)]
 #[command(about = "AIBUNDLE: A CLI & TUI file aggregator and formatter")]
 #[command(long_about = "\
 A powerful tool for aggregating and formatting files with both CLI and TUI modes.
 
 EXAMPLES:
-    # TUI mode (default)
-    aibundle
-    # CLI: XML format to clipboard
-    aibundle --cli --files \"*.rs\"
-    # CLI: Markdown to file
-    aibundle --cli --files \"*.rs *.toml\" --format markdown --output-file out.md
-    # CLI: JSON to console
-    aibundle --cli --files \"*test*\" --format json --output-console
-    # CLI: Non-recursive
-    aibundle --cli --files \"*.rs\" --recursive false")]
+    aibundle                                                # TUI mode (default)
+    aibundle --cli --files \"*.rs\"                         # XML to clipboard
+    aibundle --cli --files \"*.rs\" --format md --out out.md # MD to file
+    aibundle --cli --files \"*test*\" --format json -c      # JSON to console
+    aibundle --cli --files \"*.rs\" --no-recursive         # Non-recursive")]
 struct CliOptions {
     /// Use CLI mode without UI
-    #[arg(long)]
+    #[arg(short, long)]
     cli: bool,
     /// Write output to file
-    #[arg(long)]
+    #[arg(short = 'o', long)]
     output_file: Option<String>,
     /// Write output to console
-    #[arg(long)]
+    #[arg(short = 'c', long)]
     output_console: bool,
     /// File pattern (e.g., "*.rs" or "*.{rs,toml}")
-    #[arg(long)]
+    #[arg(short = 'f', long)]
     files: Option<String>,
     /// Search pattern (e.g., "test" to match files containing 'test')
-    #[arg(long)]
+    #[arg(short = 's', long)]
     search: Option<String>,
-    /// Output format [possible values: markdown, xml, json] [default: xml]
-    #[arg(long, default_value = "xml", value_parser = ["markdown", "xml", "json"])]
+    /// Output format [markdown|xml|json] [default: xml]
+    #[arg(short = 'm', long, value_parser = ["markdown", "xml", "json"])]
     format: String,
     /// Source directory [default: .]
-    #[arg(long, default_value = ".")]
+    #[arg(short = 'd', long, default_value = ".")]
     source_dir: String,
     /// Include subfolders [default: true]
-    #[arg(long, default_value = "true")]
+    #[arg(short = 'r', long, default_value = "true")]
     recursive: bool,
     /// Show line numbers [default: false]
-    #[arg(long, default_value = "false")]
+    #[arg(short = 'n', long)]
     line_numbers: bool,
     /// Use .gitignore [default: true]
-    #[arg(long, default_value = "true")]
+    #[arg(short = 'g', long, default_value = "true")]
     gitignore: bool,
     /// Ignore patterns (comma-separated) [default: default]
-    #[arg(long, use_value_delimiter = true, default_value = "default")]
+    #[arg(
+        short = 'i',
+        long,
+        use_value_delimiter = true,
+        default_value = "default"
+    )]
     ignore: Vec<String>,
     /// Save settings to .aibundle.config
-    #[arg(long)]
+    #[arg(short = 'S', long)]
     save_config: bool,
 }
 
@@ -126,43 +121,41 @@ const ICONS: &[(&str, &str)] = &[
     ("folder", "📁"),
     ("folder_open", "📂"),
     ("archive_folder", "🗄️"), // For archive or special folders
-
     // Development
-    ("rs", "🦀"), // Rust
-    ("ts", "💠"), // TypeScript
-    ("js", "📜"), // JavaScript
-    ("py", "🐍"), // Python
-    ("java", "☕"), // Java
-    ("class", "☕"), // Java Class Files
-    ("cpp", "⚡"), // C++
-    ("c", "🔌"), // C
-    ("h", "📐"), // C Header
-    ("hpp", "📐"), // C++ Header
-    ("go", "🐹"), // Go
-    ("rb", "💎"), // Ruby
-    ("php", "🐘"), // PHP
-    ("scala", "💫"), // Scala
-    ("swift", "🕊️"), // Swift
-    ("kotlin", "🎯"), // Kotlin
-    ("dart", "🦋"), // Dart
-    ("lua", "🌙"), // Lua
-    ("sh", "🐚"), // Shell Script
-    ("pl", "🔮"), // Perl
-    ("r", "📊"), // R
-    ("erl", "🐘"), // Erlang
-    ("hs", "☯️"), // Haskell
-    ("sql", "🗃️"), // SQL
-    ("m", "🔧"), // Objective-C / MATLAB (context-dependent)
-    ("adb", "📱"), // Android Debug Bridge Scripts
-    ("gradle", "🛠️"), // Gradle Build Scripts
-    ("pom", "📦"), // Maven POM Files
-    ("sbt", "📚"), // Scala Build Tool
-    ("makefile", "🛠️"), // Makefile
-    ("Dockerfile", "🐳"), // Dockerfile
-    ("Vagrantfile", "🔧"), // Vagrant Configuration
-    ("gulpfile", "🛠️"), // Gulp Build Scripts
+    ("rs", "🦀"),             // Rust
+    ("ts", "💠"),             // TypeScript
+    ("js", "📜"),             // JavaScript
+    ("py", "🐍"),             // Python
+    ("java", "☕"),           // Java
+    ("class", "☕"),          // Java Class Files
+    ("cpp", "⚡"),            // C++
+    ("c", "🔌"),              // C
+    ("h", "📐"),              // C Header
+    ("hpp", "📐"),            // C++ Header
+    ("go", "🐹"),             // Go
+    ("rb", "💎"),             // Ruby
+    ("php", "🐘"),            // PHP
+    ("scala", "💫"),          // Scala
+    ("swift", "🕊️"),          // Swift
+    ("kotlin", "🎯"),         // Kotlin
+    ("dart", "🦋"),           // Dart
+    ("lua", "🌙"),            // Lua
+    ("sh", "🐚"),             // Shell Script
+    ("pl", "🔮"),             // Perl
+    ("r", "📊"),              // R
+    ("erl", "🐘"),            // Erlang
+    ("hs", "☯️"),             // Haskell
+    ("sql", "🗃️"),            // SQL
+    ("m", "🔧"),              // Objective-C / MATLAB (context-dependent)
+    ("adb", "📱"),            // Android Debug Bridge Scripts
+    ("gradle", "🛠️"),         // Gradle Build Scripts
+    ("pom", "📦"),            // Maven POM Files
+    ("sbt", "📚"),            // Scala Build Tool
+    ("makefile", "🛠️"),       // Makefile
+    ("Dockerfile", "🐳"),     // Dockerfile
+    ("Vagrantfile", "🔧"),    // Vagrant Configuration
+    ("gulpfile", "🛠️"),       // Gulp Build Scripts
     ("webpack.config", "🔗"), // Webpack Configuration
-
     // Web
     ("html", "🌐"),
     ("htm", "🌐"),
@@ -178,12 +171,11 @@ const ICONS: &[(&str, &str)] = &[
     ("asp", "🖥️"),
     ("aspx", "🖥️"),
     ("jsp", "🖥️"),
-    ("erb", "🌸"), // Embedded Ruby
+    ("erb", "🌸"),        // Embedded Ruby
     ("handlebars", "🪡"), // Handlebars Templates
-    ("ejs", "🖥️"), // Embedded JavaScript
-    ("phphtml", "🐘"), // PHP Embedded in HTML
-    ("jade", "🌿"), // Jade/Pug Templates
-
+    ("ejs", "🖥️"),        // Embedded JavaScript
+    ("phphtml", "🐘"),    // PHP Embedded in HTML
+    ("jade", "🌿"),       // Jade/Pug Templates
     // Data
     ("json", "📋"),
     ("yaml", "⚙️"),
@@ -197,10 +189,9 @@ const ICONS: &[(&str, &str)] = &[
     ("parquet", "📦"),
     ("pickle", "🥒"),
     ("protobuf", "🔗"), // Protocol Buffers
-    ("avsc", "🗃️"), // Avro Schema
-    ("ndjson", "📄"), // Newline Delimited JSON
-    ("hdf5", "📁"), // Hierarchical Data Format
-
+    ("avsc", "🗃️"),     // Avro Schema
+    ("ndjson", "📄"),   // Newline Delimited JSON
+    ("hdf5", "📁"),     // Hierarchical Data Format
     // Config
     ("toml", "⚙️"),
     ("ini", "⚙️"),
@@ -221,7 +212,6 @@ const ICONS: &[(&str, &str)] = &[
     ("Pipfile", "📦"),
     ("Cargo.toml", "🦀"),
     ("Makefile", "🛠️"),
-
     // Documents
     ("md", "📝"),
     ("txt", "📄"),
@@ -236,7 +226,6 @@ const ICONS: &[(&str, &str)] = &[
     ("mmd", "📜"), // MultiMarkdown
     ("epub", "📚"),
     ("djvu", "📖"),
-
     // Spreadsheets
     ("xls", "📗"),
     ("xlsx", "📗"),
@@ -244,17 +233,15 @@ const ICONS: &[(&str, &str)] = &[
     ("csv", "📊"),
     ("tsv", "📈"),
     ("numbers", "📊"), // Apple Numbers
-    ("gsheet", "📊"), // Google Sheets
-
+    ("gsheet", "📊"),  // Google Sheets
     // Presentations
     ("ppt", "📙"),
     ("pptx", "📙"),
     ("odp", "📙"),
-    ("key", "🔑"), // Apple Keynote
-    ("mdx", "📝"), // Markdown with JSX
-    ("sldx", "📊"), // Slide files
+    ("key", "🔑"),     // Apple Keynote
+    ("mdx", "📝"),     // Markdown with JSX
+    ("sldx", "📊"),    // Slide files
     ("gslides", "📊"), // Google Slides
-
     // Images
     ("png", "🖼️"),
     ("jpg", "🖼️"),
@@ -267,14 +254,13 @@ const ICONS: &[(&str, &str)] = &[
     ("webp", "🖼️"),
     ("heic", "📷"),
     ("raw", "📸"),
-    ("psd", "🖌️"), // Photoshop
-    ("ai", "🖍️"), // Adobe Illustrator
+    ("psd", "🖌️"),  // Photoshop
+    ("ai", "🖍️"),   // Adobe Illustrator
     ("indd", "📄"), // Adobe InDesign
-    ("xcf", "🎨"), // GIMP
-    ("eps", "📐"), // Encapsulated PostScript
-    ("drw", "🖊️"), // Generic Drawing
-    ("dxf", "📏"), // Drawing Exchange Format
-
+    ("xcf", "🎨"),  // GIMP
+    ("eps", "📐"),  // Encapsulated PostScript
+    ("drw", "🖊️"),  // Generic Drawing
+    ("dxf", "📏"),  // Drawing Exchange Format
     // Audio
     ("mp3", "🎵"),
     ("wav", "🎵"),
@@ -288,7 +274,6 @@ const ICONS: &[(&str, &str)] = &[
     ("mid", "🎹"), // MIDI Files
     ("midi", "🎹"),
     ("aiff", "🎤"),
-
     // Video
     ("mp4", "🎬"),
     ("avi", "🎬"),
@@ -302,9 +287,8 @@ const ICONS: &[(&str, &str)] = &[
     ("mpeg", "📽️"),
     ("mpg", "📽️"),
     ("rmvb", "🗂️"), // RealMedia Variable Bitrate
-    ("vob", "📀"), // DVD Video Object
+    ("vob", "📀"),  // DVD Video Object
     ("m2ts", "🎞️"),
-
     // Archives
     ("zip", "📦"),
     ("rar", "📦"),
@@ -320,7 +304,6 @@ const ICONS: &[(&str, &str)] = &[
     ("cab", "📦"),
     ("arj", "📦"),
     ("ace", "📦"),
-
     // Git
     ("git", "🔰"),
     ("gitignore", "🔰"),
@@ -328,9 +311,8 @@ const ICONS: &[(&str, &str)] = &[
     ("gitmodules", "🔰"),
     ("gitconfig", "🔧"),
     ("gitlab-ci.yml", "🤖"), // GitLab CI Configuration
-    ("circleci", "🔄"), // CircleCI Config
-    ("travis.yml", "📈"), // Travis CI Config
-
+    ("circleci", "🔄"),      // CircleCI Config
+    ("travis.yml", "📈"),    // Travis CI Config
     // Logs
     ("log", "📋"),
     ("trace", "🔍"),
@@ -340,7 +322,6 @@ const ICONS: &[(&str, &str)] = &[
     ("access", "🔓"),
     ("server", "🌐"),
     ("audit", "🔒"),
-
     // Shell
     ("sh", "🐚"),
     ("bash", "🐚"),
@@ -352,7 +333,6 @@ const ICONS: &[(&str, &str)] = &[
     ("ksh", "🐚"),
     ("csh", "🐚"),
     ("tcsh", "🐚"),
-
     // Lock files
     ("lock", "🔒"),
     ("pem", "🔑"),
@@ -360,7 +340,6 @@ const ICONS: &[(&str, &str)] = &[
     ("crt", "🔒"),
     ("p12", "🔐"), // PKCS#12 Certificate
     ("pfx", "🔐"),
-
     // Executables
     ("exe", "💻"),
     ("bin", "📦"),
@@ -372,10 +351,9 @@ const ICONS: &[(&str, &str)] = &[
     ("run", "🔄"),
     ("sh", "🐚"),
     ("out", "📤"),
-    ("dll", "🗄️"), // Dynamic Link Library
-    ("so", "🗄️"), // Shared Object
+    ("dll", "🗄️"),   // Dynamic Link Library
+    ("so", "🗄️"),    // Shared Object
     ("dylib", "🗄️"), // macOS Dynamic Library
-
     // Scripts
     ("ps1", "💻"),
     ("lua", "🌙"),
@@ -388,7 +366,6 @@ const ICONS: &[(&str, &str)] = &[
     ("tcl", "🔧"),
     ("awk", "✂️"),
     ("sed", "📝"),
-
     // Fonts
     ("ttf", "🔤"),
     ("otf", "🔤"),
@@ -399,7 +376,6 @@ const ICONS: &[(&str, &str)] = &[
     ("fon", "🔠"),
     ("pfm", "🔠"),
     ("afm", "🔠"),
-
     // Miscellaneous
     ("ipynb", "📓"), // Jupyter Notebook
     ("vuepress", "📚"),
@@ -421,7 +397,6 @@ const ICONS: &[(&str, &str)] = &[
     ("yarn.lock", "🔒"),
     ("package-lock.json", "🔒"),
     ("Pipfile.lock", "🔒"),
-
     // Fonts (duplicates omitted; left once if encountered)
     // Default
     ("default", "📄"),
@@ -508,45 +483,44 @@ impl Modal {
     }
 
     fn help() -> Self {
-        let help_text = format!(
-            "Keyboard Shortcuts\n\
-             ═════════════════\n\
-             \n\
-             Navigation\n\
-             ──────────\n\
-             ↑/↓        - Move selection\n\
-             PgUp/PgDn  - Move by 10 items\n\
-             Enter      - Open directory\n\
-             Tab        - Expand/collapse folder\n\
-             \n\
-             Selection\n\
-             ─────────\n\
-             Space      - Select/deselect item\n\
-             *          - Select/deselect all\n\
-             \n\
-             Actions\n\
-             ───────\n\
-             c          - Copy to clipboard\n\
-             f          - Toggle format (XML/MD/JSON)\n\
-             n          - Toggle line numbers\n\
-             /          - Search (ESC to cancel)\n\
-             \n\
-             Filters\n\
-             ───────\n\
-             i          - Toggle default ignores\n\
-             g          - Toggle .gitignore\n\
-             b          - Toggle binary files\n\
-             \n\
-             Other\n\
-             ─────\n\
-             h          - Show this help\n\
-             q          - Quit (copies if items selected)\n\
-             \n\
-             Help Navigation\n\
-             ──────────────\n\
-             PgUp/PgDn  - Scroll help pages\n\
-             Any key    - Close help"
-        );
+        let help_text = "Keyboard Shortcuts\n\
+═════════════════\n\
+\n\
+Navigation\n\
+──────────\n\
+↑/↓        - Move selection\n\
+PgUp/PgDn  - Move by 10 items\n\
+Enter      - Open directory\n\
+Tab        - Expand/collapse folder\n\
+\n\
+Selection\n\
+─────────\n\
+Space      - Select/deselect item\n\
+*          - Select/deselect all\n\
+\n\
+Actions\n\
+───────\n\
+c          - Copy to clipboard\n\
+f          - Toggle format (XML/MD/JSON)\n\
+n          - Toggle line numbers\n\
+/          - Search (ESC to cancel)\n\
+\n\
+Filters\n\
+───────\n\
+i          - Toggle default ignores\n\
+g          - Toggle .gitignore\n\
+b          - Toggle binary files\n\
+\n\
+Other\n\
+─────\n\
+h          - Show this help\n\
+q          - Quit (copies if items selected)\n\
+\n\
+Help Navigation\n\
+──────────────\n\
+PgUp/PgDn  - Scroll help pages\n\
+Any key    - Close help"
+            .to_string();
         Self {
             message: help_text,
             timestamp: std::time::Instant::now(),
@@ -560,13 +534,18 @@ impl Modal {
         let content_height = (available_height - 4) as usize;
         let lines: Vec<&str> = self.message.lines().collect();
         let total_lines = lines.len();
-        let total_pages = (total_lines + content_height - 1) / content_height;
+        let total_pages = total_lines.div_ceil(content_height);
         let has_more_pages = total_lines > content_height;
         let start = self.page * content_height;
         let end = (start + content_height).min(total_lines);
         let visible_content = lines[start..end].join("\n");
         let content = if has_more_pages {
-            format!("{}\n\nPage {} of {}", visible_content, self.page + 1, total_pages)
+            format!(
+                "{}\n\nPage {} of {}",
+                visible_content,
+                self.page + 1,
+                total_pages
+            )
         } else {
             visible_content
         };
@@ -576,7 +555,7 @@ impl Modal {
     fn next_page(&mut self, available_height: u16) {
         let content_height = (available_height - 4) as usize;
         let total_lines = self.message.lines().count();
-        let total_pages = (total_lines + content_height - 1) / content_height;
+        let total_pages = total_lines.div_ceil(content_height);
         if total_pages > 1 {
             self.page = (self.page + 1) % total_pages;
         }
@@ -585,7 +564,7 @@ impl Modal {
     fn prev_page(&mut self, available_height: u16) {
         let content_height = (available_height - 4) as usize;
         let total_lines = self.message.lines().count();
-        let total_pages = (total_lines + content_height - 1) / content_height;
+        let total_pages = total_lines.div_ceil(content_height);
         if total_pages > 1 {
             self.page = (self.page + total_pages - 1) % total_pages;
         }
@@ -901,7 +880,8 @@ impl App {
             return;
         }
         let current = self.list_state.selected().unwrap_or(0);
-        let new_selected = (current as i32 + delta).clamp(0, self.filtered_items.len() as i32 - 1) as usize;
+        let new_selected =
+            (current as i32 + delta).clamp(0, self.filtered_items.len() as i32 - 1) as usize;
         self.list_state.select(Some(new_selected));
     }
 
@@ -958,7 +938,8 @@ impl App {
                 let path_clone = path.clone();
 
                 thread::spawn(move || {
-                    let result = count_selection_items_async(&path_clone, &base_path, &ignore_config);
+                    let result =
+                        count_selection_items_async(&path_clone, &base_path, &ignore_config);
                     let _ = tx.send(result);
                 });
 
@@ -1005,7 +986,9 @@ impl App {
                     "Selection aborted.\n\
                      Selecting {} additional items would exceed the limit of {}.\n\
                      Currently selected: {}",
-                    total_new_items, SELECTION_LIMIT, self.selected_items.len()
+                    total_new_items,
+                    SELECTION_LIMIT,
+                    self.selected_items.len()
                 );
                 self.modal = Some(Modal::new(msg, 50, 6));
                 return;
@@ -1023,16 +1006,27 @@ impl App {
 
     fn copy_selected_to_clipboard(&mut self) -> io::Result<()> {
         let contents = self.format_selected_items()?;
-        let mut ctx = ClipboardContext::new()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to create clipboard context: {}", e)))?;
-        ctx.set_contents(contents.to_owned())
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to set clipboard contents: {}", e)))?;
+        let mut ctx = ClipboardContext::new().map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to create clipboard context: {}", e),
+            )
+        })?;
+        ctx.set_contents(contents.to_owned()).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to set clipboard contents: {}", e),
+            )
+        })?;
 
         // Update copy stats
         let line_count = contents.lines().count();
         let byte_size = contents.len();
         let (file_count, folder_count) = self.count_selected_items();
-        self.last_copy_stats = Some(CopyStats { files: file_count, folders: folder_count });
+        self.last_copy_stats = Some(CopyStats {
+            files: file_count,
+            folders: folder_count,
+        });
         self.modal = Some(Modal::copy_stats(
             file_count,
             folder_count,
@@ -1059,7 +1053,12 @@ impl App {
         (file_count, folder_count)
     }
 
-    fn process_directory(&self, path: &PathBuf, output: &mut String, base_path: &PathBuf) -> io::Result<(usize, usize)> {
+    fn process_directory(
+        &self,
+        path: &PathBuf,
+        output: &mut String,
+        base_path: &PathBuf,
+    ) -> io::Result<(usize, usize)> {
         let mut file_count = 0;
         let mut folder_count = 0;
 
@@ -1089,10 +1088,16 @@ impl App {
                         if self.ignore_config.include_binary_files {
                             match self.output_format {
                                 OutputFormat::Xml => {
-                                    output.push_str(&format!("<file name=\"{}\">\n</file>\n", normalized_path));
+                                    output.push_str(&format!(
+                                        "<file name=\"{}\">\n</file>\n",
+                                        normalized_path
+                                    ));
                                 }
                                 OutputFormat::Markdown => {
-                                    output.push_str(&format!("```{}\n<binary file>\n```\n\n", normalized_path));
+                                    output.push_str(&format!(
+                                        "```{}\n<binary file>\n```\n\n",
+                                        normalized_path
+                                    ));
                                 }
                                 OutputFormat::Json => {
                                     output.push_str(&format!(
@@ -1271,21 +1276,17 @@ impl App {
                     let child_path = entry.path();
                     if child_path.is_dir() {
                         self.update_folder_selection(&child_path, selected);
+                    } else if selected {
+                        self.selected_items.insert(child_path);
                     } else {
-                        if selected {
-                            self.selected_items.insert(child_path);
-                        } else {
-                            self.selected_items.remove(&child_path);
-                        }
+                        self.selected_items.remove(&child_path);
                     }
                 }
             }
+        } else if selected {
+            self.selected_items.insert(path.clone());
         } else {
-            if selected {
-                self.selected_items.insert(path.clone());
-            } else {
-                self.selected_items.remove(path);
-            }
+            self.selected_items.remove(path);
         }
     }
 
@@ -1509,14 +1510,11 @@ impl App {
     fn is_binary_file(path: &PathBuf) -> bool {
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             let binary_extensions = [
-                "idx", "pack", "rev", "index",
-                "png", "jpg", "jpeg", "gif", "bmp", "tiff", "webp", "ico", "svg",
-                "mp3", "wav", "ogg", "flac", "m4a", "aac", "wma",
-                "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm",
-                "zip", "rar", "7z", "tar", "gz", "iso",
-                "exe", "dll", "so", "dylib",
-                "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-                "class", "pyc", "pyd", "pyo",
+                "idx", "pack", "rev", "index", "png", "jpg", "jpeg", "gif", "bmp", "tiff", "webp",
+                "ico", "svg", "mp3", "wav", "ogg", "flac", "m4a", "aac", "wma", "mp4", "avi",
+                "mkv", "mov", "wmv", "flv", "webm", "zip", "rar", "7z", "tar", "gz", "iso", "exe",
+                "dll", "so", "dylib", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "class",
+                "pyc", "pyd", "pyo",
             ];
             if binary_extensions.contains(&ext.to_lowercase().as_str()) {
                 return true;
@@ -1530,7 +1528,7 @@ impl App {
         false
     }
 
-    fn is_path_ignored(&self, path: &PathBuf) -> bool {
+    fn is_path_ignored(&self, path: &Path) -> bool {
         if !self.ignore_config.use_default_ignores && !self.ignore_config.use_gitignore {
             return false;
         }
@@ -1547,18 +1545,16 @@ impl App {
             while let Some(parent) = dir.parent() {
                 let gitignore = dir.join(".gitignore");
                 if gitignore.exists() {
-                    match builder.add(gitignore) {
-                        None => (),
-                        Some(_) => break,
+                    if builder.add(gitignore).is_some() {
+                        break;
                     }
                 }
                 dir = parent.to_path_buf();
             }
             if let Ok(gitignore) = builder.build() {
                 let is_dir = path.is_dir();
-                match gitignore.matched_path_or_any_parents(path, is_dir) {
-                    Match::Ignore(_) => return true,
-                    _ => (),
+                if let Match::Ignore(_) = gitignore.matched_path_or_any_parents(path, is_dir) {
+                    return true;
                 }
             }
         }
@@ -1594,19 +1590,21 @@ impl App {
             default_line_numbers: Some(self.show_line_numbers),
             default_recursive: Some(true), // Always true in TUI mode
         };
-        let toml_str = toml::to_string_pretty(&config)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}")))?;
+        let toml_str = toml::to_string_pretty(&config).map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}"))
+        })?;
         fs::write(".aibundle.config", toml_str)?;
         Ok(())
     }
 
     fn format_selected_items(&mut self) -> io::Result<String> {
         let mut output = String::new();
-        let mut stats = CopyStats { files: 0, folders: 0 };
+        let mut stats = CopyStats {
+            files: 0,
+            folders: 0,
+        };
 
-        if self.output_format == OutputFormat::Json {
-            output.push_str("[");
-        }
+        output.push('['); // Fix single character push_str
 
         // Process only items whose parent is not also selected (avoid duplication)
         let mut to_process: Vec<_> = self
@@ -1624,7 +1622,8 @@ impl App {
 
         let mut first_item = true;
         for path in to_process {
-            if let Some(rel_path) = path.strip_prefix(&self.current_dir).ok() {
+            if let Ok(rel_path) = path.strip_prefix(&self.current_dir) {
+                // Fix redundant Some/ok()
                 let normalized_path = normalize_path(&rel_path.to_string_lossy());
 
                 if self.output_format == OutputFormat::Json && !first_item {
@@ -1637,10 +1636,16 @@ impl App {
                         if self.ignore_config.include_binary_files {
                             match self.output_format {
                                 OutputFormat::Xml => {
-                                    output.push_str(&format!("<file name=\"{}\">\n</file>\n", normalized_path));
+                                    output.push_str(&format!(
+                                        "<file name=\"{}\">\n</file>\n",
+                                        normalized_path
+                                    ));
                                 }
                                 OutputFormat::Markdown => {
-                                    output.push_str(&format!("```{}\n<binary file>\n```\n\n", normalized_path));
+                                    output.push_str(&format!(
+                                        "```{}\n<binary file>\n```\n\n",
+                                        normalized_path
+                                    ));
                                 }
                                 OutputFormat::Json => {
                                     output.push_str(&format!(
@@ -1804,7 +1809,7 @@ fn add_items_iterative(
             let entry_clone = entry.clone();
             items.push(entry_clone.clone());
             if entry_clone.is_dir() && expanded_folders.contains(&entry_clone) {
-                stack.push(entry_clone.clone());
+                stack.push(entry_clone);
             }
         }
     }
@@ -1889,8 +1894,9 @@ fn get_clipboard_contents() -> io::Result<String> {
     match OS {
         "windows" => {
             if let Ok(mut ctx) = ClipboardContext::new() {
-                ctx.get_contents()
-                    .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to get clipboard contents"))
+                ctx.get_contents().map_err(|_| {
+                    io::Error::new(io::ErrorKind::Other, "Failed to get clipboard contents")
+                })
             } else {
                 Ok(String::new())
             }
@@ -1901,15 +1907,17 @@ fn get_clipboard_contents() -> io::Result<String> {
                 .output();
             if let Ok(output) = powershell_result {
                 if output.status.success() {
-                    return String::from_utf8(output.stdout)
-                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"));
+                    return String::from_utf8(output.stdout).map_err(|_| {
+                        io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard")
+                    });
                 }
             }
             let wl_output = Command::new("wl-paste").output();
             if let Ok(output) = wl_output {
                 if output.status.success() {
-                    return String::from_utf8(output.stdout)
-                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"));
+                    return String::from_utf8(output.stdout).map_err(|_| {
+                        io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard")
+                    });
                 }
             }
             let output = Command::new("xclip")
@@ -2024,7 +2032,8 @@ fn run_cli_mode(
     }
 
     // Select all filtered items
-    app.selected_items.extend(app.filtered_items.iter().cloned());
+    app.selected_items
+        .extend(app.filtered_items.iter().cloned());
 
     // Generate output
     let output = app.format_selected_items()?;
@@ -2037,10 +2046,18 @@ fn run_cli_mode(
         println!("{output}");
     } else {
         // Copy to clipboard
-        let mut ctx = ClipboardContext::new()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to create clipboard context: {}", e)))?;
-        ctx.set_contents(output)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to set clipboard contents: {}", e)))?;
+        let mut ctx = ClipboardContext::new().map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to create clipboard context: {}", e),
+            )
+        })?;
+        ctx.set_contents(output).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to set clipboard contents: {}", e),
+            )
+        })?;
         println!("Output copied to clipboard");
     }
 
@@ -2064,8 +2081,9 @@ fn main() -> io::Result<()> {
                 default_line_numbers: Some(cli_args.line_numbers),
                 default_recursive: Some(cli_args.recursive),
             };
-            let toml_str = toml::to_string_pretty(&config)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}")))?;
+            let toml_str = toml::to_string_pretty(&config).map_err(|e| {
+                io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}"))
+            })?;
             fs::write(".aibundle.config", toml_str)?;
         }
 

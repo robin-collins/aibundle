@@ -134,6 +134,23 @@ Core dependencies:
 - [cli-clipboard](https://crates.io/crates/cli-clipboard) - Cross-platform clipboard operations
 - [ignore](https://crates.io/crates/ignore) - .gitignore support and file filtering
 
+## B# Clean build
+
+```bash
+cargo clean
+cargo build --release
+
+# Run all checks
+cargo fmt --all -- --check
+cargo fmt
+cargo clippy --all-targets --all-features
+cargo test --all-features
+cargo doc --no-deps
+
+# If publishing to crates.io
+cargo publish --dry-run
+```
+
 ## Performance 🚀
 
 AIBundle v0.5.0 includes several performance optimizations:

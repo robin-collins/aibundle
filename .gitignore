@@ -30,3 +30,5 @@ test_dir/*
 test_dir*
 
 .specstory*
+
+node_app_docs/*
