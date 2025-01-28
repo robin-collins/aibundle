@@ -51,7 +51,8 @@ struct AppConfig {
 #[command(name = "aibundle")]
 #[command(version = VERSION)]
 #[command(about = "AIBUNDLE: A CLI & TUI file aggregator and formatter")]
-#[command(long_about = "A powerful tool for aggregating and formatting files with both CLI and TUI modes.
+#[command(long_about = "\
+A powerful tool for aggregating and formatting files with both CLI and TUI modes.
 
 EXAMPLES:
     # TUI mode (default)
@@ -66,51 +67,40 @@ EXAMPLES:
     aibundle --cli --files \"*.rs\" --recursive false")]
 struct CliOptions {
     /// Use CLI mode without UI
-    #[arg(long, default_value = "false", action=clap::ArgAction::SetTrue)]
+    #[arg(long)]
     cli: bool,
-
     /// Write output to file
-    #[arg(long, help = "Write output to specified file")]
+    #[arg(long)]
     output_file: Option<String>,
-
     /// Write output to console
-    #[arg(long, default_value = "false", action=clap::ArgAction::SetTrue)]
+    #[arg(long)]
     output_console: bool,
-
     /// File pattern (e.g., "*.rs" or "*.{rs,toml}")
     #[arg(long)]
     files: Option<String>,
-
     /// Search pattern (e.g., "test" to match files containing 'test')
     #[arg(long)]
     search: Option<String>,
-
-    /// Output format [possible values: markdown, xml, json]
+    /// Output format [possible values: markdown, xml, json] [default: xml]
     #[arg(long, default_value = "xml", value_parser = ["markdown", "xml", "json"])]
     format: String,
-
     /// Source directory [default: .]
     #[arg(long, default_value = ".")]
     source_dir: String,
-
     /// Include subfolders [default: true]
-    #[arg(long, default_value = "true", action=clap::ArgAction::Set)]
+    #[arg(long, default_value = "true")]
     recursive: bool,
-
     /// Show line numbers [default: false]
-    #[arg(long, default_value = "false", action=clap::ArgAction::Set)]
+    #[arg(long, default_value = "false")]
     line_numbers: bool,
-
     /// Use .gitignore [default: true]
-    #[arg(long, default_value = "true", action=clap::ArgAction::Set)]
+    #[arg(long, default_value = "true")]
     gitignore: bool,
-
-    /// Ignore patterns (comma-separated)
+    /// Ignore patterns (comma-separated) [default: default]
     #[arg(long, use_value_delimiter = true, default_value = "default")]
     ignore: Vec<String>,
-
     /// Save settings to .aibundle.config
-    #[arg(long, default_value = "false", action=clap::ArgAction::SetTrue)]
+    #[arg(long)]
     save_config: bool,
 }
 
