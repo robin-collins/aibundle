@@ -1589,6 +1589,16 @@ impl App {
     }
 
     fn save_config(&self) -> io::Result<()> {
+        let config_path = ".aibundle.config";
+        if Path::new(config_path).exists() {
+            println!("Configuration file already exists. Overwrite? (y/n): ");
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            if !input.trim().eq_ignore_ascii_case("y") {
+                println!("Aborted saving configuration.");
+                return Ok(());
+            }
+        }
         let config = AppConfig {
             default_format: Some(match self.output_format {
                 OutputFormat::Xml => "xml".to_string(),
@@ -1603,7 +1613,8 @@ impl App {
         let toml_str = toml::to_string_pretty(&config).map_err(|e| {
             io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}"))
         })?;
-        fs::write(".aibundle.config", toml_str)?;
+        fs::write(config_path, toml_str)?;
+        println!("Configuration saved successfully.");
         Ok(())
     }
 
@@ -1845,7 +1856,9 @@ fn is_path_ignored_for_iterative(
         }
         if let Ok(gitignore) = builder.build() {
             let is_dir = path.is_dir();
-            if let Match::Ignore(_) = gitignore.matched_path_or_any_parents(path, is_dir) { return true }
+            if let Match::Ignore(_) = gitignore.matched_path_or_any_parents(path, is_dir) {
+                return true;
+            }
         }
     }
     false

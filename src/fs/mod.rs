@@ -1,5 +1,16 @@
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+
+pub fn confirm_overwrite(file_path: &str) -> io::Result<bool> {
+    if Path::new(file_path).exists() {
+        println!("File '{}' already exists. Overwrite? (y/n): ", file_path);
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        return Ok(input.trim().eq_ignore_ascii_case("y"));
+    }
+    Ok(true)
+}
 
 pub fn list_files(path: &PathBuf) -> Vec<PathBuf> {
     WalkDir::new(path)

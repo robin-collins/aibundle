@@ -1,0 +1,25 @@
+[book]
+authors = ["Robin Collins"]
+language = "en"
+multilingual = false
+src = "src"
+title = "AI Programming Assistant Guide"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/yourusername/your-repo"
+git-repository-icon = "fa-github"
+additional-css = ["custom.css"]
+# additional-js = ["custom.js"]
+
+[output.html.fold]
+enable = true
+level = 0
+
+[output.html.search]
+enable = true
+limit-results = 30
+
+[preprocessor.theme]
+pagetoc = true
