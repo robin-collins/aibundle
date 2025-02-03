@@ -1,0 +1,33 @@
+[cli]
+files = "*"
+format = "xml"
+out = ""
+gitignore = true
+ignore = [
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    "coverage",
+    "target",
+]
+line-numbers = false
+recursive = true
+source-dir = "."
+
+[tui]
+files = "*"
+format = "xml"
+out = ""
+gitignore = true
+ignore = [
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    "coverage",
+    "target",
+]
+line-numbers = false
+recursive = true
+source-dir = "."

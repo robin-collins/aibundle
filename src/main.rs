@@ -30,7 +30,7 @@ use std::process::Command;
 use std::time::Duration;
 use std::{collections::HashSet, fs, io, path::Path, path::PathBuf};
 
-const VERSION: &str = "0.5.9"; // Updated version due to recursive CLI fix.
+const VERSION: &str = "0.6.3"; // Updated version due to recursive CLI fix.
 const SELECTION_LIMIT: usize = 400;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -40,6 +40,26 @@ struct AppConfig {
     default_ignore: Option<Vec<String>>,
     default_line_numbers: Option<bool>,
     default_recursive: Option<bool>,
+}
+
+// Re-add the new types to support separate CLI and TUI configuration
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+struct ModeConfig {
+    files: Option<String>,
+    format: Option<String>,
+    out: Option<String>,
+    gitignore: Option<bool>,
+    ignore: Option<Vec<String>>,
+    line_numbers: Option<bool>,
+    recursive: Option<bool>,
+    source_dir: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+struct FullConfig {
+    cli: Option<ModeConfig>,
+    tui: Option<ModeConfig>,
 }
 
 /// Command-line options parsed via clap.
@@ -1588,7 +1608,11 @@ impl App {
             }
         }
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if self.ignore_config.extra_ignore_patterns.contains(&name.to_string()) {
+            if self
+                .ignore_config
+                .extra_ignore_patterns
+                .contains(&name.to_string())
+            {
                 return true;
             }
         }
@@ -1885,7 +1909,10 @@ fn is_path_ignored_for_iterative(
         }
     }
     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-        if ignore_config.extra_ignore_patterns.contains(&name.to_string()) {
+        if ignore_config
+            .extra_ignore_patterns
+            .contains(&name.to_string())
+        {
             return true;
         }
     }
@@ -1912,7 +1939,10 @@ fn is_path_ignored_for_iterative(
     false
 }
 
-fn collect_all_subdirs(base_dir: &Path, ignore_config: &IgnoreConfig) -> io::Result<HashSet<PathBuf>> {
+fn collect_all_subdirs(
+    base_dir: &Path,
+    ignore_config: &IgnoreConfig,
+) -> io::Result<HashSet<PathBuf>> {
     let base_dir_buf = base_dir.to_path_buf();
     let mut dirs = HashSet::new();
     let mut stack = vec![base_dir_buf.clone()];
@@ -1922,7 +1952,9 @@ fn collect_all_subdirs(base_dir: &Path, ignore_config: &IgnoreConfig) -> io::Res
             for entry in fs::read_dir(&current)? {
                 if let Ok(entry) = entry {
                     let path = entry.path();
-                    if path.is_dir() && !is_path_ignored_for_iterative(&path, &base_dir_buf, ignore_config) {
+                    if path.is_dir()
+                        && !is_path_ignored_for_iterative(&path, &base_dir_buf, ignore_config)
+                    {
                         stack.push(path);
                     }
                 }
@@ -2049,15 +2081,27 @@ fn count_selection_items_async(
     }
 }
 
-/// Loads `.aibundle.config` from disk if present.
-fn load_config(path: &str) -> io::Result<AppConfig> {
-    if std::path::Path::new(path).exists() {
-        let contents = fs::read_to_string(path)?;
-        let parsed: AppConfig = toml::from_str(&contents)
+/// Returns the config file path in the user's home directory.
+fn config_file_path() -> io::Result<PathBuf> {
+    let home = if cfg!(windows) {
+        std::env::var("USERPROFILE").map(PathBuf::from)
+    } else {
+        std::env::var("HOME").map(PathBuf::from)
+    }
+    .map_err(|_| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;
+    Ok(home.join(".aibundle.config.toml"))
+}
+
+/// Loads a config file from the user's home directory if present.
+fn load_config() -> io::Result<FullConfig> {
+    let config_path = config_file_path()?;
+    if config_path.exists() {
+        let contents = fs::read_to_string(&config_path)?;
+        let parsed: FullConfig = toml::from_str(&contents)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML parse error: {e}")))?;
         Ok(parsed)
     } else {
-        Ok(AppConfig::default())
+        Ok(FullConfig::default())
     }
 }
 
@@ -2152,8 +2196,8 @@ fn main() -> io::Result<()> {
         .source_dir_pos
         .unwrap_or(cli_args.source_dir.clone());
 
-    // Load existing config
-    let config = load_config(".aibundle.config")?;
+    // Load existing config from the user's home directory
+    let full_config = load_config()?;
 
     // Determine CLI mode if any of these flags are provided.
     let use_cli = cli_args.files.is_some()
@@ -2163,31 +2207,84 @@ fn main() -> io::Result<()> {
         || cli_args.save_config;
 
     if use_cli {
-        // If saving config is requested, save it.
+        // If saving config is requested, save a default config file (with both [cli] and [tui] sections)
         if cli_args.save_config {
-            let config = AppConfig {
-                default_format: Some(cli_args.format.clone()),
-                default_gitignore: Some(cli_args.gitignore),
-                default_ignore: config.default_ignore.clone(),
-                default_line_numbers: Some(cli_args.line_numbers),
-                default_recursive: Some(cli_args.recursive),
+            // Define our default ignored directories as a Vec<String>
+            let default_ignore: Vec<String> =
+                DEFAULT_IGNORED_DIRS.iter().map(|s| s.to_string()).collect();
+
+            let cli_config = ModeConfig {
+                // Default files is "*" (not "*.rs")
+                files: cli_args.files.clone().or(Some("*".to_string())),
+                // Format is provided by clap (default "xml")
+                format: Some(cli_args.format.clone()),
+                // Default output is an empty string instead of "bundle.md"
+                out: cli_args.output_file.clone().or(Some("".to_string())),
+                gitignore: Some(cli_args.gitignore),
+                // If the ignore vec equals ["default"], use our built-in default_ignore list
+                ignore: if cli_args.ignore.len() == 1 && cli_args.ignore[0] == "default" {
+                    Some(default_ignore.clone())
+                } else {
+                    Some(cli_args.ignore.clone())
+                },
+                line_numbers: Some(cli_args.line_numbers),
+                recursive: Some(cli_args.recursive),
+                // Use the CLI source-dir (defaults to ".")
+                source_dir: Some(cli_args.source_dir.clone()),
             };
-            let toml_str = toml::to_string_pretty(&config).map_err(|e| {
+            // For TUI, use the same defaults as CLI
+            let tui_config = cli_config.clone();
+            let config_to_save = FullConfig {
+                cli: Some(cli_config),
+                tui: Some(tui_config),
+            };
+            let toml_str = toml::to_string_pretty(&config_to_save).map_err(|e| {
                 io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}"))
             })?;
-            fs::write(".aibundle.config", toml_str)?;
+            let config_path = config_file_path()?;
+            fs::write(&config_path, toml_str)?;
+            println!(
+                "Configuration saved successfully to {}.",
+                config_path.display()
+            );
+
+            // If --save-config was provided without any other CLI options, exit early.
+            if cli_args.files.is_none()
+                && cli_args.search.is_none()
+                && cli_args.output_file.is_none()
+                && !cli_args.output_console
+            {
+                return Ok(());
+            }
         }
 
-        // Run in CLI mode with the effective source directory.
+        // Merge command-line values with the [cli] defaults (command-line wins)
+        let cli_conf = full_config.cli.unwrap_or_default();
+        let files = cli_args.files.or(cli_conf.files);
+        let format = if !cli_args.format.is_empty() {
+            cli_args.format.clone()
+        } else {
+            cli_conf.format.unwrap_or_else(|| "xml".to_string())
+        };
+        let source_dir = effective_source_dir.clone();
+        let gitignore = cli_args.gitignore || cli_conf.gitignore.unwrap_or(true);
+        let line_numbers = cli_args.line_numbers || cli_conf.line_numbers.unwrap_or(false);
+        let recursive = cli_args.recursive || cli_conf.recursive.unwrap_or(true);
+        let ignore = if !cli_args.ignore.is_empty() {
+            cli_args.ignore.clone()
+        } else {
+            cli_conf.ignore.unwrap_or_default()
+        };
+
         run_cli_mode(
-            cli_args.files.as_deref(),
+            files.as_deref(),
             cli_args.search.as_deref(),
-            &effective_source_dir,
-            &cli_args.format,
-            cli_args.gitignore,
-            cli_args.line_numbers,
-            cli_args.recursive,
-            &cli_args.ignore,
+            &source_dir,
+            &format,
+            gitignore,
+            line_numbers,
+            recursive,
+            &ignore,
             cli_args.output_file.as_deref(),
             cli_args.output_console,
         )
@@ -2196,23 +2293,28 @@ fn main() -> io::Result<()> {
         let mut app = App::new();
         app.current_dir = PathBuf::from(effective_source_dir);
 
-        // Apply configuration if present.
-        if let Some(format) = config.default_format {
-            app.output_format = match format.to_lowercase().as_str() {
-                "markdown" => OutputFormat::Markdown,
-                "json" => OutputFormat::Json,
-                _ => OutputFormat::Xml,
-            };
-        }
-        if let Some(gitignore) = config.default_gitignore {
-            app.ignore_config.use_gitignore = gitignore;
-        }
-        if let Some(ignore) = config.default_ignore {
-            app.config.default_ignore = Some(ignore.clone());
-            app.ignore_config.extra_ignore_patterns = ignore;
-        }
-        if let Some(line_numbers) = config.default_line_numbers {
-            app.show_line_numbers = line_numbers;
+        // Apply [tui] configuration if available.
+        if let Some(tui_conf) = full_config.tui {
+            if let Some(format) = tui_conf.format {
+                app.output_format = match format.to_lowercase().as_str() {
+                    "markdown" => OutputFormat::Markdown,
+                    "json" => OutputFormat::Json,
+                    _ => OutputFormat::Xml,
+                };
+            }
+            if let Some(git) = tui_conf.gitignore {
+                app.ignore_config.use_gitignore = git;
+            }
+            if let Some(ignore) = tui_conf.ignore {
+                app.config.default_ignore = Some(ignore.clone());
+                app.ignore_config.extra_ignore_patterns = ignore;
+            }
+            if let Some(ln) = tui_conf.line_numbers {
+                app.show_line_numbers = ln;
+            }
+            if let Some(src) = tui_conf.source_dir {
+                app.current_dir = PathBuf::from(src);
+            }
         }
 
         enable_raw_mode()?;
