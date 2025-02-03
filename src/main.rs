@@ -427,6 +427,7 @@ struct IgnoreConfig {
     use_default_ignores: bool,
     use_gitignore: bool,
     include_binary_files: bool,
+    extra_ignore_patterns: Vec<String>,
 }
 
 impl Default for IgnoreConfig {
@@ -435,6 +436,7 @@ impl Default for IgnoreConfig {
             use_default_ignores: true,
             use_gitignore: true,
             include_binary_files: false,
+            extra_ignore_patterns: Vec::new(),
         }
     }
 }
@@ -1585,6 +1587,11 @@ impl App {
                 }
             }
         }
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if self.ignore_config.extra_ignore_patterns.contains(&name.to_string()) {
+                return true;
+            }
+        }
         if self.ignore_config.use_gitignore {
             let mut builder = GitignoreBuilder::new(&self.current_dir);
             let mut dir = self.current_dir.clone();
@@ -1877,6 +1884,11 @@ fn is_path_ignored_for_iterative(
             }
         }
     }
+    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+        if ignore_config.extra_ignore_patterns.contains(&name.to_string()) {
+            return true;
+        }
+    }
     if ignore_config.use_gitignore {
         let mut builder = GitignoreBuilder::new(base_dir);
         let mut dir = base_dir.clone();
@@ -2073,8 +2085,9 @@ fn run_cli_mode(
     // Only set line numbers if not using JSON format
     app.show_line_numbers = line_numbers && app.output_format != OutputFormat::Json;
 
-    // Set up ignore patterns
+    // Set up ignore patterns from the CLI flag (--ignore)
     app.config.default_ignore = Some(ignore_list.to_vec());
+    app.ignore_config.extra_ignore_patterns = ignore_list.to_vec();
 
     // Load items based on patterns and recursion setting
     if recursive {
@@ -2196,6 +2209,7 @@ fn main() -> io::Result<()> {
         }
         if let Some(ignore) = config.default_ignore {
             app.config.default_ignore = Some(ignore.clone());
+            app.ignore_config.extra_ignore_patterns = ignore;
         }
         if let Some(line_numbers) = config.default_line_numbers {
             app.show_line_numbers = line_numbers;
