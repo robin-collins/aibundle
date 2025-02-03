@@ -8,7 +8,7 @@ use cli_clipboard::{ClipboardContext, ClipboardProvider};
 /// and resources in large directories. The rest of the file remains the same
 /// as your previous version.
 ///
-/// Version incremented to 0.5.6 to reflect this update.
+/// Version incremented to 0.5.9 to reflect this update.
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
@@ -30,7 +30,7 @@ use std::process::Command;
 use std::time::Duration;
 use std::{collections::HashSet, fs, io, path::Path, path::PathBuf};
 
-const VERSION: &str = "0.5.6";
+const VERSION: &str = "0.5.9"; // Updated version due to recursive CLI fix.
 const SELECTION_LIMIT: usize = 400;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -50,15 +50,15 @@ struct AppConfig {
 A powerful tool for aggregating and formatting files with both CLI and TUI modes.
 
 EXAMPLES:
-    aibundle                                                # TUI mode (default)
-    aibundle --cli --files \"*.rs\"                         # XML to clipboard
-    aibundle --cli --files \"*.rs\" --format md --out out.md # MD to file
-    aibundle --cli --files \"*test*\" --format json -p      # JSON to console
-    aibundle --cli --files \"*.rs\" --no-recursive         # Non-recursive")]
+    aibundle                                                # TUI mode (default, using current folder)
+    aibundle d:\\projects                                   # TUI mode, starting in d:\\projects (Windows)
+    aibundle /mnt/d/projects                                # TUI mode, starting in /mnt/d/projects (POSIX)
+    aibundle --files \"*.rs\"                              # CLI mode, current folder, files that match \"*.rs\"
+    aibundle --files \"*.rs\" /mnt/d/projects/rust_aiformat  # CLI mode, starting in specified directory")]
 struct CliOptions {
-    /// Enable CLI mode (disables TUI interface)
-    #[arg(short, long)]
-    cli: bool,
+    /// Optional positional source directory.
+    #[arg(value_name = "SOURCE_DIR", index = 1)]
+    source_dir_pos: Option<String>,
 
     /// Write output to file instead of clipboard
     #[arg(short = 'o', long)]
@@ -80,7 +80,7 @@ struct CliOptions {
     #[arg(short = 'm', long, value_parser = ["markdown", "xml", "json"], default_value = "xml")]
     format: String,
 
-    /// Source directory to start from
+    /// Source directory to start from (overridden by the positional SOURCE_DIR if supplied)
     #[arg(short = 'd', long, default_value = ".")]
     source_dir: String,
 
@@ -697,22 +697,32 @@ impl App {
         if use_glob {
             // Use glob pattern matching for file names.
             if let Ok(pattern) = glob::Pattern::new(&query) {
-                self.filtered_items = self.items.iter().filter(|path| {
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        pattern.matches(&name.to_lowercase())
-                    } else {
-                        false
-                    }
-                }).cloned().collect();
+                self.filtered_items = self
+                    .items
+                    .iter()
+                    .filter(|path| {
+                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                            pattern.matches(&name.to_lowercase())
+                        } else {
+                            false
+                        }
+                    })
+                    .cloned()
+                    .collect();
             } else {
                 // If glob pattern fails to compile, fallback to substring matching.
-                self.filtered_items = self.items.iter().filter(|path| {
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        name.to_lowercase().contains(&query)
-                    } else {
-                        false
-                    }
-                }).cloned().collect();
+                self.filtered_items = self
+                    .items
+                    .iter()
+                    .filter(|path| {
+                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                            name.to_lowercase().contains(&query)
+                        } else {
+                            false
+                        }
+                    })
+                    .cloned()
+                    .collect();
             }
         } else {
             self.filtered_items = self
@@ -1890,6 +1900,26 @@ fn is_path_ignored_for_iterative(
     false
 }
 
+fn collect_all_subdirs(base_dir: &Path, ignore_config: &IgnoreConfig) -> io::Result<HashSet<PathBuf>> {
+    let base_dir_buf = base_dir.to_path_buf();
+    let mut dirs = HashSet::new();
+    let mut stack = vec![base_dir_buf.clone()];
+    while let Some(current) = stack.pop() {
+        if current.is_dir() {
+            dirs.insert(current.clone());
+            for entry in fs::read_dir(&current)? {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    if path.is_dir() && !is_path_ignored_for_iterative(&path, &base_dir_buf, ignore_config) {
+                        stack.push(path);
+                    }
+                }
+            }
+        }
+    }
+    Ok(dirs)
+}
+
 fn normalize_path(path: &str) -> String {
     path.replace('\\', "/")
 }
@@ -2048,6 +2078,8 @@ fn run_cli_mode(
 
     // Load items based on patterns and recursion setting
     if recursive {
+        // In CLI mode with --recursive, populate expanded_folders so that all subdirectories are recursed.
+        app.expanded_folders = collect_all_subdirs(&app.current_dir, &app.ignore_config)?;
         app.load_items()?;
     } else {
         app.load_items_nonrecursive()?;
@@ -2102,12 +2134,23 @@ fn run_cli_mode(
 fn main() -> io::Result<()> {
     let cli_args = CliOptions::parse();
 
+    // Use the positional SOURCE_DIR if supplied; otherwise, fall back to --source-dir.
+    let effective_source_dir = cli_args
+        .source_dir_pos
+        .unwrap_or(cli_args.source_dir.clone());
+
     // Load existing config
     let config = load_config(".aibundle.config")?;
 
-    // If in CLI mode and files pattern is provided, run in CLI mode
-    if cli_args.cli {
-        // Save config if requested
+    // Determine CLI mode if any of these flags are provided.
+    let use_cli = cli_args.files.is_some()
+        || cli_args.search.is_some()
+        || cli_args.output_file.is_some()
+        || cli_args.output_console
+        || cli_args.save_config;
+
+    if use_cli {
+        // If saving config is requested, save it.
         if cli_args.save_config {
             let config = AppConfig {
                 default_format: Some(cli_args.format.clone()),
@@ -2122,11 +2165,11 @@ fn main() -> io::Result<()> {
             fs::write(".aibundle.config", toml_str)?;
         }
 
-        // Run in CLI mode
+        // Run in CLI mode with the effective source directory.
         run_cli_mode(
             cli_args.files.as_deref(),
             cli_args.search.as_deref(),
-            &cli_args.source_dir,
+            &effective_source_dir,
             &cli_args.format,
             cli_args.gitignore,
             cli_args.line_numbers,
@@ -2136,10 +2179,11 @@ fn main() -> io::Result<()> {
             cli_args.output_console,
         )
     } else {
-        // Run in TUI mode
+        // Run in TUI mode: start in the effective source directory.
         let mut app = App::new();
+        app.current_dir = PathBuf::from(effective_source_dir);
 
-        // Apply config if present
+        // Apply configuration if present.
         if let Some(format) = config.default_format {
             app.output_format = match format.to_lowercase().as_str() {
                 "markdown" => OutputFormat::Markdown,
