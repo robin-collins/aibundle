@@ -77,7 +77,7 @@ struct CliOptions {
     search: Option<String>,
 
     /// Output format to use [possible values: markdown, xml, json]
-    #[arg(short = 'm', long, value_parser = ["markdown", "xml", "json"], default_value = "xml", required_if_eq("cli", "true"))]
+    #[arg(short = 'm', long, value_parser = ["markdown", "xml", "json"], default_value = "xml")]
     format: String,
 
     /// Source directory to start from
@@ -692,24 +692,48 @@ impl App {
         }
 
         let query = self.search_query.to_lowercase();
-        self.filtered_items = self
-            .items
-            .iter()
-            .filter(|path| {
-                if let Ok(rel_path) = path.strip_prefix(&self.current_dir) {
-                    let path_str = rel_path.to_string_lossy().to_lowercase();
-                    path_str.contains(&query)
-                } else {
-                    let name = path
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("")
-                        .to_lowercase();
-                    name.contains(&query)
-                }
-            })
-            .cloned()
-            .collect();
+        let use_glob = query.contains('*') || query.contains('?');
+
+        if use_glob {
+            // Use glob pattern matching for file names.
+            if let Ok(pattern) = glob::Pattern::new(&query) {
+                self.filtered_items = self.items.iter().filter(|path| {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        pattern.matches(&name.to_lowercase())
+                    } else {
+                        false
+                    }
+                }).cloned().collect();
+            } else {
+                // If glob pattern fails to compile, fallback to substring matching.
+                self.filtered_items = self.items.iter().filter(|path| {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        name.to_lowercase().contains(&query)
+                    } else {
+                        false
+                    }
+                }).cloned().collect();
+            }
+        } else {
+            self.filtered_items = self
+                .items
+                .iter()
+                .filter(|path| {
+                    if let Ok(rel_path) = path.strip_prefix(&self.current_dir) {
+                        let path_str = rel_path.to_string_lossy().to_lowercase();
+                        path_str.contains(&query)
+                    } else {
+                        let name = path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("")
+                            .to_lowercase();
+                        name.contains(&query)
+                    }
+                })
+                .cloned()
+                .collect();
+        }
 
         let mut parents_to_expand = HashSet::new();
         for item in &self.filtered_items {
@@ -1625,7 +1649,9 @@ impl App {
             folders: 0,
         };
 
-        output.push('[');
+        if self.output_format == OutputFormat::Json {
+            output.push('[');
+        }
 
         // Process only items whose parent is not also selected (avoid duplication)
         let mut to_process: Vec<_> = self
@@ -2080,7 +2106,7 @@ fn main() -> io::Result<()> {
     let config = load_config(".aibundle.config")?;
 
     // If in CLI mode and files pattern is provided, run in CLI mode
-    if cli_args.cli && cli_args.files.is_some() {
+    if cli_args.cli {
         // Save config if requested
         if cli_args.save_config {
             let config = AppConfig {
