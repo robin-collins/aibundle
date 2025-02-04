@@ -32,3 +32,4 @@ test_dir*
 .specstory*
 
 node_app_docs/*
+test_filesystem/

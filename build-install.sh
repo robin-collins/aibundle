@@ -98,9 +98,26 @@ main() {
             exit 1
         fi
 
-        # build and install
-        cargo fmt && cargo build --release && sudo cp target/release/aibundle /c/tools/bin/aibundle.exe
+        if [[ -f "target/release/aibundle.exe" ]]; then
+            echo "aibundle.exe exists in target/release, removing it"
+            rm -f "target/release/aibundle.exe"
+        fi
 
+        # build and install
+        cargo fmt && cargo build --release 
+        if [[ -f "target/release/aibundle.exe" ]]; then
+            sudo cp target/release/aibundle.exe /c/tools/bin/aibundle.exe
+            # check the exit code of the cp command
+            if [[ $? -ne 0 ]]; then
+                echo "Failed to copy aibundle.exe to /c/tools/bin/aibundle.exe"
+                exit 1
+            else
+                echo "Successfully copied aibundle.exe to /c/tools/bin/aibundle.exe"
+            fi
+        else
+            echo "Failed to build aibundle.exe"
+            exit 1
+        fi
     else
         echo "Unsupported OS"
         exit 1

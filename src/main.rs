@@ -14,6 +14,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use glob::Pattern;
 use ignore::{gitignore::GitignoreBuilder, Match};
 use ratatui::{
     backend::CrosstermBackend,
@@ -30,7 +31,7 @@ use std::process::Command;
 use std::time::Duration;
 use std::{collections::HashSet, fs, io, path::Path, path::PathBuf};
 
-const VERSION: &str = "0.6.6";
+const VERSION: &str = "0.6.7";
 const DEFAULT_SELECTION_LIMIT: usize = 400;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -717,59 +718,42 @@ impl App {
         }
 
         let query = self.search_query.to_lowercase();
-        let use_glob = query.contains('*') || query.contains('?');
+        let max_depth = 4;
+        let mut results = HashSet::new();
 
-        if use_glob {
-            // Use glob pattern matching for file names.
-            if let Ok(pattern) = glob::Pattern::new(&query) {
-                self.filtered_items = self
-                    .items
-                    .iter()
-                    .filter(|path| {
-                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                            pattern.matches(&name.to_lowercase())
-                        } else {
-                            false
-                        }
-                    })
-                    .cloned()
-                    .collect();
-            } else {
-                // If glob pattern fails to compile, fallback to substring matching.
-                self.filtered_items = self
-                    .items
-                    .iter()
-                    .filter(|path| {
-                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                            name.to_lowercase().contains(&query)
-                        } else {
-                            false
-                        }
-                    })
-                    .cloned()
-                    .collect();
+        // Determine matching function: if query contains wildcards, use glob pattern; otherwise, plain substring.
+        let matcher: Box<dyn Fn(&str) -> bool> = if query.contains('*') || query.contains('?') {
+            match Pattern::new(&query) {
+                Ok(pattern) => Box::new(move |name: &str| pattern.matches(&name.to_lowercase())),
+                Err(_) => Box::new(move |name: &str| name.to_lowercase().contains(&query)),
             }
         } else {
-            self.filtered_items = self
-                .items
-                .iter()
-                .filter(|path| {
-                    if let Ok(rel_path) = path.strip_prefix(&self.current_dir) {
-                        let path_str = rel_path.to_string_lossy().to_lowercase();
-                        path_str.contains(&query)
-                    } else {
-                        let name = path
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("")
-                            .to_lowercase();
-                        name.contains(&query)
-                    }
-                })
-                .cloned()
-                .collect();
+            Box::new(move |name: &str| name.to_lowercase().contains(&query))
+        };
+
+        // Recursively search each immediate child of the current directory.
+        if let Ok(entries) = fs::read_dir(&self.current_dir) {
+            for entry in entries.filter_map(|e| e.ok()).map(|e| e.path()) {
+                recursive_search_helper_generic(
+                    self,
+                    &entry,
+                    1,
+                    max_depth,
+                    &*matcher,
+                    &mut results,
+                );
+            }
         }
 
+        let mut matched: Vec<PathBuf> = results.into_iter().collect();
+        matched.sort_by_key(|p| {
+            p.strip_prefix(&self.current_dir)
+                .map(|r| r.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        });
+        self.filtered_items = matched;
+
+        // Ensure that the full hierarchy is visible by expanding parent folders.
         let mut parents_to_expand = HashSet::new();
         for item in &self.filtered_items {
             let mut current = item.as_path();
@@ -2332,4 +2316,51 @@ fn main() -> io::Result<()> {
         disable_raw_mode()?;
         result
     }
+}
+
+// NEW FUNCTION: recursively search for items matching the query up to a given depth.
+// This generic function uses a custom matcher to determine if a file/directory matches.
+fn recursive_search_helper_generic<F>(
+    app: &App,
+    path: &Path,
+    depth: usize,
+    max_depth: usize,
+    matcher: &F,
+    results: &mut HashSet<PathBuf>,
+) -> bool
+where
+    F: Fn(&str) -> bool + ?Sized,
+{
+    if app.is_path_ignored(path) {
+        return false;
+    }
+    let mut found = false;
+    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+        if matcher(name) {
+            results.insert(path.to_path_buf());
+            found = true;
+        }
+    }
+    if path.is_dir() && depth < max_depth {
+        if let Ok(entries) = fs::read_dir(path) {
+            let mut children: Vec<_> = entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
+            children.sort();
+            for child in children {
+                if recursive_search_helper_generic(
+                    app,
+                    &child,
+                    depth + 1,
+                    max_depth,
+                    matcher,
+                    results,
+                ) {
+                    found = true;
+                }
+            }
+        }
+        if found {
+            results.insert(path.to_path_buf());
+        }
+    }
+    found
 }
