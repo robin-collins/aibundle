@@ -33,3 +33,4 @@ test_dir*
 
 node_app_docs/*
 test_filesystem/
+test_*
