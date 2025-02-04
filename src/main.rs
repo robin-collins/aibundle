@@ -31,7 +31,7 @@ use std::process::Command;
 use std::time::Duration;
 use std::{collections::HashSet, fs, io, path::Path, path::PathBuf};
 
-const VERSION: &str = "0.6.7";
+const VERSION: &str = "0.6.8";
 const DEFAULT_SELECTION_LIMIT: usize = 400;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -106,12 +106,12 @@ struct CliOptions {
     #[arg(short = 'd', long, default_value = ".")]
     source_dir: String,
 
-    /// Include subfolders in search
-    #[arg(short = 'r', long, default_value = "true")]
+    /// Include subfolders (recursively) in CLI mode
+    #[arg(short = 'r', long, default_value = "false")]
     recursive: bool,
 
     /// Show line numbers in output (ignored in JSON format)
-    #[arg(short = 'n', long)]
+    #[arg(short = 'n', long, default_value = "false")]
     line_numbers: bool,
 
     /// Use .gitignore files for filtering
@@ -626,6 +626,7 @@ struct App {
     is_counting: bool,
     config: AppConfig,
     selection_limit: usize, // New dynamic selection limit field
+    recursive: bool,        // <-- New field to control recursive search/filtering
 }
 
 impl App {
@@ -652,6 +653,7 @@ impl App {
             is_counting: false,
             config: AppConfig::default(),
             selection_limit: DEFAULT_SELECTION_LIMIT, // Set default limit
+            recursive: false,                         // <-- Default to non-recursive filtering
         }
     }
 
@@ -716,11 +718,7 @@ impl App {
             self.filtered_items = self.items.clone();
             return;
         }
-
         let query = self.search_query.to_lowercase();
-        let max_depth = 4;
-        let mut results = HashSet::new();
-
         // Determine matching function: if query contains wildcards, use glob pattern; otherwise, plain substring.
         let matcher: Box<dyn Fn(&str) -> bool> = if query.contains('*') || query.contains('?') {
             match Pattern::new(&query) {
@@ -731,6 +729,24 @@ impl App {
             Box::new(move |name: &str| name.to_lowercase().contains(&query))
         };
 
+        // If not in recursive mode, filter only the current items (non-recursive filtering)
+        if !self.recursive {
+            self.filtered_items = self
+                .items
+                .iter()
+                .cloned()
+                .filter(|p| {
+                    p.file_name()
+                        .and_then(|n| n.to_str())
+                        .map_or(false, |name| matcher(name))
+                })
+                .collect();
+            return;
+        }
+
+        // Otherwise, perform recursive search (as in TUI mode)
+        let max_depth = 4;
+        let mut results = HashSet::new();
         // Recursively search each immediate child of the current directory.
         if let Ok(entries) = fs::read_dir(&self.current_dir) {
             for entry in entries.filter_map(|e| e.ok()).map(|e| e.path()) {
@@ -744,7 +760,6 @@ impl App {
                 );
             }
         }
-
         let mut matched: Vec<PathBuf> = results.into_iter().collect();
         matched.sort_by_key(|p| {
             p.strip_prefix(&self.current_dir)
@@ -752,7 +767,6 @@ impl App {
                 .unwrap_or_default()
         });
         self.filtered_items = matched;
-
         // Ensure that the full hierarchy is visible by expanding parent folders.
         let mut parents_to_expand = HashSet::new();
         for item in &self.filtered_items {
@@ -766,7 +780,6 @@ impl App {
             }
         }
         self.expanded_folders.extend(parents_to_expand);
-
         if let Some(selected) = self.list_state.selected() {
             if selected >= self.filtered_items.len() {
                 self.list_state.select(Some(0));
@@ -2097,7 +2110,6 @@ fn load_config() -> io::Result<FullConfig> {
 /// This function runs the tool in CLI mode, bypassing the TUI entirely.
 fn run_cli_mode(
     files_pattern: Option<&str>,
-    search_pattern: Option<&str>,
     source_dir: &str,
     format: &str,
     gitignore: bool,
@@ -2117,6 +2129,9 @@ fn run_cli_mode(
     };
     app.show_line_numbers = line_numbers && app.output_format != OutputFormat::Json;
 
+    // Set the recursive flag based on the CLI parameter.
+    app.recursive = recursive;
+
     // Set up ignore patterns from the CLI flag (--ignore)
     app.config.default_ignore = Some(ignore_list.to_vec());
     app.ignore_config.extra_ignore_patterns = ignore_list.to_vec();
@@ -2135,16 +2150,9 @@ fn run_cli_mode(
         app.load_items_nonrecursive()?;
     }
 
-    // Apply file pattern and search filters
+    // Apply file pattern filter
     if let Some(pattern) = files_pattern {
         app.search_query = pattern.to_string();
-        app.update_search();
-    }
-    if let Some(pattern) = search_pattern {
-        if !app.search_query.is_empty() {
-            app.search_query.push(' ');
-        }
-        app.search_query.push_str(pattern);
         app.update_search();
     }
 
@@ -2194,7 +2202,6 @@ fn main() -> io::Result<()> {
 
     // Determine CLI mode if any of these flags are provided.
     let use_cli = cli_args.files.is_some()
-        || cli_args.search.is_some()
         || cli_args.output_file.is_some()
         || cli_args.output_console
         || cli_args.save_config;
@@ -2267,7 +2274,6 @@ fn main() -> io::Result<()> {
 
         run_cli_mode(
             files.as_deref(),
-            cli_args.search.as_deref(),
             &source_dir,
             &format,
             gitignore,
@@ -2308,6 +2314,10 @@ fn main() -> io::Result<()> {
             }
             if let Some(limit) = tui_conf.selection_limit {
                 app.selection_limit = limit;
+            }
+            // Set the recursive flag from the saved TUI config, if provided.
+            if let Some(recursive) = tui_conf.recursive {
+                app.recursive = recursive;
             }
         }
 

@@ -69,7 +69,7 @@ create_file "test_filesystem/target/ignored_target.txt"
 echo "Test filesystem created successfully under ./test_filesystem."
 
 ##########################################
-# Run tests on the aibundle application. #
+# Run tests on the aibundle application.
 ##########################################
 
 # Check if aibundle executable is available
@@ -84,7 +84,8 @@ declare -a test_results
 
 # --- Test 1: Filtering .rs files in CLI mode ---
 echo "Running Test $test_counter: Filtering .rs files in CLI mode"
-output_rs=$(aibundle --files "*.rs" -d test_filesystem --output-console)
+echo "Command: aibundle --files \"*.rs\" -d test_filesystem --output-console"
+output_rs=$(aibundle --files "*.rs" -d test_filesystem --output-console 2>&1 | tee /dev/tty)
 if echo "$output_rs" | grep -q "file3.rs" && \
    echo "$output_rs" | grep -q "file6.rs" && \
    echo "$output_rs" | grep -q "file9.rs"; then
@@ -96,12 +97,14 @@ fi
 
 # --- Test 2: (Removed) Search functionality test is not applicable in CLI mode ---
 echo "Running Test $test_counter: (Removed) Search functionality test not applicable in CLI mode"
+echo "Command: (N/A)"
 test_results[$test_counter]="✅skipped  Test $test_counter: (Removed) Search functionality test not applicable in CLI mode"
 ((test_counter++))
 
 # --- Test 3: Recursive processing check (should include deeply nested files) ---
 echo "Running Test $test_counter: Recursive processing check"
-output_recursive=$(aibundle --files "*.*" -d test_filesystem --output-console)
+echo "Command: aibundle --files \"*.*\" -d test_filesystem --output-console"
+output_recursive=$(aibundle --files "*.*" -d test_filesystem --output-console 2>&1 | tee /dev/tty)
 if echo "$output_recursive" | grep -q "level5/file9.rs"; then
     test_results[$test_counter]="✅passed  Test $test_counter: Recursive processing check (deeply nested files)"
 else
@@ -111,6 +114,7 @@ fi
 
 # --- Test 4: Verify that ignored files are not included ---
 echo "Running Test $test_counter: Ignored files check"
+echo "Command: (Using previous Recursive processing output)"
 if echo "$output_recursive" | grep -q "ignored.txt"; then
     test_results[$test_counter]="❌failed  Test $test_counter: Ignored files check"
 else
@@ -120,8 +124,9 @@ fi
 
 # --- Test 5: Output redirection to file for .py files ---
 echo "Running Test $test_counter: Output redirection to file for .py files"
+echo "Command: aibundle --files \"*.py\" -d test_filesystem --output-file test_output.txt"
 output_file="test_output.txt"
-aibundle --files "*.py" -d test_filesystem --output-file "$output_file"
+aibundle --files "*.py" -d test_filesystem --output-file "$output_file" 2>&1 | tee /dev/tty
 if [ -f "$output_file" ] && grep -q "file2.py" "$output_file"; then
     test_results[$test_counter]="✅passed  Test $test_counter: Output redirection to file for .py files"
 else
@@ -131,8 +136,8 @@ fi
 
 # --- Test 6: XML format test ---
 echo "Running Test $test_counter: XML format test"
-output_xml=$(aibundle --files "*.py" -d test_filesystem --format xml --output-console)
-# Check for an XML tag containing the relative file path "level1/file2.py"
+echo "Command: aibundle --files \"*.py\" -d test_filesystem --format xml --output-console"
+output_xml=$(aibundle --files "*.py" -d test_filesystem --format xml --output-console 2>&1 | tee /dev/tty)
 if echo "$output_xml" | grep -q "<file name=\"level1/file2.py\">"; then
     test_results[$test_counter]="✅passed  Test $test_counter: XML format test"
 else
@@ -142,8 +147,8 @@ fi
 
 # --- Test 7: Markdown format test ---
 echo "Running Test $test_counter: Markdown format test"
-output_markdown=$(aibundle --files "*.py" -d test_filesystem --format markdown --output-console)
-# Check for a fenced code block with the file path "level1/file2.py"
+echo "Command: aibundle --files \"*.py\" -d test_filesystem --format markdown --output-console"
+output_markdown=$(aibundle --files "*.py" -d test_filesystem --format markdown --output-console 2>&1 | tee /dev/tty)
 if echo "$output_markdown" | grep -q '```level1/file2.py'; then
     test_results[$test_counter]="✅passed  Test $test_counter: Markdown format test"
 else
@@ -153,7 +158,8 @@ fi
 
 # --- Test 8: JSON format test ---
 echo "Running Test $test_counter: JSON format test"
-output_json=$(aibundle --files "*.py" -d test_filesystem --format json --output-console)
+echo "Command: aibundle --files \"*.py\" -d test_filesystem --format json --output-console"
+output_json=$(aibundle --files "*.py" -d test_filesystem --format json --output-console 2>&1 | tee /dev/tty)
 if command -v jq &> /dev/null; then
     # Check if the JSON output is valid and contains the expected file path
     echo "$output_json" | jq . > /dev/null 2>&1
@@ -169,8 +175,9 @@ fi
 
 # --- Test 9: Version output test ---
 echo "Running Test $test_counter: Version output test"
-output_version=$(aibundle --version 2>&1)
-# Expected version from the .version file is 0.6.7
+echo "Command: aibundle --version"
+output_version=$(aibundle --version 2>&1 | tee /dev/tty)
+# Expected version from the .version file is 0.6.7 (or the current version)
 if echo "$output_version" | grep -q "0.6.7"; then
     test_results[$test_counter]="✅passed  Test $test_counter: Version output test"
 else
@@ -180,7 +187,8 @@ fi
 
 # --- Test 10: --gitignore false test ---
 echo "Running Test $test_counter: --gitignore false test"
-output_gitignore=$(aibundle --files "*.*" -d test_filesystem --gitignore false --output-console)
+echo "Command: aibundle --files \"*.*\" -d test_filesystem --gitignore false --output-console"
+output_gitignore=$(aibundle --files "*.*" -d test_filesystem --gitignore false --output-console 2>&1 | tee /dev/tty)
 # With gitignore disabled, the output should include "ignored.txt"
 if echo "$output_gitignore" | grep -q "ignored.txt"; then
     test_results[$test_counter]="✅passed  Test $test_counter: --gitignore false test"
@@ -191,8 +199,8 @@ fi
 
 # --- Test 11: --ignore custom test ---
 echo "Running Test $test_counter: --ignore custom test"
-# Use a custom ignore list ("dummy") with gitignore disabled so that ignored.txt is not filtered by extra_ignore_patterns
-output_ignore=$(aibundle --files "*.*" -d test_filesystem --gitignore false --ignore dummy --output-console)
+echo "Command: aibundle --files \"*.*\" -d test_filesystem --gitignore false --ignore dummy --output-console"
+output_ignore=$(aibundle --files "*.*" -d test_filesystem --gitignore false --ignore dummy --output-console 2>&1 | tee /dev/tty)
 if echo "$output_ignore" | grep -q "ignored.txt"; then
     test_results[$test_counter]="✅passed  Test $test_counter: --ignore custom test"
 else
