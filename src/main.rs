@@ -31,7 +31,7 @@ use std::process::Command;
 use std::time::Duration;
 use std::{collections::HashSet, fs, io, path::Path, path::PathBuf};
 
-const VERSION: &str = "0.6.8";
+const VERSION: &str = "0.6.9";
 const DEFAULT_SELECTION_LIMIT: usize = 400;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -2154,6 +2154,8 @@ fn run_cli_mode(
     if let Some(pattern) = files_pattern {
         app.search_query = pattern.to_string();
         app.update_search();
+        // In CLI mode, only select files that match the pattern (exclude directories)
+        app.filtered_items.retain(|p| p.is_file());
     }
 
     // Select all filtered items
@@ -2265,7 +2267,7 @@ fn main() -> io::Result<()> {
         let source_dir = effective_source_dir.clone();
         let gitignore = cli_args.gitignore || cli_conf.gitignore.unwrap_or(true);
         let line_numbers = cli_args.line_numbers || cli_conf.line_numbers.unwrap_or(false);
-        let recursive = cli_args.recursive || cli_conf.recursive.unwrap_or(true);
+        let recursive = cli_args.recursive || cli_conf.recursive.unwrap_or(false);
         let ignore = if !cli_args.ignore.is_empty() {
             cli_args.ignore.clone()
         } else {
