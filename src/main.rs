@@ -30,7 +30,7 @@ use std::process::Command;
 use std::time::Duration;
 use std::{collections::HashSet, fs, io, path::Path, path::PathBuf};
 
-const VERSION: &str = "0.6.5";
+const VERSION: &str = "0.6.6";
 const DEFAULT_SELECTION_LIMIT: usize = 400;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -2296,7 +2296,7 @@ fn main() -> io::Result<()> {
     } else {
         // Run in TUI mode: start in the effective source directory.
         let mut app = App::new();
-        app.current_dir = PathBuf::from(effective_source_dir);
+        app.current_dir = PathBuf::from(effective_source_dir.clone());
 
         if let Some(tui_conf) = full_config.tui {
             if let Some(format) = tui_conf.format {
@@ -2316,8 +2316,11 @@ fn main() -> io::Result<()> {
             if let Some(ln) = tui_conf.line_numbers {
                 app.show_line_numbers = ln;
             }
-            if let Some(src) = tui_conf.source_dir {
-                app.current_dir = PathBuf::from(src);
+            // Only override the current directory from saved config when no explicit directory was provided.
+            if effective_source_dir == "." {
+                if let Some(src) = tui_conf.source_dir {
+                    app.current_dir = PathBuf::from(src);
+                }
             }
             if let Some(limit) = tui_conf.selection_limit {
                 app.selection_limit = limit;

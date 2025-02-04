@@ -1,6 +1,6 @@
 [package]
 name = "aibundle"
-version = "0.6.5"
+version = "0.6.6"
 edition = "2021"
 description = "A TUI tool for bundling files and directories into AI/LLM-friendly formats (AIBundle format)"
 authors = ["AIBundle Team"]

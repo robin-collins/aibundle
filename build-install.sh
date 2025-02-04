@@ -37,7 +37,7 @@ main() {
             # update the .version file's patch number
             source ".version"
             new_patch=$((vpatch + 1))
-            sed -i.bak -E "s/(^patch *= *)([0-9]+)/\1${new_patch}/" ".version"
+            sed -i.bak -E "s/(^vpatch *= *)([0-9]+)/\1${new_patch}/" ".version"
             # check if the new patch number got updated
             source ".version"
             if [[ "$vpatch" != "$new_patch" ]]; then
@@ -99,7 +99,7 @@ main() {
         fi
 
         # build and install
-        cargo fmt && cargo build --release && sudo cp target/release/aibundle /usr/local/bin/aibundle
+        cargo fmt && cargo build --release && sudo cp target/release/aibundle /c/tools/bin/aibundle.exe
 
     else
         echo "Unsupported OS"
