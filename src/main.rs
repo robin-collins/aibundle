@@ -30,8 +30,8 @@ use std::process::Command;
 use std::time::Duration;
 use std::{collections::HashSet, fs, io, path::Path, path::PathBuf};
 
-const VERSION: &str = "0.6.3"; // Updated version due to recursive CLI fix.
-const SELECTION_LIMIT: usize = 400;
+const VERSION: &str = "0.6.3"; 
+const DEFAULT_SELECTION_LIMIT: usize = 400;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 struct AppConfig {
@@ -54,6 +54,7 @@ struct ModeConfig {
     line_numbers: Option<bool>,
     recursive: Option<bool>,
     source_dir: Option<String>,
+    selection_limit: Option<usize>, // New field for selection limit override
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -623,6 +624,7 @@ struct App {
     counting_path: Option<PathBuf>,
     is_counting: bool,
     config: AppConfig,
+    selection_limit: usize, // New dynamic selection limit field
 }
 
 impl App {
@@ -648,6 +650,7 @@ impl App {
             counting_path: None,
             is_counting: false,
             config: AppConfig::default(),
+            selection_limit: DEFAULT_SELECTION_LIMIT, // Set default limit
         }
     }
 
@@ -830,7 +833,7 @@ impl App {
             if self.is_counting {
                 if let Some(rx) = &self.pending_count {
                     if let Ok(Ok(count)) = rx.try_recv() {
-                        if count <= SELECTION_LIMIT {
+                        if count <= self.selection_limit {
                             if let Some(path) = self.counting_path.take() {
                                 if path.is_dir() {
                                     self.update_folder_selection(&path, true);
@@ -842,7 +845,7 @@ impl App {
                             self.modal = Some(Modal::new(
                                 format!(
                                     "Cannot select: would exceed limit of {} items\nTried to add {} items",
-                                    SELECTION_LIMIT, count
+                                    self.selection_limit, count
                                 ),
                                 50,
                                 4,
@@ -974,9 +977,6 @@ impl App {
     }
 
     fn toggle_selection(&mut self) {
-        use std::sync::mpsc;
-        use std::thread;
-
         if let Some(selected_index) = self.list_state.selected() {
             if selected_index >= self.filtered_items.len() {
                 return;
@@ -999,14 +999,18 @@ impl App {
 
             // If not selected, start an async count to see if we can add it without exceeding limit
             if !self.is_counting {
-                let (tx, rx) = mpsc::channel();
+                let (tx, rx) = std::sync::mpsc::channel();
                 let base_path = self.current_dir.clone();
                 let ignore_config = self.ignore_config.clone();
                 let path_clone = path.clone();
-
-                thread::spawn(move || {
-                    let result =
-                        count_selection_items_async(&path_clone, &base_path, &ignore_config);
+                let selection_limit = self.selection_limit; // Capture the current limit
+                std::thread::spawn(move || {
+                    let result = count_selection_items_async(
+                        &path_clone,
+                        &base_path,
+                        &ignore_config,
+                        selection_limit,
+                    );
                     let _ = tx.send(result);
                 });
 
@@ -1048,13 +1052,13 @@ impl App {
             }
 
             let total_would_be = self.selected_items.len() + total_new_items;
-            if total_would_be > SELECTION_LIMIT {
+            if total_would_be > self.selection_limit {
                 let msg = format!(
                     "Selection aborted.\n\
                      Selecting {} additional items would exceed the limit of {}.\n\
                      Currently selected: {}",
                     total_new_items,
-                    SELECTION_LIMIT,
+                    self.selection_limit,
                     self.selected_items.len()
                 );
                 self.modal = Some(Modal::new(msg, 50, 6));
@@ -1310,7 +1314,7 @@ impl App {
                     count += 1;
                 } else if current.is_dir() {
                     count += 1;
-                    if count > SELECTION_LIMIT {
+                    if count > DEFAULT_SELECTION_LIMIT {
                         // Bail as soon as limit is exceeded
                         return Ok(count);
                     }
@@ -1321,7 +1325,7 @@ impl App {
                         stack.push(entry_path);
                     }
                 }
-                if count > SELECTION_LIMIT {
+                if count > DEFAULT_SELECTION_LIMIT {
                     return Ok(count);
                 }
             }
@@ -2039,12 +2043,13 @@ fn get_clipboard_contents() -> io::Result<String> {
     }
 }
 
-/// New asynchronous helper replicating `count_selection_items` logic,
-/// but does not block the UI. Returns `io::Result<usize>`.
+/// Asynchronous helper replicating `count_selection_items` logic without blocking the UI.
+/// Now accepts a `selection_limit` parameter.
 fn count_selection_items_async(
     path: &PathBuf,
     base_dir: &PathBuf,
     ignore_config: &IgnoreConfig,
+    selection_limit: usize,
 ) -> io::Result<usize> {
     if path.is_file() {
         return Ok(1);
@@ -2061,7 +2066,7 @@ fn count_selection_items_async(
                 count += 1;
             } else if current.is_dir() {
                 count += 1;
-                if count > SELECTION_LIMIT {
+                if count > selection_limit {
                     return Ok(count);
                 }
                 let entries = fs::read_dir(&current)?
@@ -2071,7 +2076,7 @@ fn count_selection_items_async(
                     stack.push(entry_path);
                 }
             }
-            if count > SELECTION_LIMIT {
+            if count > selection_limit {
                 return Ok(count);
             }
         }
@@ -2126,16 +2131,20 @@ fn run_cli_mode(
         "json" => OutputFormat::Json,
         _ => OutputFormat::Xml,
     };
-    // Only set line numbers if not using JSON format
     app.show_line_numbers = line_numbers && app.output_format != OutputFormat::Json;
 
     // Set up ignore patterns from the CLI flag (--ignore)
     app.config.default_ignore = Some(ignore_list.to_vec());
     app.ignore_config.extra_ignore_patterns = ignore_list.to_vec();
+    // Override selection limit from CLI config if provided.
+    if let Some(cli_conf) = load_config()?.cli {
+        if let Some(limit) = cli_conf.selection_limit {
+            app.selection_limit = limit;
+        }
+    }
 
     // Load items based on patterns and recursion setting
     if recursive {
-        // In CLI mode with --recursive, populate expanded_folders so that all subdirectories are recursed.
         app.expanded_folders = collect_all_subdirs(&app.current_dir, &app.ignore_config)?;
         app.load_items()?;
     } else {
@@ -2214,14 +2223,10 @@ fn main() -> io::Result<()> {
                 DEFAULT_IGNORED_DIRS.iter().map(|s| s.to_string()).collect();
 
             let cli_config = ModeConfig {
-                // Default files is "*" (not "*.rs")
                 files: cli_args.files.clone().or(Some("*".to_string())),
-                // Format is provided by clap (default "xml")
                 format: Some(cli_args.format.clone()),
-                // Default output is an empty string instead of "bundle.md"
                 out: cli_args.output_file.clone().or(Some("".to_string())),
                 gitignore: Some(cli_args.gitignore),
-                // If the ignore vec equals ["default"], use our built-in default_ignore list
                 ignore: if cli_args.ignore.len() == 1 && cli_args.ignore[0] == "default" {
                     Some(default_ignore.clone())
                 } else {
@@ -2229,8 +2234,8 @@ fn main() -> io::Result<()> {
                 },
                 line_numbers: Some(cli_args.line_numbers),
                 recursive: Some(cli_args.recursive),
-                // Use the CLI source-dir (defaults to ".")
                 source_dir: Some(cli_args.source_dir.clone()),
+                selection_limit: Some(DEFAULT_SELECTION_LIMIT),
             };
             // For TUI, use the same defaults as CLI
             let tui_config = cli_config.clone();
@@ -2293,7 +2298,6 @@ fn main() -> io::Result<()> {
         let mut app = App::new();
         app.current_dir = PathBuf::from(effective_source_dir);
 
-        // Apply [tui] configuration if available.
         if let Some(tui_conf) = full_config.tui {
             if let Some(format) = tui_conf.format {
                 app.output_format = match format.to_lowercase().as_str() {
@@ -2314,6 +2318,9 @@ fn main() -> io::Result<()> {
             }
             if let Some(src) = tui_conf.source_dir {
                 app.current_dir = PathBuf::from(src);
+            }
+            if let Some(limit) = tui_conf.selection_limit {
+                app.selection_limit = limit;
             }
         }
 
