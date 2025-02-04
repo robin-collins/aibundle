@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 
-major=0
-minor=6
-patch=4
+vmajor=0
+vminor=6
+vpatch=5
