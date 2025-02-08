@@ -1,14 +1,4 @@
 use clap::Parser;
-use cli_clipboard::{ClipboardContext, ClipboardProvider};
-/// File: src/main.rs
-/// Encoding: UTF-8
-///
-/// This version modifies `count_selection_items` so that it bails out early
-/// once the total count exceeds the SELECTION_LIMIT, potentially saving time
-/// and resources in large directories. The rest of the file remains the same
-/// as your previous version.
-///
-/// Version incremented to 0.5.9 to reflect this update.
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
@@ -27,11 +17,12 @@ use ratatui::{
 };
 use serde::{Deserialize, Serialize};
 use std::env::consts::OS;
-use std::process::Command;
+use std::io::Write;
+use std::process::{Command, Stdio};
 use std::time::Duration;
-use std::{collections::HashSet, fs, io, path::Path, path::PathBuf};
+use std::{collections::HashSet, fs, io, path::Path, path::PathBuf}; // Add this with the other imports at the top
 
-const VERSION: &str = "0.6.9";
+const VERSION: &str = "0.6.10";
 const DEFAULT_SELECTION_LIMIT: usize = 400;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -1074,18 +1065,7 @@ impl App {
 
     fn copy_selected_to_clipboard(&mut self) -> io::Result<()> {
         let contents = self.format_selected_items()?;
-        let mut ctx = ClipboardContext::new().map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Failed to create clipboard context: {}", e),
-            )
-        })?;
-        ctx.set_contents(contents.to_owned()).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Failed to set clipboard contents: {}", e),
-            )
-        })?;
+        copy_to_clipboard(&contents)?;
 
         // Update copy stats
         let line_count = contents.lines().count();
@@ -2000,27 +1980,31 @@ fn human_readable_size(size: usize) -> String {
 }
 
 fn get_clipboard_contents() -> io::Result<String> {
+    if is_wsl() {
+        // Use Windows clip.exe through WSL
+        let output = Command::new("powershell.exe")
+            .args(["-Command", "Get-Clipboard"])
+            .output()?;
+        if output.status.success() {
+            return String::from_utf8(output.stdout)
+                .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"));
+        }
+    }
+
     match OS {
         "windows" => {
-            if let Ok(mut ctx) = ClipboardContext::new() {
-                ctx.get_contents().map_err(|_| {
-                    io::Error::new(io::ErrorKind::Other, "Failed to get clipboard contents")
-                })
+            let output = Command::new("powershell.exe")
+                .args(["-Command", "Get-Clipboard"])
+                .output()?;
+            if output.status.success() {
+                String::from_utf8(output.stdout)
+                    .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"))
             } else {
                 Ok(String::new())
             }
         }
         _ => {
-            let powershell_result = Command::new("powershell.exe")
-                .args(["-Command", "Get-Clipboard"])
-                .output();
-            if let Ok(output) = powershell_result {
-                if output.status.success() {
-                    return String::from_utf8(output.stdout).map_err(|_| {
-                        io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard")
-                    });
-                }
-            }
+            // Try wl-paste first (Wayland)
             let wl_output = Command::new("wl-paste").output();
             if let Ok(output) = wl_output {
                 if output.status.success() {
@@ -2029,6 +2013,8 @@ fn get_clipboard_contents() -> io::Result<String> {
                     });
                 }
             }
+
+            // Fall back to xclip (X11)
             let output = Command::new("xclip")
                 .arg("-selection")
                 .arg("clipboard")
@@ -2038,6 +2024,44 @@ fn get_clipboard_contents() -> io::Result<String> {
                 .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"))
         }
     }
+}
+
+fn copy_to_clipboard(text: &str) -> io::Result<()> {
+    if is_wsl() {
+        // Use Windows clip.exe through WSL
+        let mut child = Command::new("/mnt/c/Windows/System32/clip.exe")
+            .stdin(Stdio::piped())
+            .spawn()?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(text.as_bytes())?;
+        }
+
+        child.wait()?;
+    } else {
+        // Handle non-WSL case (Linux/Unix systems)
+        let mut child = Command::new("xclip")
+            .arg("-selection")
+            .arg("clipboard")
+            .stdin(Stdio::piped())
+            .spawn()?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(text.as_bytes())?;
+        }
+
+        child.wait()?;
+    }
+
+    Ok(())
+}
+
+fn is_wsl() -> bool {
+    std::fs::read_to_string("/proc/version")
+        .map(|version| {
+            version.to_lowercase().contains("microsoft") || version.to_lowercase().contains("wsl")
+        })
+        .unwrap_or(false)
 }
 
 /// Asynchronous helper replicating `count_selection_items` logic without blocking the UI.
@@ -2172,19 +2196,8 @@ fn run_cli_mode(
     } else if output_console {
         println!("{output}");
     } else {
-        // Copy to clipboard
-        let mut ctx = ClipboardContext::new().map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Failed to create clipboard context: {}", e),
-            )
-        })?;
-        ctx.set_contents(output).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Failed to set clipboard contents: {}", e),
-            )
-        })?;
+        // Replace ClipboardContext with our new function
+        copy_to_clipboard(&output)?;
         println!("Output copied to clipboard");
     }
 
