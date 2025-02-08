@@ -22,7 +22,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use std::{collections::HashSet, fs, io, path::Path, path::PathBuf}; // Add this with the other imports at the top
 
-const VERSION: &str = "0.6.12";
+const VERSION: &str = "0.6.13";
 const DEFAULT_SELECTION_LIMIT: usize = 400;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -1985,9 +1985,21 @@ fn copy_to_clipboard(text: &str) -> io::Result<()> {
         let temp_file = std::env::temp_dir().join("aibundle_clipboard_temp.txt");
         fs::write(&temp_file, text)?;
 
+        // Convert Linux path to Windows path
+        let windows_path = String::from_utf8(
+            Command::new("wslpath")
+                .arg("-w")
+                .arg(&temp_file)
+                .output()?
+                .stdout,
+        )
+        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to convert path"))?
+        .trim()
+        .to_string();
+
         let ps_command = format!(
             "Get-Content -Raw -Path '{}' | Set-Clipboard",
-            temp_file.to_string_lossy().replace("'", "''")
+            windows_path.replace("'", "''")
         );
 
         let status = Command::new("powershell.exe")
