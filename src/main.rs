@@ -22,7 +22,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use std::{collections::HashSet, fs, io, path::Path, path::PathBuf}; // Add this with the other imports at the top
 
-const VERSION: &str = "0.6.11";
+const VERSION: &str = "0.6.12";
 const DEFAULT_SELECTION_LIMIT: usize = 400;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -1981,15 +1981,21 @@ fn human_readable_size(size: usize) -> String {
 
 fn copy_to_clipboard(text: &str) -> io::Result<()> {
     if is_wsl() {
-        // For WSL2, use PowerShell with UTF-8 encoding and error handling
+        // For WSL2, write to a temporary file and use PowerShell to read it
+        let temp_file = std::env::temp_dir().join("aibundle_clipboard_temp.txt");
+        fs::write(&temp_file, text)?;
+
         let ps_command = format!(
-            "$text = @'\n{}\n'@; [System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Set-Clipboard -Value $text",
-            text.replace("'@", "'``@")  // Escape any potential closing markers
+            "Get-Content -Raw -Path '{}' | Set-Clipboard",
+            temp_file.to_string_lossy().replace("'", "''")
         );
 
         let status = Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-Command", &ps_command])
             .status()?;
+
+        // Clean up temp file
+        let _ = fs::remove_file(temp_file);
 
         if !status.success() {
             return Err(io::Error::new(
@@ -2000,15 +2006,21 @@ fn copy_to_clipboard(text: &str) -> io::Result<()> {
     } else {
         match OS {
             "windows" => {
-                // For native Windows, use PowerShell with UTF-8 encoding
+                // For Windows, use the same temp file approach
+                let temp_file = std::env::temp_dir().join("aibundle_clipboard_temp.txt");
+                fs::write(&temp_file, text)?;
+
                 let ps_command = format!(
-                    "$text = @'\n{}\n'@; [System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Set-Clipboard -Value $text",
-                    text.replace("'@", "'``@")
+                    "Get-Content -Raw -Path '{}' | Set-Clipboard",
+                    temp_file.to_string_lossy().replace("'", "''")
                 );
 
                 let status = Command::new("powershell.exe")
                     .args(["-NoProfile", "-NonInteractive", "-Command", &ps_command])
                     .status()?;
+
+                // Clean up temp file
+                let _ = fs::remove_file(temp_file);
 
                 if !status.success() {
                     return Err(io::Error::new(
@@ -2018,7 +2030,6 @@ fn copy_to_clipboard(text: &str) -> io::Result<()> {
                 }
             }
             "macos" => {
-                // Use pbcopy for macOS
                 let mut child = Command::new("pbcopy").stdin(Stdio::piped()).spawn()?;
 
                 if let Some(mut stdin) = child.stdin.take() {
@@ -2036,7 +2047,6 @@ fn copy_to_clipboard(text: &str) -> io::Result<()> {
                             stdin.write_all(text.as_bytes())?;
                         }
                         child.wait()?;
-                        return Ok(());
                     }
                     Err(_) => {
                         // Fall back to X11 (xclip)
@@ -2061,7 +2071,7 @@ fn copy_to_clipboard(text: &str) -> io::Result<()> {
 
 fn get_clipboard_contents() -> io::Result<String> {
     if is_wsl() {
-        // For WSL2, use PowerShell with UTF-8 encoding
+        // For WSL2, use PowerShell with UTF-8 encoding and error handling
         let output = Command::new("powershell.exe")
             .args([
                 "-NoProfile",
