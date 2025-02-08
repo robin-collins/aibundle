@@ -22,7 +22,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use std::{collections::HashSet, fs, io, path::Path, path::PathBuf}; // Add this with the other imports at the top
 
-const VERSION: &str = "0.6.10";
+const VERSION: &str = "0.6.11";
 const DEFAULT_SELECTION_LIMIT: usize = 400;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -1979,12 +1979,98 @@ fn human_readable_size(size: usize) -> String {
     }
 }
 
+fn copy_to_clipboard(text: &str) -> io::Result<()> {
+    if is_wsl() {
+        // For WSL2, use PowerShell with UTF-8 encoding and error handling
+        let ps_command = format!(
+            "$text = @'\n{}\n'@; [System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Set-Clipboard -Value $text",
+            text.replace("'@", "'``@")  // Escape any potential closing markers
+        );
+
+        let status = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &ps_command])
+            .status()?;
+
+        if !status.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Failed to copy to Windows clipboard",
+            ));
+        }
+    } else {
+        match OS {
+            "windows" => {
+                // For native Windows, use PowerShell with UTF-8 encoding
+                let ps_command = format!(
+                    "$text = @'\n{}\n'@; [System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Set-Clipboard -Value $text",
+                    text.replace("'@", "'``@")
+                );
+
+                let status = Command::new("powershell.exe")
+                    .args(["-NoProfile", "-NonInteractive", "-Command", &ps_command])
+                    .status()?;
+
+                if !status.success() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "Failed to copy to clipboard",
+                    ));
+                }
+            }
+            "macos" => {
+                // Use pbcopy for macOS
+                let mut child = Command::new("pbcopy").stdin(Stdio::piped()).spawn()?;
+
+                if let Some(mut stdin) = child.stdin.take() {
+                    stdin.write_all(text.as_bytes())?;
+                }
+                child.wait()?;
+            }
+            _ => {
+                // Try Wayland first
+                let wayland_result = Command::new("wl-copy").stdin(Stdio::piped()).spawn();
+
+                match wayland_result {
+                    Ok(mut child) => {
+                        if let Some(mut stdin) = child.stdin.take() {
+                            stdin.write_all(text.as_bytes())?;
+                        }
+                        child.wait()?;
+                        return Ok(());
+                    }
+                    Err(_) => {
+                        // Fall back to X11 (xclip)
+                        let mut child = Command::new("xclip")
+                            .arg("-selection")
+                            .arg("clipboard")
+                            .stdin(Stdio::piped())
+                            .spawn()?;
+
+                        if let Some(mut stdin) = child.stdin.take() {
+                            stdin.write_all(text.as_bytes())?;
+                        }
+                        child.wait()?;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn get_clipboard_contents() -> io::Result<String> {
     if is_wsl() {
-        // Use Windows clip.exe through WSL
+        // For WSL2, use PowerShell with UTF-8 encoding
         let output = Command::new("powershell.exe")
-            .args(["-Command", "Get-Clipboard"])
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "[Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Clipboard",
+            ])
             .output()?;
+
         if output.status.success() {
             return String::from_utf8(output.stdout)
                 .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"));
@@ -1994,8 +2080,14 @@ fn get_clipboard_contents() -> io::Result<String> {
     match OS {
         "windows" => {
             let output = Command::new("powershell.exe")
-                .args(["-Command", "Get-Clipboard"])
+                .args([
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "[Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Clipboard",
+                ])
                 .output()?;
+
             if output.status.success() {
                 String::from_utf8(output.stdout)
                     .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"))
@@ -2003,10 +2095,15 @@ fn get_clipboard_contents() -> io::Result<String> {
                 Ok(String::new())
             }
         }
+        "macos" => {
+            let output = Command::new("pbpaste").output()?;
+            String::from_utf8(output.stdout)
+                .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"))
+        }
         _ => {
-            // Try wl-paste first (Wayland)
-            let wl_output = Command::new("wl-paste").output();
-            if let Ok(output) = wl_output {
+            // Try Wayland first
+            let wayland_result = Command::new("wl-paste").output();
+            if let Ok(output) = wayland_result {
                 if output.status.success() {
                     return String::from_utf8(output.stdout).map_err(|_| {
                         io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard")
@@ -2014,46 +2111,17 @@ fn get_clipboard_contents() -> io::Result<String> {
                 }
             }
 
-            // Fall back to xclip (X11)
+            // Fall back to X11 (xclip)
             let output = Command::new("xclip")
                 .arg("-selection")
                 .arg("clipboard")
                 .arg("-o")
                 .output()?;
+
             String::from_utf8(output.stdout)
                 .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"))
         }
     }
-}
-
-fn copy_to_clipboard(text: &str) -> io::Result<()> {
-    if is_wsl() {
-        // Use Windows clip.exe through WSL
-        let mut child = Command::new("/mnt/c/Windows/System32/clip.exe")
-            .stdin(Stdio::piped())
-            .spawn()?;
-
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(text.as_bytes())?;
-        }
-
-        child.wait()?;
-    } else {
-        // Handle non-WSL case (Linux/Unix systems)
-        let mut child = Command::new("xclip")
-            .arg("-selection")
-            .arg("clipboard")
-            .stdin(Stdio::piped())
-            .spawn()?;
-
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(text.as_bytes())?;
-        }
-
-        child.wait()?;
-    }
-
-    Ok(())
 }
 
 fn is_wsl() -> bool {
