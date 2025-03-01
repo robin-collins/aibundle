@@ -1175,7 +1175,7 @@ impl App {
                                 output.push_str("</file>\n");
                             }
                             OutputFormat::Markdown => {
-                                output.push_str(&format!("```{}\n", normalized_path));
+                                    output.push_str(&format!("```{}\n", normalized_path));
                                 if let Ok(content) = fs::read_to_string(&entry_clone) {
                                     if self.show_line_numbers {
                                         for (i, line) in content.lines().enumerate() {
@@ -1188,7 +1188,7 @@ impl App {
                                         output.push('\n');
                                     }
                                 }
-                                output.push_str("```\n\n");
+                                    output.push_str("```\n\n");
                             }
                             OutputFormat::Json => {
                                 if let Ok(content) = fs::read_to_string(&entry_clone) {
@@ -1743,7 +1743,7 @@ impl App {
                                 output.push_str("</file>\n");
                             }
                             OutputFormat::Markdown => {
-                                output.push_str(&format!("```{}\n", normalized_path));
+                                    output.push_str(&format!("```{}\n", normalized_path));
                                 if let Ok(content) = fs::read_to_string(path) {
                                     if self.show_line_numbers {
                                         for (i, line) in content.lines().enumerate() {
@@ -1756,7 +1756,7 @@ impl App {
                                         output.push('\n');
                                     }
                                 }
-                                output.push_str("```\n\n");
+                                    output.push_str("```\n\n");
                             }
                             OutputFormat::Json => {
                                 if let Ok(content) = fs::read_to_string(path) {
