@@ -1,9 +1,9 @@
 # AIBundle 📦
 
-[![Version](https://img.shields.io/badge/version-0.5.0-blue.svg)](https://crates.io/crates/aibundle)
+[![Version](https://img.shields.io/badge/version-0.6.13-blue.svg)](https://crates.io/crates/aibundle)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A TUI (Terminal User Interface) tool for bundling files and directories into AI/LLM-friendly formats. Perfect for sharing code snippets and project structures with AI assistants.
+A powerful CLI and TUI tool for bundling files and directories into AI/LLM-friendly formats. Perfect for sharing code snippets and project structures with AI assistants.
 
 ![AIBundle Screenshot](screenshot.png)
 
@@ -16,13 +16,16 @@ AIBundle is a multi-format specification designed for optimal code sharing with 
   - XML (hierarchical and structured)
   - Markdown (human-readable and LLM-friendly)
   - JSON (parseable and programmatic)
+  - LLM (enhanced AI-optimized format with dependency analysis)
 - **File Hierarchy**: Preserves directory structure and relationships
 - **Content Preservation**: Maintains original file content and formatting
 - **Binary Handling**: Identifies and marks binary files
 - **Path Normalization**: Uses forward slashes for cross-platform compatibility
 - **Line Numbers**: Optional line numbering for precise code references
-- **Selection Limits**: Smart handling of large directories with selection limits
+- **Selection Limits**: Smart handling of large directories with selection limits (default: 400 files)
 - **Async Operations**: Non-blocking UI during large operations
+- **Command Line Mode**: Full CLI support with config persistence
+- **Smart Dependency Analysis**: Detects and visualizes file relationships (LLM format)
 
 ### Format Examples
 
@@ -59,24 +62,95 @@ AIBundle is a multi-format specification designed for optimal code sharing with 
 ]
 ```
 
+#### LLM Format
+```markdown
+# PROJECT ANALYSIS FOR AI ASSISTANT
+
+## 📦 GENERAL INFORMATION
+- **Project path**: `/home/user/project`
+- **Total files**: 12
+- **Files included in this analysis**: 8
+- **Main languages used**:
+  - Rust (5 files)
+  - Markdown (2 files)
+  - TOML (1 file)
+
+## 🗂️ PROJECT STRUCTURE
+```
+/home/user/project
+├── src
+│   ├── main.rs
+│   ├── lib.rs
+│   └── utils
+│       └── helpers.rs
+├── tests
+│   └── integration_test.rs
+└── Cargo.toml
+```
+
+## 🔄 FILE RELATIONSHIPS
+### Core Files (most referenced)
+- **`src/lib.rs`** is imported by 3 files
+
+### Dependencies by File
+- **`src/main.rs`**:
+  - *Internal dependencies*: `src/lib.rs`, `src/utils/helpers.rs`
+  - *External dependencies*: `std::io`, `clap`
+
+## 📄 FILE CONTENTS
+### src/main.rs
+```rust
+fn main() {
+    println!("Hello, world!");
+}
+```
+```
+
 ## Features 🚀
 
+- 🖥️ **Dual-Mode Operation**:
+  - Interactive TUI for visual file exploration
+  - Full-featured CLI for scripting and automation
 - 📁 Interactive file browser with folder expansion/collapse
-- 🔍 Live search functionality with real-time filtering
+- 🔍 Enhanced search functionality:
+  - Real-time filtering
+  - Glob pattern support
+  - Recursive or non-recursive search modes
 - ✨ Rich file icons for over 200 file types
-- 📋 Export in multiple formats (XML/MD/JSON)
+- 📋 Export in multiple formats:
+  - XML (hierarchical and structured)
+  - Markdown (human-readable format)
+  - JSON (parseable format)
+  - LLM (AI-optimized with dependency analysis)
+- 📊 Smart code analysis (LLM format):
+  - Dependency detection between files
+  - Project structure visualization
+  - Focused project insights for AI
 - 🎯 Smart file filtering:
   - `.gitignore` support
   - Default ignore patterns (node_modules, target, etc.)
+  - Custom ignore patterns
   - Binary file handling
 - ⌨️ Intuitive keyboard shortcuts
-- 🖥️ Cross-platform clipboard support (Windows, Linux X11/Wayland, WSL)
+- 🖥️ Cross-platform clipboard support:
+  - Windows (PowerShell)
+  - macOS (pbcopy/pbpaste)
+  - Linux - X11 (xclip)
+  - Linux - Wayland (wl-copy/wl-paste)
+  - WSL2 integration
 - 📝 Line number support for all formats
 - 🔄 Format switching on the fly
-- ⚡ Performance optimizations for large directories
+- ⚡ Performance optimizations:
+  - Asynchronous directory scanning
+  - Iterative vs. recursive loading options
+  - Early bailout for large selections
 - 🎨 Beautiful TUI with modal dialogs and help screens
 - 📊 Detailed copy statistics with file counts and sizes
-- 🔒 Selection limits to prevent memory issues
+- 🔒 Selection limits to prevent memory issues (configurable)
+- ⚙️ Persistent configuration:
+  - Save and load settings
+  - Per-user configuration files
+  - CLI and TUI configuration separation
 
 ## Installation 📦
 
@@ -94,9 +168,47 @@ cargo build --release
 
 ## Usage 🛠️
 
-Launch AIBundle in any directory:
+### TUI Mode
+
+Launch AIBundle's interactive terminal interface in any directory:
 ```bash
-aibundle
+aibundle                           # Current directory
+aibundle /path/to/project          # Specific directory
+```
+
+### CLI Mode
+
+Use AIBundle directly from the command line:
+```bash
+# Basic usage - copy all .rs files to clipboard in LLM format
+aibundle --files "*.rs"
+
+# Export to a file instead of clipboard
+aibundle --files "*.{rs,toml}" --output-file project_bundle.md
+
+# Print to console with line numbers
+aibundle --files "src/*.rs" --output-console --line-numbers
+
+# Specify format and other options
+aibundle --files "*.py" --format markdown --recursive
+
+# Save your preferences for future use
+aibundle --format llm --gitignore true --recursive true --save-config
+```
+
+### Configuration
+
+AIBundle saves configuration in `~/.aibundle.config.toml`:
+```toml
+[cli]
+files = "*.rs"
+format = "llm"
+recursive = true
+
+[tui]
+format = "markdown"
+line_numbers = true
+selection_limit = 600
 ```
 
 ### Keyboard Shortcuts
@@ -113,7 +225,7 @@ Selection:
 
 Actions:
 - `c` - Copy selected items to clipboard
-- `f` - Toggle format (XML → Markdown → JSON)
+- `f` - Toggle format (XML → Markdown → JSON → LLM)
 - `n` - Toggle line numbers
 - `/` - Search (ESC to cancel)
 
@@ -124,6 +236,7 @@ Filters:
 
 Other:
 - `h` - Show help
+- `s` - Save configuration
 - `q` - Quit (copies if items selected)
 
 ## Dependencies 📚
@@ -131,12 +244,18 @@ Other:
 Core dependencies:
 - [crossterm](https://crates.io/crates/crossterm) - Terminal manipulation and events
 - [ratatui](https://crates.io/crates/ratatui) - Terminal user interface framework
-- [cli-clipboard](https://crates.io/crates/cli-clipboard) - Cross-platform clipboard operations
 - [ignore](https://crates.io/crates/ignore) - .gitignore support and file filtering
+- [clap](https://crates.io/crates/clap) - Command line argument parsing
+- [serde](https://crates.io/crates/serde) - Serialization/deserialization framework
+- [toml](https://crates.io/crates/toml) - TOML file parsing for configuration
+- [glob](https://crates.io/crates/glob) - Glob pattern matching
+- [regex](https://crates.io/crates/regex) - Regular expressions for dependency analysis
+- [itertools](https://crates.io/crates/itertools) - Additional iterator adaptors
 
-## B# Clean build
+## Build from Source
 
 ```bash
+# Clean build
 cargo clean
 cargo build --release
 
@@ -153,12 +272,22 @@ cargo publish --dry-run
 
 ## Performance 🚀
 
-AIBundle v0.5.0 includes several performance optimizations:
-- Early bailout for large directory selections
-- Asynchronous item counting
-- Smart caching of directory contents
-- Efficient path normalization
-- Optimized search filtering
+AIBundle v0.6.13 includes several performance optimizations:
+- Asynchronous processing:
+  - Non-blocking item counting during selection
+  - Background processing of large operations
+- Smart selection management:
+  - Early bailout for large directory selections
+  - Default selection limit of 400 files (configurable)
+  - Hierarchical selection cascading
+- Improved file navigation:
+  - Iterative vs. recursive directory traversal options
+  - Smart caching of directory contents
+  - Efficient path normalization
+- Search optimizations:
+  - Pattern-based (glob) or text-based search options
+  - Recursive or non-recursive search modes
+  - Real-time filtering with pattern matching
 
 ## Contributing 🤝
 

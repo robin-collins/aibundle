@@ -34,3 +34,7 @@ test_dir*
 node_app_docs/*
 test_filesystem/
 test_*
+expand_folder/
+
+default_output.txt
+output.txt
