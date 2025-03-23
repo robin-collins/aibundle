@@ -1,35 +1,32 @@
-use std::io;
-use std::path::PathBuf;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
+use ratatui::{backend::CrosstermBackend, Terminal};
+use std::io;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::models::{AppConfig, OutputFormat};
-use crate::tui::state::{AppState, SelectionState, SearchState};
-use crate::tui::handlers::{KeyboardHandler, ClipboardHandler, FileOpsHandler};
+use crate::tui::handlers::{ClipboardHandler, FileOpsHandler, KeyboardHandler};
+use crate::tui::state::{AppState, SearchState, SelectionState};
 use crate::tui::views::MainView;
 
 pub struct App {
     // Application state
     pub state: AppState,
-    
+
     // UI state managers
     selection_state: SelectionState,
     search_state: SearchState,
-    
+
     // Event handlers
     keyboard_handler: KeyboardHandler,
-    
+
     // Views
     main_view: MainView,
-    
+
     // Public-facing properties (for compatibility with existing code)
     pub current_dir: PathBuf,
     pub config: AppConfig,
@@ -48,7 +45,7 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         let app_state = AppState::new();
-        
+
         // Create a new instance with all components initialized
         let mut app = Self {
             current_dir: app_state.current_dir.clone(),
@@ -63,20 +60,20 @@ impl App {
             filtered_items: Vec::new(),
             items: Vec::new(),
             selection_limit: app_state.selection_limit,
-            
+
             state: app_state,
             selection_state: SelectionState::new(),
             search_state: SearchState::new(),
             keyboard_handler: KeyboardHandler::new(),
             main_view: MainView::new(),
         };
-        
+
         // Initialize compatibility properties
         app.sync_state_to_properties();
-        
+
         app
     }
-    
+
     // Synchronizes internal state to public properties for compatibility
     fn sync_state_to_properties(&mut self) {
         self.current_dir = self.state.current_dir.clone();
@@ -92,7 +89,7 @@ impl App {
         self.items = self.state.items.clone();
         self.selection_limit = self.state.selection_limit;
     }
-    
+
     // Synchronizes public properties to internal state for compatibility
     fn sync_properties_to_state(&mut self) {
         self.state.current_dir = self.current_dir.clone();
@@ -108,42 +105,50 @@ impl App {
         self.state.items = self.items.clone();
         self.state.selection_limit = self.selection_limit;
     }
-    
+
     pub fn run(&mut self) -> io::Result<()> {
         // Synchronize any external changes to internal state
         self.sync_properties_to_state();
-        
+
         // Setup terminal
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen)?;
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
-        
+
         // Load initial items
         FileOpsHandler::load_items(&mut self.state)?;
-        
+
         // Main event loop
         while !self.state.quit {
             // Check for pending selection count results
             FileOpsHandler::check_pending_selection(&mut self.state, &mut self.selection_state)?;
-            
+
             // Render UI
-            terminal.draw(|f| self.main_view.render(f, &self.state, &self.selection_state, &self.search_state))?;
-            
+            terminal.draw(|f| {
+                self.main_view
+                    .render(f, &self.state, &self.selection_state, &self.search_state)
+            })?;
+
             // Handle events with timeout
             if event::poll(Duration::from_millis(50))? {
                 if let Event::Key(key) = event::read()? {
-                    self.keyboard_handler.handle_key(key, &mut self.state, &mut self.selection_state, &mut self.search_state)?;
+                    self.keyboard_handler.handle_key(
+                        key,
+                        &mut self.state,
+                        &mut self.selection_state,
+                        &mut self.search_state,
+                    )?;
                 }
             }
-            
+
             // Keep compatibility properties in sync
             self.sync_state_to_properties();
         }
-        
+
         // Restore terminal
         execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-        
+
         // Print final statistics if anything was copied
         if let Some(stats) = &self.state.last_copy_stats {
             if let Ok(contents) = crate::clipboard::get_clipboard_contents() {
@@ -153,40 +158,43 @@ impl App {
                 println!("  Files copied: {}", stats.files);
                 println!("  Folders copied: {}", stats.folders);
                 println!("  Total lines: {}", line_count);
-                println!("  Total size: {}", crate::utils::human_readable_size(byte_size));
+                println!(
+                    "  Total size: {}",
+                    crate::utils::human_readable_size(byte_size)
+                );
                 println!();
             }
         }
-        
+
         Ok(())
     }
-    
+
     // Delegating methods for backward compatibility
-    
+
     pub fn load_items(&mut self) -> io::Result<()> {
         self.sync_properties_to_state();
         let result = FileOpsHandler::load_items(&mut self.state);
         self.sync_state_to_properties();
         result
     }
-    
+
     pub fn load_items_nonrecursive(&mut self) -> io::Result<()> {
         self.sync_properties_to_state();
         let result = FileOpsHandler::load_items_nonrecursive(&mut self.state);
         self.sync_state_to_properties();
         result
     }
-    
+
     pub fn update_search(&mut self) {
         self.sync_properties_to_state();
         let _ = FileOpsHandler::update_search(&mut self.state, &mut self.search_state);
         self.sync_state_to_properties();
     }
-    
+
     pub fn format_selected_items(&mut self) -> io::Result<String> {
         self.sync_properties_to_state();
         ClipboardHandler::format_selected_items(&mut self.state)
     }
-    
+
     // Other delegating methods as needed...
 }

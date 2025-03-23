@@ -1,21 +1,21 @@
 mod cli;
-mod tui;
+mod clipboard;
 mod config;
 mod fs;
-mod output;
-mod clipboard;
 mod models;
+mod output;
+mod tui;
 mod utils;
 
 use clap::Parser;
-use cli::{CliOptions, CliModeOptions, run_cli_mode};
+use cli::{run_cli_mode, CliModeOptions, CliOptions};
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use models::{FullConfig, ModeConfig};
-use std::path::PathBuf;
 use std::io;
+use std::path::PathBuf;
 
 fn main() -> io::Result<()> {
     let cli_args = CliOptions::parse();
@@ -38,8 +38,10 @@ fn main() -> io::Result<()> {
         // If saving config is requested, save a default config file (with both [cli] and [tui] sections)
         if cli_args.save_config {
             // Define our default ignored directories as a Vec<String>
-            let default_ignore: Vec<String> =
-                models::DEFAULT_IGNORED_DIRS.iter().map(|s| s.to_string()).collect();
+            let default_ignore: Vec<String> = models::DEFAULT_IGNORED_DIRS
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
 
             let cli_config = ModeConfig {
                 files: cli_args.files.clone().or(Some("*".to_string())),

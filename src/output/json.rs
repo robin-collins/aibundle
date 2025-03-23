@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use std::collections::HashSet;
 use std::fs;
 use std::io;
+use std::path::PathBuf;
 
 use crate::fs::normalize_path;
 use crate::models::CopyStats;
@@ -94,6 +94,6 @@ pub fn format_json_output(
     }
 
     output.push(']');
-    
+
     Ok((output, stats))
-} 
+}

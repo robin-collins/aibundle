@@ -1,8 +1,8 @@
-use std::io;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+use std::io;
 
-use crate::tui::state::{AppState, SelectionState, SearchState};
 use crate::tui::handlers::{ClipboardHandler, FileOpsHandler};
+use crate::tui::state::{AppState, SearchState, SelectionState};
 
 pub struct KeyboardHandler;
 
@@ -10,7 +10,7 @@ impl KeyboardHandler {
     pub fn new() -> Self {
         Self
     }
-    
+
     pub fn handle_key(
         &self,
         key: KeyEvent,
@@ -22,7 +22,7 @@ impl KeyboardHandler {
         if key.kind != KeyEventKind::Press {
             return Ok(());
         }
-        
+
         // If searching, handle search input
         if search_state.is_searching {
             match key.code {
@@ -39,7 +39,7 @@ impl KeyboardHandler {
             }
             return Ok(());
         }
-        
+
         // Normal mode key handling
         match key.code {
             KeyCode::Char('q') => {
@@ -72,7 +72,7 @@ impl KeyboardHandler {
             KeyCode::Char('h') => FileOpsHandler::show_help(app_state),
             _ => {}
         }
-        
+
         Ok(())
     }
 }

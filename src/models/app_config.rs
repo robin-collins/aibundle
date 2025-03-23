@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct AppConfig {

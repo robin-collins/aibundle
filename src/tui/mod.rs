@@ -1,7 +1,7 @@
 // Public modules
 pub mod components;
-pub mod state;
 pub mod handlers;
+pub mod state;
 pub mod views;
 
 // App re-export

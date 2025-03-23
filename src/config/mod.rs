@@ -1,6 +1,6 @@
 use crate::models::{AppConfig, FullConfig};
-use std::io;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 /// Returns the config file path in the user's home directory.
@@ -35,10 +35,10 @@ pub fn save_config(config: &AppConfig, file_path: &str) -> io::Result<()> {
             return Ok(());
         }
     }
-    
+
     let toml_str = toml::to_string_pretty(config)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}")))?;
-    
+
     fs::write(file_path, toml_str)?;
     println!("Configuration saved successfully.");
     Ok(())

@@ -1,10 +1,10 @@
-use std::path::{Path, PathBuf};
-use std::fs;
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::io;
+use std::path::{Path, PathBuf};
 
-use crate::models::{CopyStats, OutputFormat, IgnoreConfig};
 use crate::fs::normalize_path;
+use crate::models::{CopyStats, IgnoreConfig, OutputFormat};
 
 // Get language name from file extension
 pub fn get_language_name(extension: &str) -> &'static str {
@@ -42,10 +42,10 @@ pub fn is_binary_file(path: &Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         let binary_extensions = [
             "idx", "pack", "rev", "index", "png", "jpg", "jpeg", "gif", "bmp", "tiff", "webp",
-            "ico", "svg", "mp3", "wav", "ogg", "flac", "m4a", "aac", "wma", "mp4", "avi",
-            "mkv", "mov", "wmv", "flv", "webm", "zip", "rar", "7z", "tar", "gz", "iso", "exe",
-            "dll", "so", "dylib", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "class",
-            "pyc", "pyd", "pyo",
+            "ico", "svg", "mp3", "wav", "ogg", "flac", "m4a", "aac", "wma", "mp4", "avi", "mkv",
+            "mov", "wmv", "flv", "webm", "zip", "rar", "7z", "tar", "gz", "iso", "exe", "dll",
+            "so", "dylib", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "class", "pyc",
+            "pyd", "pyo",
         ];
         if binary_extensions.contains(&ext.to_lowercase().as_str()) {
             return true;
@@ -62,7 +62,7 @@ pub fn is_binary_file(path: &Path) -> bool {
 // Format files with line numbers if needed
 pub fn format_file_content(content: &str, show_line_numbers: bool) -> String {
     let mut output = String::new();
-    
+
     if show_line_numbers {
         for (i, line) in content.lines().enumerate() {
             output.push_str(&format!("{:>6} | {}\n", i + 1, line));
@@ -73,7 +73,7 @@ pub fn format_file_content(content: &str, show_line_numbers: bool) -> String {
             output.push('\n');
         }
     }
-    
+
     output
 }
 
@@ -89,14 +89,14 @@ pub fn process_directory(
 ) -> io::Result<(usize, usize)> {
     let mut files = 0;
     let mut folders = 0;
-    
+
     // Create a list of selected entries within this directory
     let entries = fs::read_dir(path)?
         .filter_map(|e| e.ok())
         .map(|e| e.path())
         .filter(|p| selected_items.contains(p))
         .collect::<Vec<_>>();
-    
+
     let mut first_item = true;
     if *output_format == OutputFormat::Json {
         for entry in entries {
@@ -104,10 +104,10 @@ pub fn process_directory(
                 output.push(',');
             }
             first_item = false;
-            
+
             if let Ok(rel_path) = entry.strip_prefix(base_path) {
                 let normalized_path = normalize_path(&rel_path.to_string_lossy());
-                
+
                 if entry.is_file() {
                     if is_binary_file(&entry) {
                         if include_binary_files {
@@ -159,7 +159,7 @@ pub fn process_directory(
         for entry in entries {
             if let Ok(rel_path) = entry.strip_prefix(base_path) {
                 let normalized_path = normalize_path(&rel_path.to_string_lossy());
-                
+
                 if entry.is_file() {
                     if is_binary_file(&entry) {
                         if include_binary_files {
@@ -185,7 +185,10 @@ pub fn process_directory(
                             OutputFormat::Xml => {
                                 output.push_str(&format!("<file name=\"{}\">\n", normalized_path));
                                 if let Ok(content) = fs::read_to_string(&entry) {
-                                    output.push_str(&format_file_content(&content, show_line_numbers));
+                                    output.push_str(&format_file_content(
+                                        &content,
+                                        show_line_numbers,
+                                    ));
                                 }
                                 output.push_str("</file>\n");
                                 files += 1;
@@ -193,7 +196,10 @@ pub fn process_directory(
                             OutputFormat::Markdown => {
                                 output.push_str(&format!("```{}\n", normalized_path));
                                 if let Ok(content) = fs::read_to_string(&entry) {
-                                    output.push_str(&format_file_content(&content, show_line_numbers));
+                                    output.push_str(&format_file_content(
+                                        &content,
+                                        show_line_numbers,
+                                    ));
                                 }
                                 output.push_str("```\n\n");
                                 files += 1;
@@ -243,6 +249,6 @@ pub fn process_directory(
             }
         }
     }
-    
+
     Ok((files, folders))
-} 
+}

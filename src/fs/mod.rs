@@ -1,10 +1,10 @@
+use crate::models::IgnoreConfig;
+use ignore::{gitignore::GitignoreBuilder, Match};
+use std::collections::HashSet;
+use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
-use std::fs;
-use std::collections::HashSet;
-use crate::models::IgnoreConfig;
-use ignore::{gitignore::GitignoreBuilder, Match};
 
 pub fn confirm_overwrite(file_path: &str) -> io::Result<bool> {
     if Path::new(file_path).exists() {
@@ -193,10 +193,10 @@ pub fn is_binary_file(path: &Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         let binary_extensions = [
             "idx", "pack", "rev", "index", "png", "jpg", "jpeg", "gif", "bmp", "tiff", "webp",
-            "ico", "svg", "mp3", "wav", "ogg", "flac", "m4a", "aac", "wma", "mp4", "avi",
-            "mkv", "mov", "wmv", "flv", "webm", "zip", "rar", "7z", "tar", "gz", "iso", "exe",
-            "dll", "so", "dylib", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "class",
-            "pyc", "pyd", "pyo",
+            "ico", "svg", "mp3", "wav", "ogg", "flac", "m4a", "aac", "wma", "mp4", "avi", "mkv",
+            "mov", "wmv", "flv", "webm", "zip", "rar", "7z", "tar", "gz", "iso", "exe", "dll",
+            "so", "dylib", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "class", "pyc",
+            "pyd", "pyo",
         ];
         if binary_extensions.contains(&ext.to_lowercase().as_str()) {
             return true;

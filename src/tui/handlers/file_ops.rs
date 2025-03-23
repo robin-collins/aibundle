@@ -1,6 +1,6 @@
+use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::collections::HashSet;
 
 use crate::models::{CopyStats, Node, OutputFormat};
 use crate::tui::state::AppState;
@@ -18,7 +18,10 @@ impl FileOpsHandler {
         Ok(())
     }
 
-    pub fn update_search(app_state: &mut AppState, search_state: &mut SearchState) -> io::Result<()> {
+    pub fn update_search(
+        app_state: &mut AppState,
+        search_state: &mut SearchState,
+    ) -> io::Result<()> {
         // Implementation for updating search state
         Ok(())
     }
@@ -28,7 +31,10 @@ impl FileOpsHandler {
         Ok(String::new())
     }
 
-    pub fn handle_enter(app_state: &mut AppState, selection_state: &mut SelectionState) -> io::Result<()> {
+    pub fn handle_enter(
+        app_state: &mut AppState,
+        selection_state: &mut SelectionState,
+    ) -> io::Result<()> {
         // Implementation for handling enter key
         Ok(())
     }
@@ -63,7 +69,10 @@ impl FileOpsHandler {
         Ok(())
     }
 
-    pub fn check_pending_selection(app_state: &mut AppState, selection_state: &mut SelectionState) -> io::Result<()> {
+    pub fn check_pending_selection(
+        app_state: &mut AppState,
+        selection_state: &mut SelectionState,
+    ) -> io::Result<()> {
         // Implementation for checking pending selection count
         Ok(())
     }

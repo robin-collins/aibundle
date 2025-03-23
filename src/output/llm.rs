@@ -1,14 +1,14 @@
-use std::path::{Path, PathBuf};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
+use std::path::{Path, PathBuf};
 
 use itertools::Itertools;
 
 use crate::fs::normalize_path;
 use crate::models::{CopyStats, FileDependencies, Node};
-use crate::output::get_language_name;
 use crate::output::format::is_binary_file;
+use crate::output::get_language_name;
 
 /// Format selected items as LLM (AI-friendly markdown)
 pub fn format_llm_output(
@@ -624,4 +624,4 @@ fn format_llm_output_internal(
         }
         output.push_str("```\n\n");
     }
-} 
+}

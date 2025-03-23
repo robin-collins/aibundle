@@ -40,16 +40,18 @@ impl MainView {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(1),     // File list takes most of the space
-                Constraint::Length(1),  // Status bar at bottom
+                Constraint::Min(1),    // File list takes most of the space
+                Constraint::Length(1), // Status bar at bottom
             ])
             .split(area);
 
         // Render file list
-        self.file_list.render(f, chunks[0], app_state, selection_state);
-        
+        self.file_list
+            .render(f, chunks[0], app_state, selection_state);
+
         // Render status bar
-        self.status_bar.render(f, chunks[1], app_state, selection_state);
+        self.status_bar
+            .render(f, chunks[1], app_state, selection_state);
 
         // Render search UI if in search mode
         if let Some(search_state) = search_state {
@@ -61,11 +63,14 @@ impl MainView {
             };
             let search_text = format!(
                 "{} {}",
-                if search_state.is_regex { "Regex:" } else { "Search:" },
+                if search_state.is_regex {
+                    "Regex:"
+                } else {
+                    "Search:"
+                },
                 search_state.query
             );
-            let search_para = Paragraph::new(search_text)
-                .style(Style::default().fg(Color::Yellow));
+            let search_para = Paragraph::new(search_text).style(Style::default().fg(Color::Yellow));
             f.render_widget(search_para, search_area);
         }
 

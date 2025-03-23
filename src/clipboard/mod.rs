@@ -1,7 +1,7 @@
+use std::env::consts::OS;
+use std::fs;
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
-use std::fs;
-use std::env::consts::OS;
 
 pub fn copy_to_clipboard(text: &str) -> io::Result<()> {
     if is_wsl() {

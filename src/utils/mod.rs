@@ -1,4 +1,3 @@
-
 use ratatui::layout::Rect;
 
 pub fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {

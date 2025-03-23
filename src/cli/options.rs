@@ -1,9 +1,9 @@
-use clap::Parser;
 use crate::models::{AppConfig, FullConfig, IgnoreConfig, OutputFormat};
 use crate::tui::App;
+use clap::Parser;
+use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::fs;
 
 use crate::VERSION;
 
@@ -107,7 +107,7 @@ pub fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
     // Set up ignore patterns from the CLI flag (--ignore)
     app.config.default_ignore = Some(options.ignore_list.to_vec());
     app.ignore_config.extra_ignore_patterns = options.ignore_list.to_vec();
-    
+
     // Override selection limit from CLI config if provided.
     if let Some(cli_conf) = crate::config::load_config()?.cli {
         if let Some(limit) = cli_conf.selection_limit {
@@ -117,7 +117,8 @@ pub fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
 
     // Load items based on patterns and recursion setting
     if options.recursive {
-        app.expanded_folders = crate::fs::collect_all_subdirs(&app.current_dir, &app.ignore_config)?;
+        app.expanded_folders =
+            crate::fs::collect_all_subdirs(&app.current_dir, &app.ignore_config)?;
         app.load_items()?;
     } else {
         app.load_items_nonrecursive()?;

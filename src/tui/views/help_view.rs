@@ -27,7 +27,9 @@ impl HelpView {
         let help_text = vec![
             Spans::from(Span::styled(
                 "Keyboard Controls",
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             )),
             Spans::from(""),
             Spans::from(Span::styled(

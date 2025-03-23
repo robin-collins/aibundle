@@ -1,7 +1,7 @@
 use ratatui::{
-    widgets::{Block, Borders, Paragraph},
     layout::Alignment,
     style::Style,
+    widgets::{Block, Borders, Paragraph},
 };
 
 use crate::tui::state::AppState;
@@ -12,7 +12,7 @@ impl StatusBar {
     pub fn new() -> Self {
         Self
     }
-    
+
     pub fn render<'a>(&self, app_state: &AppState) -> Block<'a> {
         let status_text = format!(
             " {} items ({} selected) - Space: select, Enter: open dir, c: copy, i: ignores [{}], g: gitignore [{}], b: binary [{}], f: format [{}], n: line numbers [{}], /: search, q: quit ",
@@ -29,7 +29,7 @@ impl StatusBar {
             },
             if app_state.show_line_numbers { "x" } else { " " },
         );
-        
+
         Block::default().title(status_text).borders(Borders::ALL)
     }
 }

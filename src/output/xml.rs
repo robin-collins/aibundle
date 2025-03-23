@@ -1,11 +1,11 @@
-use std::path::PathBuf;
 use std::collections::HashSet;
 use std::fs;
 use std::io;
+use std::path::PathBuf;
 
 use crate::fs::normalize_path;
 use crate::models::CopyStats;
-use crate::output::format::{is_binary_file, format_file_content, process_directory};
+use crate::output::format::{format_file_content, is_binary_file, process_directory};
 
 /// Format selected items as XML
 pub fn format_xml_output(
@@ -40,10 +40,7 @@ pub fn format_xml_output(
             if path.is_file() {
                 if is_binary_file(path) {
                     if include_binary_files {
-                        output.push_str(&format!(
-                            "<file name=\"{}\">\n</file>\n",
-                            normalized_path
-                        ));
+                        output.push_str(&format!("<file name=\"{}\">\n</file>\n", normalized_path));
                         stats.files += 1;
                     }
                 } else {
@@ -77,4 +74,4 @@ pub fn format_xml_output(
     }
 
     Ok((output, stats))
-} 
+}
