@@ -1,5 +1,119 @@
 pub const VERSION: &str = "0.7.0";
 pub const DEFAULT_SELECTION_LIMIT: usize = 400;
 
-// Placeholder for other constants to be implemented
-// according to refactoring plan
+pub const ICONS: &[(&str, &str)] = &[
+    // Folders
+    ("folder", "📁"),
+    ("folder_open", "📂"),
+    // Text files
+    ("txt", "📄"),
+    ("md", "📝"),
+    ("markdown", "📝"),
+    ("rst", "📝"),
+    // Code files
+    ("rs", "🦀"),
+    ("py", "🐍"),
+    ("js", "🟨"),
+    ("jsx", "⚛️"),
+    ("ts", "🔷"),
+    ("tsx", "🔷"),
+    ("html", "🌐"),
+    ("htm", "🌐"),
+    ("css", "🎨"),
+    ("scss", "🎨"),
+    ("less", "🎨"),
+    ("json", "📋"),
+    ("toml", "⚙️"),
+    ("yaml", "⚙️"),
+    ("yml", "⚙️"),
+    ("xml", "📋"),
+    ("c", "🔧"),
+    ("cpp", "🔧"),
+    ("h", "🔧"),
+    ("hpp", "🔧"),
+    ("go", "🔹"),
+    ("java", "☕"),
+    ("class", "☕"),
+    ("rb", "💎"),
+    ("php", "🐘"),
+    ("sh", "🐚"),
+    ("bash", "🐚"),
+    ("zsh", "🐚"),
+    ("fish", "🐚"),
+    ("bat", "🖥️"),
+    ("cmd", "🖥️"),
+    ("ps1", "🖥️"),
+    ("sql", "🗄️"),
+    ("db", "🗄️"),
+    ("sqlite", "🗄️"),
+    // Configuration
+    ("config", "⚙️"),
+    ("conf", "⚙️"),
+    ("ini", "⚙️"),
+    ("env", "⚙️"),
+    // Binaries and executables
+    ("exe", "⚡"),
+    ("dll", "⚡"),
+    ("so", "⚡"),
+    ("o", "⚡"),
+    ("bin", "⚡"),
+    // Archives
+    ("zip", "📦"),
+    ("tar", "📦"),
+    ("gz", "📦"),
+    ("rar", "📦"),
+    ("7z", "📦"),
+    // Images
+    ("jpg", "🖼️"),
+    ("jpeg", "🖼️"),
+    ("png", "🖼️"),
+    ("gif", "🖼️"),
+    ("bmp", "🖼️"),
+    ("svg", "🖼️"),
+    ("webp", "🖼️"),
+    ("ico", "🖼️"),
+    // Documents
+    ("pdf", "📕"),
+    ("doc", "📘"),
+    ("docx", "📘"),
+    ("xls", "📗"),
+    ("xlsx", "📗"),
+    ("ppt", "📙"),
+    ("pptx", "📙"),
+    // Audio/Video
+    ("mp3", "🎵"),
+    ("wav", "🎵"),
+    ("ogg", "🎵"),
+    ("flac", "🎵"),
+    ("mp4", "🎬"),
+    ("avi", "🎬"),
+    ("mkv", "🎬"),
+    ("mov", "🎬"),
+    ("webm", "🎬"),
+    // Git-related
+    ("git", "🔄"),
+    ("gitignore", "🔄"),
+    ("gitmodules", "🔄"),
+    // Dotfiles
+    ("bashrc", "⚙️"),
+    ("zshrc", "⚙️"),
+    ("vimrc", "⚙️"),
+    ("npmrc", "⚙️"),
+    // Package management
+    ("package.json", "📦"),
+    ("Cargo.toml", "📦"),
+    ("Cargo.lock", "🔒"),
+    ("Gemfile", "💎"),
+    ("requirements.txt", "🐍"),
+    // Default fallback
+    ("default", "📄"),
+];
+
+pub const DEFAULT_IGNORED_DIRS: &[&str] = &[
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    "coverage",
+    "target",
+];
