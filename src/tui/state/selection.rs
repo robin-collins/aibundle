@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
 
-use crate::fs;
+use crate::fs as crate_fs;
 use crate::models::IgnoreConfig;
 use crate::tui::state::AppState;
 
@@ -68,7 +68,7 @@ impl SelectionState {
                 let selection_limit = app_state.selection_limit;
 
                 thread::spawn(move || {
-                    let result = fs::count_selection_items_async(
+                    let result = crate_fs::count_selection_items_async(
                         &path_clone,
                         &base_path,
                         &ignore_config,
@@ -156,7 +156,7 @@ impl SelectionState {
 
                 // Spawn a background thread to count items
                 thread::spawn(move || {
-                    let result = fs::count_selection_items_async(
+                    let result = crate_fs::count_selection_items_async(
                         &counting_path,
                         &base_dir,
                         &ignore_config,

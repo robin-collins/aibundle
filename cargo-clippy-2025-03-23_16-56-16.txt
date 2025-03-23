@@ -1,0 +1,905 @@
+    Checking aibundle v0.7.0 (/home/tech/projects/aibundle-modular)
+error[E0432]: unresolved import `crate::VERSION`
+ --> src/cli/options.rs:8:5
+  |
+8 | use crate::VERSION;
+  |     ^^^^^^^^^^^^^^ no `VERSION` in the root
+
+error[E0432]: unresolved import `ratatui::text::Spans`
+ --> src/tui/views/help_view.rs:4:18
+  |
+4 |     text::{Span, Spans},
+  |                  ^^^^^
+  |                  |
+  |                  no `Spans` in `text`
+  |                  help: a similar name exists in the module: `Span`
+
+error[E0432]: unresolved import `ratatui::text::Spans`
+ --> src/tui/views/main_view.rs:4:18
+  |
+4 |     text::{Span, Spans},
+  |                  ^^^^^
+  |                  |
+  |                  no `Spans` in `text`
+  |                  help: a similar name exists in the module: `Span`
+
+error[E0432]: unresolved import `ratatui::text::Spans`
+ --> src/tui/views/message_view.rs:4:18
+  |
+4 |     text::{Span, Spans},
+  |                  ^^^^^
+  |                  |
+  |                  no `Spans` in `text`
+  |                  help: a similar name exists in the module: `Span`
+
+error[E0433]: failed to resolve: could not find `MessageType` in `state`
+  --> src/tui/views/message_view.rs:41:36
+   |
+41 |                 crate::tui::state::MessageType::Info => Style::default().fg(Color::Cyan),
+   |                                    ^^^^^^^^^^^ could not find `MessageType` in `state`
+
+error[E0433]: failed to resolve: could not find `MessageType` in `state`
+  --> src/tui/views/message_view.rs:42:36
+   |
+42 |                 crate::tui::state::MessageType::Success => Style::default().fg(Color::Green),
+   |                                    ^^^^^^^^^^^ could not find `MessageType` in `state`
+
+error[E0433]: failed to resolve: could not find `MessageType` in `state`
+  --> src/tui/views/message_view.rs:43:36
+   |
+43 |                 crate::tui::state::MessageType::Warning => Style::default().fg(Color::Yellow),
+   |                                    ^^^^^^^^^^^ could not find `MessageType` in `state`
+
+error[E0433]: failed to resolve: could not find `MessageType` in `state`
+  --> src/tui/views/message_view.rs:44:36
+   |
+44 |                 crate::tui::state::MessageType::Error => Style::default().fg(Color::Red),
+   |                                    ^^^^^^^^^^^ could not find `MessageType` in `state`
+
+error[E0433]: failed to resolve: could not find `MessageType` in `state`
+  --> src/tui/views/message_view.rs:51:44
+   |
+51 |                         crate::tui::state::MessageType::Info => "INFO: ",
+   |                                            ^^^^^^^^^^^ could not find `MessageType` in `state`
+
+error[E0433]: failed to resolve: could not find `MessageType` in `state`
+  --> src/tui/views/message_view.rs:52:44
+   |
+52 |                         crate::tui::state::MessageType::Success => "SUCCESS: ",
+   |                                            ^^^^^^^^^^^ could not find `MessageType` in `state`
+
+error[E0433]: failed to resolve: could not find `MessageType` in `state`
+  --> src/tui/views/message_view.rs:53:44
+   |
+53 |                         crate::tui::state::MessageType::Warning => "WARNING: ",
+   |                                            ^^^^^^^^^^^ could not find `MessageType` in `state`
+
+error[E0433]: failed to resolve: could not find `MessageType` in `state`
+  --> src/tui/views/message_view.rs:54:44
+   |
+54 |                         crate::tui::state::MessageType::Error => "ERROR: ",
+   |                                            ^^^^^^^^^^^ could not find `MessageType` in `state`
+
+error[E0425]: cannot find function `analyze_dependencies` in module `crate::output`
+   --> src/tui/handlers/clipboard.rs:120:51
+    |
+120 |                 let dependencies = crate::output::analyze_dependencies(&file_contents, base_path);
+    |                                                   ^^^^^^^^^^^^^^^^^^^^ not found in `crate::output`
+    |
+note: function `crate::output::llm::analyze_dependencies` exists but is inaccessible
+   --> src/output/llm.rs:130:1
+    |
+130 | / fn analyze_dependencies(
+131 | |     file_contents: &[(String, String)],
+132 | |     _base_dir: &Path,
+133 | | ) -> HashMap<String, FileDependencies> {
+...   |
+340 | |     dependencies
+341 | | }
+    | |_^ not accessible
+
+error[E0412]: cannot find type `SearchState` in this scope
+  --> src/tui/handlers/file_ops.rs:23:28
+   |
+23 |         search_state: &mut SearchState,
+   |                            ^^^^^^^^^^^ not found in this scope
+   |
+help: consider importing this struct through its public re-export
+   |
+1  + use crate::tui::state::SearchState;
+   |
+
+error[E0412]: cannot find type `SelectionState` in this scope
+  --> src/tui/handlers/file_ops.rs:36:31
+   |
+36 |         selection_state: &mut SelectionState,
+   |                               ^^^^^^^^^^^^^^ not found in this scope
+   |
+help: consider importing this struct through its public re-export
+   |
+1  + use crate::tui::state::SelectionState;
+   |
+
+error[E0412]: cannot find type `SelectionState` in this scope
+  --> src/tui/handlers/file_ops.rs:74:31
+   |
+74 |         selection_state: &mut SelectionState,
+   |                               ^^^^^^^^^^^^^^ not found in this scope
+   |
+help: consider importing this struct through its public re-export
+   |
+1  + use crate::tui::state::SelectionState;
+   |
+
+error[E0603]: module `constants` is private
+ --> src/tui/views/main_view.rs:9:20
+  |
+9 | use crate::models::constants::ICONS;
+  |                    ^^^^^^^^^ private module
+  |
+note: the module `constants` is defined here
+ --> src/models/mod.rs:2:1
+  |
+2 | mod constants;
+  | ^^^^^^^^^^^^^^
+
+warning: unused imports: `AppConfig`, `FullConfig`, and `IgnoreConfig`
+ --> src/cli/options.rs:1:21
+  |
+1 | use crate::models::{AppConfig, FullConfig, IgnoreConfig, OutputFormat};
+  |                     ^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `Path`
+ --> src/cli/options.rs:6:17
+  |
+6 | use std::path::{Path, PathBuf};
+  |                 ^^^^
+
+warning: this `if` statement can be collapsed
+  --> src/config/mod.rs:32:5
+   |
+32 | /     if Path::new(file_path).exists() {
+33 | |         if !crate::fs::confirm_overwrite(file_path)? {
+34 | |             println!("Aborted saving configuration.");
+35 | |             return Ok(());
+36 | |         }
+37 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_if
+   = note: `#[warn(clippy::collapsible_if)]` on by default
+help: collapse nested if block
+   |
+32 ~     if Path::new(file_path).exists() && !crate::fs::confirm_overwrite(file_path)? {
+33 +         println!("Aborted saving configuration.");
+34 +         return Ok(());
+35 +     }
+   |
+
+warning: unused import: `std::collections::HashSet`
+ --> src/models/app_config.rs:2:5
+  |
+2 | use std::collections::HashSet;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::path::PathBuf`
+ --> src/models/app_config.rs:3:5
+  |
+3 | use std::path::PathBuf;
+  |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `HashMap`
+ --> src/output/format.rs:1:24
+  |
+1 | use std::collections::{HashMap, HashSet};
+  |                        ^^^^^^^
+
+warning: unused imports: `CopyStats` and `IgnoreConfig`
+ --> src/output/format.rs:7:21
+  |
+7 | use crate::models::{CopyStats, IgnoreConfig, OutputFormat};
+  |                     ^^^^^^^^^  ^^^^^^^^^^^^
+
+warning: this `else { if .. }` block can be collapsed
+   --> src/output/format.rs:120:28
+    |
+120 |                       } else {
+    |  ____________________________^
+121 | |                         if let Ok(content) = fs::read_to_string(&entry) {
+122 | |                             let escaped_content = content
+123 | |                                 .replace('\\', "\\\\")
+...   |
+134 | |                     }
+    | |_____________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_else_if
+    = note: `#[warn(clippy::collapsible_else_if)]` on by default
+help: collapse nested if block
+    |
+120 ~                     } else if let Ok(content) = fs::read_to_string(&entry) {
+121 +                         let escaped_content = content
+122 +                             .replace('\\', "\\\\")
+123 +                             .replace('\"', "\\\"")
+124 +                             .replace('\n', "\\n")
+125 +                             .replace('\r', "\\r");
+126 +                         output.push_str(&format!(
+127 +                             "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
+128 +                             normalized_path,
+129 +                             escaped_content
+130 +                         ));
+131 +                         files += 1;
+132 +                     }
+    |
+
+warning: this `else { if .. }` block can be collapsed
+  --> src/output/json.rs:56:24
+   |
+56 |                   } else {
+   |  ________________________^
+57 | |                     if let Ok(content) = fs::read_to_string(path) {
+58 | |                         let escaped_content = content
+59 | |                             .replace('\\', "\\\\")
+...  |
+70 | |                 }
+   | |_________________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_else_if
+help: collapse nested if block
+   |
+56 ~                 } else if let Ok(content) = fs::read_to_string(path) {
+57 +                     let escaped_content = content
+58 +                         .replace('\\', "\\\\")
+59 +                         .replace('\"', "\\\"")
+60 +                         .replace('\n', "\\n")
+61 +                         .replace('\r', "\\r");
+62 +                     output.push_str(&format!(
+63 +                         "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
+64 +                         normalized_path,
+65 +                         escaped_content
+66 +                     ));
+67 +                     stats.files += 1;
+68 +                 }
+   |
+
+warning: unused import: `format::*`
+ --> src/output/mod.rs:7:9
+  |
+7 | pub use format::*;
+  |         ^^^^^^^^^
+
+warning: unused imports: `Paragraph`, `layout::Alignment`, and `style::Style`
+ --> src/tui/components/status_bar.rs:2:5
+  |
+2 |     layout::Alignment,
+  |     ^^^^^^^^^^^^^^^^^
+3 |     style::Style,
+  |     ^^^^^^^^^^^^
+4 |     widgets::{Block, Borders, Paragraph},
+  |                               ^^^^^^^^^
+
+warning: unused import: `std::collections::HashSet`
+ --> src/tui/handlers/clipboard.rs:1:5
+  |
+1 | use std::collections::HashSet;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashSet`
+ --> src/tui/handlers/file_ops.rs:1:5
+  |
+1 | use std::collections::HashSet;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `PathBuf` and `Path`
+ --> src/tui/handlers/file_ops.rs:3:17
+  |
+3 | use std::path::{Path, PathBuf};
+  |                 ^^^^  ^^^^^^^
+
+warning: unused imports: `CopyStats`, `Node`, and `OutputFormat`
+ --> src/tui/handlers/file_ops.rs:5:21
+  |
+5 | use crate::models::{CopyStats, Node, OutputFormat};
+  |                     ^^^^^^^^^  ^^^^  ^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashSet`
+ --> src/tui/state/search.rs:2:5
+  |
+2 | use std::collections::HashSet;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::path::Path`
+ --> src/tui/state/search.rs:3:5
+  |
+3 | use std::path::Path;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashSet`
+ --> src/tui/state/selection.rs:1:5
+  |
+1 | use std::collections::HashSet;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Path`
+ --> src/tui/state/selection.rs:4:17
+  |
+4 | use std::path::{Path, PathBuf};
+  |                 ^^^^
+
+warning: unused import: `crate::models::IgnoreConfig`
+ --> src/tui/state/selection.rs:9:5
+  |
+9 | use crate::models::IgnoreConfig;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Block`, `Borders`, `ListItem`, `List`, `Modifier`, `Span`, and `Wrap`
+ --> src/tui/views/main_view.rs:3:20
+  |
+3 |     style::{Color, Modifier, Style},
+  |                    ^^^^^^^^
+4 |     text::{Span, Spans},
+  |            ^^^^
+5 |     widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+  |               ^^^^^  ^^^^^^^  ^^^^  ^^^^^^^^             ^^^^
+
+warning: unused import: `Modal`
+  --> src/tui/views/main_view.rs:10:40
+   |
+10 | use crate::tui::components::{FileList, Modal, StatusBar};
+   |                                        ^^^^^
+
+warning: unused imports: `KeyCode`, `disable_raw_mode`, and `enable_raw_mode`
+ --> src/tui/app.rs:2:26
+  |
+2 |     event::{self, Event, KeyCode},
+  |                          ^^^^^^^
+3 |     execute,
+4 |     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+  |                ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+
+warning: unused imports: `EnterAlternateScreen`, `LeaveAlternateScreen`, and `execute`
+  --> src/main.rs:13:5
+   |
+13 |     execute,
+   |     ^^^^^^^
+14 |     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+   |                                                   ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^
+
+error[E0609]: no field `modal` on type `&mut tui::state::app_state::AppState`
+  --> src/tui/handlers/clipboard.rs:32:19
+   |
+32 |         app_state.modal = Some(crate::tui::components::Modal::copy_stats(
+   |                   ^^^^^ unknown field
+   |
+   = note: available fields are: `current_dir`, `items`, `filtered_items`, `expanded_folders`, `config` ... and 11 others
+
+error[E0599]: no method named `is_path_ignored` found for reference `&tui::state::app_state::AppState` in the current scope
+  --> src/tui/handlers/clipboard.rs:63:36
+   |
+63 |             .filter(|p| !app_state.is_path_ignored(p))
+   |                                    ^^^^^^^^^^^^^^^ method not found in `&AppState`
+
+error[E0061]: this function takes 4 arguments but 3 arguments were supplied
+  --> src/tui/handlers/clipboard.rs:89:17
+   |
+89 |                   crate::output::format_xml_output(
+   |  _________________^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+90 | |                     &mut output,
+91 | |                     &file_contents,
+92 | |                     app_state.show_line_numbers,
+93 | |                 );
+   | |_________________- argument #4 of type `bool` is missing
+   |
+note: expected `&HashSet<PathBuf>`, found `&mut String`
+  --> src/tui/handlers/clipboard.rs:90:21
+   |
+90 |                     &mut output,
+   |                     ^^^^^^^^^^^
+   = note:      expected reference `&std::collections::HashSet<std::path::PathBuf>`
+           found mutable reference `&mut std::string::String`
+note: expected `&PathBuf`, found `&Vec<(String, String)>`
+  --> src/tui/handlers/clipboard.rs:91:21
+   |
+91 |                     &file_contents,
+   |                     ^^^^^^^^^^^^^^
+   = note: expected reference `&std::path::PathBuf`
+              found reference `&std::vec::Vec<(std::string::String, std::string::String)>`
+note: function defined here
+  --> src/output/xml.rs:11:8
+   |
+11 | pub fn format_xml_output(
+   |        ^^^^^^^^^^^^^^^^^
+12 |     selected_items: &HashSet<PathBuf>,
+   |     ---------------------------------
+13 |     current_dir: &PathBuf,
+   |     ---------------------
+14 |     show_line_numbers: bool,
+   |     -----------------------
+15 |     include_binary_files: bool,
+   |     --------------------------
+help: provide the argument
+   |
+89 |                 crate::output::format_xml_output(/* &std::collections::HashSet<std::path::PathBuf> */, /* &std::path::PathBuf */, app_state.show_line_numbers, /* bool */);
+   |                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error[E0061]: this function takes 4 arguments but 3 arguments were supplied
+   --> src/tui/handlers/clipboard.rs:96:17
+    |
+96  |                   crate::output::format_markdown_output(
+    |  _________________^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+97  | |                     &mut output,
+98  | |                     &file_contents,
+99  | |                     app_state.show_line_numbers,
+100 | |                 );
+    | |_________________- argument #4 of type `bool` is missing
+    |
+note: expected `&HashSet<PathBuf>`, found `&mut String`
+   --> src/tui/handlers/clipboard.rs:97:21
+    |
+97  |                     &mut output,
+    |                     ^^^^^^^^^^^
+    = note:      expected reference `&std::collections::HashSet<std::path::PathBuf>`
+            found mutable reference `&mut std::string::String`
+note: expected `&PathBuf`, found `&Vec<(String, String)>`
+   --> src/tui/handlers/clipboard.rs:98:21
+    |
+98  |                     &file_contents,
+    |                     ^^^^^^^^^^^^^^
+    = note: expected reference `&std::path::PathBuf`
+               found reference `&std::vec::Vec<(std::string::String, std::string::String)>`
+note: function defined here
+   --> src/output/markdown.rs:11:8
+    |
+11  | pub fn format_markdown_output(
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+12  |     selected_items: &HashSet<PathBuf>,
+    |     ---------------------------------
+13  |     current_dir: &PathBuf,
+    |     ---------------------
+14  |     show_line_numbers: bool,
+    |     -----------------------
+15  |     include_binary_files: bool,
+    |     --------------------------
+help: provide the argument
+    |
+96  |                 crate::output::format_markdown_output(/* &std::collections::HashSet<std::path::PathBuf> */, /* &std::path::PathBuf */, app_state.show_line_numbers, /* bool */);
+    |                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error[E0061]: this function takes 3 arguments but 2 arguments were supplied
+   --> src/tui/handlers/clipboard.rs:103:17
+    |
+103 |                 crate::output::format_json_output(&mut output, &file_contents);
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^----------------------------- argument #3 of type `bool` is missing
+    |
+note: expected `&HashSet<PathBuf>`, found `&mut String`
+   --> src/tui/handlers/clipboard.rs:103:51
+    |
+103 |                 crate::output::format_json_output(&mut output, &file_contents);
+    |                                                   ^^^^^^^^^^^
+    = note:      expected reference `&std::collections::HashSet<std::path::PathBuf>`
+            found mutable reference `&mut std::string::String`
+note: expected `&PathBuf`, found `&Vec<(String, String)>`
+   --> src/tui/handlers/clipboard.rs:103:64
+    |
+103 |                 crate::output::format_json_output(&mut output, &file_contents);
+    |                                                                ^^^^^^^^^^^^^^
+    = note: expected reference `&std::path::PathBuf`
+               found reference `&std::vec::Vec<(std::string::String, std::string::String)>`
+note: function defined here
+   --> src/output/json.rs:11:8
+    |
+11  | pub fn format_json_output(
+    |        ^^^^^^^^^^^^^^^^^^
+12  |     selected_items: &HashSet<PathBuf>,
+    |     ---------------------------------
+13  |     current_dir: &PathBuf,
+    |     ---------------------
+14  |     include_binary_files: bool,
+    |     --------------------------
+help: provide the argument
+    |
+103 |                 crate::output::format_json_output(/* &std::collections::HashSet<std::path::PathBuf> */, /* &std::path::PathBuf */, /* bool */);
+    |                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error[E0061]: this function takes 2 arguments but 5 arguments were supplied
+   --> src/tui/handlers/clipboard.rs:123:17
+    |
+123 |                 crate::output::format_llm_output(
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+124 |                     &mut output,
+125 |                     &file_contents,
+    |                     -------------- unexpected argument #2 of type `&std::vec::Vec<(std::string::String, std::string::String)>`
+126 |                     base_path,
+127 |                     &root_node,
+    |                     ---------- unexpected argument #4 of type `&models::app_config::Node`
+128 |                     &dependencies,
+    |                     ------------- unexpected argument #5
+    |
+note: expected `&HashSet<PathBuf>`, found `&mut String`
+   --> src/tui/handlers/clipboard.rs:124:21
+    |
+124 |                     &mut output,
+    |                     ^^^^^^^^^^^
+    = note:      expected reference `&std::collections::HashSet<std::path::PathBuf>`
+            found mutable reference `&mut std::string::String`
+note: function defined here
+   --> src/output/llm.rs:14:8
+    |
+14  | pub fn format_llm_output(
+    |        ^^^^^^^^^^^^^^^^^
+15  |     selected_items: &HashSet<PathBuf>,
+    |     ---------------------------------
+16  |     current_dir: &PathBuf,
+    |     ---------------------
+help: remove the extra arguments
+    |
+124 ~                     /* &std::collections::HashSet<std::path::PathBuf> */,
+125 ~                     base_path,
+    |
+
+error[E0599]: no method named `is_path_ignored` found for reference `&tui::state::app_state::AppState` in the current scope
+   --> src/tui/handlers/clipboard.rs:143:22
+    |
+143 |         if app_state.is_path_ignored(path) {
+    |                      ^^^^^^^^^^^^^^^ method not found in `&AppState`
+
+error[E0599]: no method named `is_path_ignored` found for reference `&tui::state::app_state::AppState` in the current scope
+   --> src/tui/handlers/clipboard.rs:174:22
+    |
+174 |         if app_state.is_path_ignored(path) {
+    |                      ^^^^^^^^^^^^^^^ method not found in `&AppState`
+
+error[E0599]: no function or associated item named `is_binary_file` found for struct `tui::app::App` in the current scope
+   --> src/tui/handlers/clipboard.rs:179:78
+    |
+179 |         if !app_state.ignore_config.include_binary_files && crate::tui::App::is_binary_file(path) {
+    |                                                                              ^^^^^^^^^^^^^^ function or associated item not found in `App`
+    |
+   ::: src/tui/app.rs:16:1
+    |
+16  | pub struct App {
+    | -------------- function or associated item `is_binary_file` not found for this struct
+    |
+note: if you're trying to build a new `tui::app::App`, consider using `tui::app::App::new` which returns `tui::app::App`
+   --> src/tui/app.rs:46:5
+    |
+46  |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+error[E0308]: `match` arms have incompatible types
+  --> src/tui/handlers/keyboard.rs:57:35
+   |
+44 | /         match key.code {
+45 | |             KeyCode::Char('q') => {
+46 | |                 if !app_state.selected_items.is_empty() {
+47 | |                     ClipboardHandler::copy_selected_to_clipboard(app_state)?;
+...  |
+56 | |             KeyCode::Char('b') => FileOpsHandler::toggle_binary_files(app_state)?,
+   | |                                   ----------------------------------------------- this and all prior arms are found to be of type `()`
+57 | |             KeyCode::Char('f') => FileOpsHandler::toggle_output_format(app_state),
+   | |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `()`, found `Result<(), Error>`
+...  |
+73 | |             _ => {}
+74 | |         }
+   | |_________- `match` arms have incompatible types
+   |
+   = note: expected unit type `()`
+                   found enum `std::result::Result<(), std::io::Error>`
+help: use the `?` operator to extract the `std::result::Result<(), std::io::Error>` value, propagating a `Result::Err` value to the caller
+   |
+57 |             KeyCode::Char('f') => FileOpsHandler::toggle_output_format(app_state)?,
+   |                                                                                  +
+
+error[E0599]: no function or associated item named `toggle_folder_expansion` found for struct `tui::handlers::file_ops::FileOpsHandler` in the current scope
+  --> src/tui/handlers/keyboard.rs:66:45
+   |
+66 |             KeyCode::Tab => FileOpsHandler::toggle_folder_expansion(app_state, selection_state)?,
+   |                                             ^^^^^^^^^^^^^^^^^^^^^^^ function or associated item not found in `FileOpsHandler`
+   |
+  ::: src/tui/handlers/file_ops.rs:8:1
+   |
+8  | pub struct FileOpsHandler;
+   | ------------------------- function or associated item `toggle_folder_expansion` not found for this struct
+
+error[E0061]: this function takes 1 argument but 0 arguments were supplied
+  --> src/tui/views/main_view.rs:24:24
+   |
+24 |             file_list: FileList::new(),
+   |                        ^^^^^^^^^^^^^-- argument #1 of type `std::path::PathBuf` is missing
+   |
+note: associated function defined here
+  --> src/tui/components/file_list.rs:15:12
+   |
+15 |     pub fn new(current_dir: PathBuf) -> Self {
+   |            ^^^ --------------------
+help: provide the argument
+   |
+24 |             file_list: FileList::new(/* std::path::PathBuf */),
+   |                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error[E0061]: this method takes 1 argument but 4 arguments were supplied
+  --> src/tui/views/main_view.rs:50:14
+   |
+50 |             .render(f, chunks[0], app_state, selection_state);
+   |              ^^^^^^ -  ---------             --------------- unexpected argument #4 of type `&tui::state::selection::SelectionState`
+   |                     |  |
+   |                     |  unexpected argument #2 of type `ratatui::layout::Rect`
+   |                     unexpected argument #1 of type `&mut ratatui::Frame<'_>`
+   |
+note: method defined here
+  --> src/tui/components/file_list.rs:19:12
+   |
+19 |     pub fn render<'a>(&self, app_state: &AppState) -> List<'a> {
+   |            ^^^^^^            --------------------
+help: remove the extra arguments
+   |
+50 -             .render(f, chunks[0], app_state, selection_state);
+50 +             .render(app_state);
+   |
+
+error[E0061]: this method takes 1 argument but 4 arguments were supplied
+  --> src/tui/views/main_view.rs:54:14
+   |
+54 |             .render(f, chunks[1], app_state, selection_state);
+   |              ^^^^^^ -  ---------             --------------- unexpected argument #4 of type `&tui::state::selection::SelectionState`
+   |                     |  |
+   |                     |  unexpected argument #2 of type `ratatui::layout::Rect`
+   |                     unexpected argument #1 of type `&mut ratatui::Frame<'_>`
+   |
+note: method defined here
+  --> src/tui/components/status_bar.rs:16:12
+   |
+16 |     pub fn render<'a>(&self, app_state: &AppState) -> Block<'a> {
+   |            ^^^^^^            --------------------
+help: remove the extra arguments
+   |
+54 -             .render(f, chunks[1], app_state, selection_state);
+54 +             .render(app_state);
+   |
+
+error[E0609]: no field `is_regex` on type `&tui::state::search::SearchState`
+  --> src/tui/views/main_view.rs:66:33
+   |
+66 |                 if search_state.is_regex {
+   |                                 ^^^^^^^^ unknown field
+   |
+   = note: available fields are: `search_query`, `is_searching`
+
+error[E0609]: no field `query` on type `&tui::state::search::SearchState`
+  --> src/tui/views/main_view.rs:71:30
+   |
+71 |                 search_state.query
+   |                              ^^^^^ unknown field
+   |
+   = note: available fields are: `search_query`, `is_searching`
+
+error[E0609]: no field `show_help` on type `&tui::state::app_state::AppState`
+  --> src/tui/views/main_view.rs:78:22
+   |
+78 |         if app_state.show_help {
+   |                      ^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `current_dir`, `items`, `filtered_items`, `expanded_folders`, `config` ... and 11 others
+
+error[E0609]: no field `show_message` on type `&tui::state::app_state::AppState`
+  --> src/tui/views/main_view.rs:80:29
+   |
+80 |         } else if app_state.show_message {
+   |                             ^^^^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `current_dir`, `items`, `filtered_items`, `expanded_folders`, `config` ... and 11 others
+
+error[E0609]: no field `modal` on type `&tui::state::app_state::AppState`
+  --> src/tui/views/main_view.rs:85:41
+   |
+85 |         if let Some(modal) = &app_state.modal {
+   |                                         ^^^^^ unknown field
+   |
+   = note: available fields are: `current_dir`, `items`, `filtered_items`, `expanded_folders`, `config` ... and 11 others
+
+error[E0609]: no field `message` on type `&tui::state::app_state::AppState`
+  --> src/tui/views/message_view.rs:24:43
+   |
+24 |         if let Some(message) = &app_state.message {
+   |                                           ^^^^^^^ unknown field
+   |
+   = note: available fields are: `current_dir`, `items`, `filtered_items`, `expanded_folders`, `config` ... and 11 others
+
+error[E0599]: no method named `clone` found for struct `models::app_config::AppConfig` in the current scope
+  --> src/tui/app.rs:52:38
+   |
+52 |             config: app_state.config.clone(),
+   |                                      ^^^^^ method not found in `AppConfig`
+   |
+  ::: src/models/app_config.rs:6:1
+   |
+6  | pub struct AppConfig {
+   | -------------------- method `clone` not found for this struct
+   |
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following trait defines an item `clone`, perhaps you need to implement it:
+           candidate #1: `std::clone::Clone`
+
+error[E0599]: no method named `clone` found for struct `models::app_config::AppConfig` in the current scope
+  --> src/tui/app.rs:80:41
+   |
+80 |         self.config = self.state.config.clone();
+   |                                         ^^^^^ method not found in `AppConfig`
+   |
+  ::: src/models/app_config.rs:6:1
+   |
+6  | pub struct AppConfig {
+   | -------------------- method `clone` not found for this struct
+   |
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following trait defines an item `clone`, perhaps you need to implement it:
+           candidate #1: `std::clone::Clone`
+
+error[E0599]: no method named `clone` found for struct `models::app_config::AppConfig` in the current scope
+  --> src/tui/app.rs:96:41
+   |
+96 |         self.state.config = self.config.clone();
+   |                                         ^^^^^ method not found in `AppConfig`
+   |
+  ::: src/models/app_config.rs:6:1
+   |
+6  | pub struct AppConfig {
+   | -------------------- method `clone` not found for this struct
+   |
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following trait defines an item `clone`, perhaps you need to implement it:
+           candidate #1: `std::clone::Clone`
+
+error[E0061]: this method takes 5 arguments but 4 arguments were supplied
+   --> src/tui/app.rs:130:22
+    |
+130 |                     .render(f, &self.state, &self.selection_state, &self.search_state)
+    |                      ^^^^^^    ----------- argument #2 of type `ratatui::layout::Rect` is missing
+    |
+note: expected `&Option<SearchState>`, found `&SearchState`
+   --> src/tui/app.rs:130:68
+    |
+130 |                     .render(f, &self.state, &self.selection_state, &self.search_state)
+    |                                                                    ^^^^^^^^^^^^^^^^^^
+    = note: expected reference `&std::option::Option<tui::state::search::SearchState>`
+               found reference `&tui::state::search::SearchState`
+note: method defined here
+   --> src/tui/views/main_view.rs:31:12
+    |
+31  |     pub fn render(
+    |            ^^^^^^
+32  |         &self,
+33  |         f: &mut Frame,
+    |         -------------
+34  |         area: Rect,
+    |         ----------
+35  |         app_state: &AppState,
+    |         --------------------
+36  |         selection_state: &SelectionState,
+    |         --------------------------------
+37  |         search_state: &Option<SearchState>,
+    |         ----------------------------------
+help: provide the argument
+    |
+130 |                     .render(f, /* ratatui::layout::Rect */, &self.state, &self.selection_state, /* &std::option::Option<tui::state::search::SearchState> */)
+    |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: unused variable: `base_dir`
+   --> src/tui/handlers/clipboard.rs:199:53
+    |
+199 |     fn add_to_tree(path_str: &str, root: &mut Node, base_dir: &Path) {
+    |                                                     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_base_dir`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+error[E0382]: borrow of moved value: `name`
+   --> src/tui/handlers/clipboard.rs:233:40
+    |
+204 |             let name = component.as_os_str().to_string_lossy().to_string();
+    |                 ----   --------------------------------------------------- this reinitialization might get skipped
+    |                 |
+    |                 move occurs because `name` has type `std::string::String`, which does not implement the `Copy` trait
+...
+221 |                         name,
+    |                         ---- value moved here
+...
+233 |             current = children.get_mut(&name).unwrap();
+    |                                        ^^^^^ value borrowed here after move
+    |
+help: consider cloning the value if the performance cost is acceptable
+    |
+221 |                         name: name.clone(),
+    |                             ++++++++++++++
+
+warning: unused variable: `app_state`
+  --> src/tui/handlers/file_ops.rs:11:23
+   |
+11 |     pub fn load_items(app_state: &mut AppState) -> io::Result<()> {
+   |                       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_app_state`
+
+warning: unused variable: `app_state`
+  --> src/tui/handlers/file_ops.rs:16:36
+   |
+16 |     pub fn load_items_nonrecursive(app_state: &mut AppState) -> io::Result<()> {
+   |                                    ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_app_state`
+
+warning: unused variable: `app_state`
+  --> src/tui/handlers/file_ops.rs:29:34
+   |
+29 |     pub fn format_selected_items(app_state: &mut AppState) -> io::Result<String> {
+   |                                  ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_app_state`
+
+warning: unused variable: `app_state`
+  --> src/tui/handlers/file_ops.rs:42:35
+   |
+42 |     pub fn toggle_default_ignores(app_state: &mut AppState) -> io::Result<()> {
+   |                                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_app_state`
+
+warning: unused variable: `app_state`
+  --> src/tui/handlers/file_ops.rs:47:29
+   |
+47 |     pub fn toggle_gitignore(app_state: &mut AppState) -> io::Result<()> {
+   |                             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_app_state`
+
+warning: unused variable: `app_state`
+  --> src/tui/handlers/file_ops.rs:52:32
+   |
+52 |     pub fn toggle_binary_files(app_state: &mut AppState) -> io::Result<()> {
+   |                                ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_app_state`
+
+warning: unused variable: `app_state`
+  --> src/tui/handlers/file_ops.rs:57:33
+   |
+57 |     pub fn toggle_output_format(app_state: &mut AppState) -> io::Result<()> {
+   |                                 ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_app_state`
+
+warning: unused variable: `app_state`
+  --> src/tui/handlers/file_ops.rs:62:32
+   |
+62 |     pub fn toggle_line_numbers(app_state: &mut AppState) -> io::Result<()> {
+   |                                ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_app_state`
+
+warning: unused variable: `app_state`
+  --> src/tui/handlers/file_ops.rs:67:24
+   |
+67 |     pub fn save_config(app_state: &mut AppState) -> io::Result<()> {
+   |                        ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_app_state`
+
+warning: unused variable: `app_state`
+  --> src/tui/handlers/file_ops.rs:80:22
+   |
+80 |     pub fn show_help(app_state: &mut AppState) -> io::Result<()> {
+   |                      ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_app_state`
+
+error[E0502]: cannot borrow `*app_state` as mutable because it is also borrowed as immutable
+   --> src/tui/state/selection.rs:145:21
+    |
+133 |             for path in &app_state.filtered_items {
+    |                         -------------------------
+    |                         |
+    |                         immutable borrow occurs here
+    |                         immutable borrow later used here
+...
+145 |                     Self::update_folder_selection(app_state, path, true)?;
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable borrow occurs here
+
+error[E0382]: use of moved value: `counting_path`
+   --> src/tui/state/selection.rs:169:48
+    |
+152 |                 let counting_path = app_state.current_dir.clone();
+    |                     ------------- move occurs because `counting_path` has type `std::path::PathBuf`, which does not implement the `Copy` trait
+...
+158 |                 thread::spawn(move || {
+    |                               ------- value moved into closure here
+159 |                     let result = crate_fs::count_selection_items_async(
+160 |                         &counting_path,
+    |                          ------------- variable moved due to use in closure
+...
+169 |                 app_state.counting_path = Some(counting_path);
+    |                                                ^^^^^^^^^^^^^ value used here after move
+
+Some errors have detailed explanations: E0061, E0308, E0382, E0412, E0425, E0432, E0433, E0502, E0599...
+For more information about an error, try `rustc --explain E0061`.
+warning: `aibundle` (bin "aibundle") generated 35 warnings
+error: could not compile `aibundle` (bin "aibundle") due to 44 previous errors; 35 warnings emitted

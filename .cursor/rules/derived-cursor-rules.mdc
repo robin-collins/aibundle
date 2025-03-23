@@ -1,0 +1,57 @@
+---
+description: Cursor rules derived by SpecStory from the project AI interaction history
+globs: *
+---
+
+## PROJECT OVERVIEW
+
+(No content provided in new interactions to update this section)
+
+## CODE STYLE
+
+- Adhere to Rust's coding conventions.
+- Use `cargo clippy --all-targets --all-features` regularly to identify and fix style and performance issues.  Address all warnings;  the `cargo clippy --fix` command can be helpful but manual review is crucial.  Avoid `push_str("\n")`; use `push('\n')` for better efficiency.  Prefer `&Path` over `&PathBuf` where appropriate.  Refactor functions with excessive arguments (>8) into structs.
+
+## FOLDER ORGANIZATION
+
+(No content provided in new interactions to update this section)
+
+## TECH STACK
+
+- Rust (version information will need to be added as it becomes available)
+- Cargo (version information will need to be added as it becomes available)
+- Clippy (version information will need to be added as it becomes available)
+
+
+## PROJECT-SPECIFIC STANDARDS
+
+(No content provided in new interactions to update this section)
+
+
+## WORKFLOW & RELEASE RULES
+
+- Regularly run `cargo clippy --all-targets --all-features` before commits and releases.
+- Address all Clippy warnings before merging code.
+
+
+## REFERENCE EXAMPLES
+
+(No content provided in new interactions to update this section)
+
+## PROJECT DOCUMENTATION & CONTEXT SYSTEM
+
+(No content provided in new interactions to update this section)
+
+## DEBUGGING
+
+- Utilize `cargo clippy --all-targets --all-features` for identifying potential issues early.
+- Employ systematic debugging techniques to resolve issues indicated by Clippy.
+
+
+## FINAL DOs AND DON'Ts
+
+- **DO** use `cargo clippy` regularly to maintain code quality.
+- **DO** address all Clippy warnings before merging code or releasing.
+- **DO** refactor functions with many arguments into structs for improved readability and maintainability.
+- **DO** prefer `&Path` over `&PathBuf` when appropriate.
+- **DON'T** use `push_str("\n")`; use `push('\n')` instead.

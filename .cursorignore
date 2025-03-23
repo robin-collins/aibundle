@@ -6,4 +6,5 @@ Cargo.lock
 .vscode/
 *.swp
 *.swo
-references/mono-file-version/
+references/*
+.specstory/*
