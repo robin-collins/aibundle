@@ -1,10 +1,10 @@
 mod cli;
-mod tui;
+mod clipboard;
 mod config;
 mod fs;
-mod output;
-mod clipboard;
 mod models;
+mod output;
+mod tui;
 mod utils;
 
 fn main() {

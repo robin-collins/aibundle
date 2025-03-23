@@ -26,4 +26,3 @@ fn is_excluded(path: &std::path::Path) -> bool {
     path.components()
         .any(|c| excluded.contains(&c.as_os_str().to_str().unwrap_or("")))
 }
-
