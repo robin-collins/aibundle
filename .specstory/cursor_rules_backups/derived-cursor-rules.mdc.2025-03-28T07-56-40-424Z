@@ -1,7 +1,3 @@
----
-description: Cursor rules derived by SpecStory from the project AI interaction history
-globs: *
----
 
 ## PROJECT OVERVIEW
 
@@ -152,14 +148,6 @@ globs: *
 - Use `KeyboardHandler::handle_key` (associated function call) instead of `self.keyboard_handler.handle_key` (method call) in `src/tui/app.rs` to correctly invoke the key handling logic. (Added 2025-03-28)
 - Ensure that the `AppState::new` function in `src/tui/state/app_state.rs` returns a `Result<Self, io::Error>` to handle potential errors during initialization. (Added 2025-03-28)
 - Remove the duplicate `impl KeyboardHandler` block from `src/tui/app.rs`. (Added 2025-03-28)
-- Add `use crate::models::constants::DEFAULT_IGNORED_DIRS;` to `src/main.rs`. (Added 2025-03-28 based on interaction resolving unresolved imports)
-- Remove `.to_string()` calls from lines 106, 107, 108, and 113 in `src/main.rs`. (Added 2025-03-28 based on interaction resolving type mismatches)
-- Remove the borrow from line 112 in `src/main.rs`. (Added 2025-03-28 based on interaction resolving type mismatches)
-- Remove unused imports `EnterAlternateScreen`, `LeaveAlternateScreen`, and `execute` from `src/main.rs`. (Added 2025-03-28 based on interaction resolving unused imports)
-- Add `use crate::models::constants::DEFAULT_SELECTION_LIMIT;` to `src/main.rs` (Added 2025-03-28 based on interaction resolving missing field)
-- Add `use crate::models::constants::DEFAULT_SELECTION_LIMIT;` to `src/main.rs` (Added 2025-03-28 based on interaction resolving missing field)
-- Wrap the `DEFAULT_SELECTION_LIMIT` in `Some()` in `src/main.rs` line 124 to resolve type mismatch. (Added 2025-03-28)
-- When resolving type mismatches related to `Option<usize>` vs `usize`, ensure that the `Option` type is used consistently throughout the codebase to represent optional values. (Added 2025-03-28 based on interaction resolving type mismatches)
 
 
 ## FOLDER ORGANIZATION
@@ -188,4 +176,14 @@ globs: *
 - Carefully review code for borrow checker issues and potential move errors before commits and releases. (Added 2025-03-23)
 - During refactoring from a monolithic codebase, ensure that all functionality is preserved.  Address any lingering unused imports by either removing them or implementing the functionality they represent. (Added 2025-03-23)
 - During refactoring from a monolithic codebase, retain unused imports that represent planned functionality. Implement this functionality and remove the `#[allow(unused_imports)]` attribute or remove the import once implemented. (Added 2025-03-23)
-- Thoroughly
+- Thoroughly test code changes after addressing linting errors to ensure functionality remains intact. (Added 2025-03-23)
+- Address all compiler errors before committing or releasing code. (Added 2025-03-23)
+- Ensure the use of `HashSet` for managing collections of paths mirrors the functionality in the monolithic codebase. (Added 2025-03-24)
+- When updating the application state with copy statistics, ensure that the `AppState` is mutably borrowed to allow modification of the `last_copy_stats` field. (Added 2025-03-24)
+- Implement planned functionality to utilize imports previously marked as unused, such as `std::collections::HashSet` and `std::path::Path`, based on their usage in the monolithic codebase. (Added 2025-03-26)
+- Ensure all modules and functions are publicly accessible (`pub`) to avoid private module errors. (Added 2025-03-26)
+- Ensure `FromStr` and `Default` traits are implemented for all necessary types. (Added 2025-03-26)
+- Ensure all modules are publicly accessible to avoid private module errors. (Added 2025-03-26)
+- When implementing search functionality, ensure it mirrors the functionality in the monolithic codebase (@main.rs and related modules).  This includes using appropriate data structures for managing search results and selected items. (Added 2025-03-27)
+- When resolving linting errors related to unused imports, prioritize implementing planned functionality from the monolithic codebase rather than simply removing the imports. (Added 2025-03-27)
+- Implement selection logic to correctly handle

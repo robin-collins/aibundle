@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Span, Spans},
+    text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
@@ -13,7 +13,7 @@ impl HelpView {
         Self
     }
 
-    pub fn render(&self, f: &mut Frame, area: Rect, app_state: &crate::tui::state::AppState) {
+    pub fn render(&self, f: &mut Frame, area: Rect, _app_state: &crate::tui::state::AppState) {
         // Create a centered area for the help content
         let help_area = centered_rect(80, 90, area);
 
@@ -25,47 +25,47 @@ impl HelpView {
 
         // Help content
         let help_text = vec![
-            Spans::from(Span::styled(
+            Line::from(Span::styled(
                 "Keyboard Controls",
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             )),
-            Spans::from(""),
-            Spans::from(Span::styled(
+            Line::from(""),
+            Line::from(Span::styled(
                 "Navigation",
                 Style::default().fg(Color::Green),
             )),
-            Spans::from("↑/↓         - Move selection up/down"),
-            Spans::from("PgUp/PgDown - Move selection by page"),
-            Spans::from("Enter       - Open directory"),
-            Spans::from("Backspace   - Go to parent directory"),
-            Spans::from("Tab         - Expand/collapse directory"),
-            Spans::from(""),
-            Spans::from(Span::styled("Selection", Style::default().fg(Color::Green))),
-            Spans::from("Space       - Select/deselect item"),
-            Spans::from("*           - Select/deselect all"),
-            Spans::from(""),
-            Spans::from(Span::styled("Search", Style::default().fg(Color::Green))),
-            Spans::from("/           - Start search"),
-            Spans::from("ESC         - Clear search"),
-            Spans::from(""),
-            Spans::from(Span::styled("Actions", Style::default().fg(Color::Green))),
-            Spans::from("c           - Copy selection to clipboard"),
-            Spans::from("f           - Toggle output format (XML/MD/JSON/LLM)"),
-            Spans::from("n           - Toggle line numbers"),
-            Spans::from(""),
-            Spans::from(Span::styled("Filters", Style::default().fg(Color::Green))),
-            Spans::from("i           - Toggle default ignore patterns"),
-            Spans::from("g           - Toggle .gitignore"),
-            Spans::from("b           - Toggle binary files"),
-            Spans::from("r           - Toggle recursive mode"),
-            Spans::from(""),
-            Spans::from(Span::styled("Other", Style::default().fg(Color::Green))),
-            Spans::from("h           - Show/hide this help"),
-            Spans::from("q           - Quit"),
-            Spans::from(""),
-            Spans::from(Span::styled(
+            Line::from("↑/↓         - Move selection up/down"),
+            Line::from("PgUp/PgDown - Move selection by page"),
+            Line::from("Enter       - Open directory"),
+            Line::from("Backspace   - Go to parent directory"),
+            Line::from("Tab         - Expand/collapse directory"),
+            Line::from(""),
+            Line::from(Span::styled("Selection", Style::default().fg(Color::Green))),
+            Line::from("Space       - Select/deselect item"),
+            Line::from("*           - Select/deselect all"),
+            Line::from(""),
+            Line::from(Span::styled("Search", Style::default().fg(Color::Green))),
+            Line::from("/           - Start search"),
+            Line::from("ESC         - Clear search"),
+            Line::from(""),
+            Line::from(Span::styled("Actions", Style::default().fg(Color::Green))),
+            Line::from("c           - Copy selection to clipboard"),
+            Line::from("f           - Toggle output format (XML/MD/JSON/LLM)"),
+            Line::from("n           - Toggle line numbers"),
+            Line::from(""),
+            Line::from(Span::styled("Filters", Style::default().fg(Color::Green))),
+            Line::from("i           - Toggle default ignore patterns"),
+            Line::from("g           - Toggle .gitignore"),
+            Line::from("b           - Toggle binary files"),
+            Line::from("r           - Toggle recursive mode"),
+            Line::from(""),
+            Line::from(Span::styled("Other", Style::default().fg(Color::Green))),
+            Line::from("h           - Show/hide this help"),
+            Line::from("q           - Quit"),
+            Line::from(""),
+            Line::from(Span::styled(
                 "Press any key to close help",
                 Style::default().fg(Color::Yellow),
             )),

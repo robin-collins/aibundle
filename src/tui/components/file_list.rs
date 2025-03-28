@@ -1,21 +1,34 @@
 use ratatui::{
-    style::{Color, Style},
+    layout::Rect,
+    style::{Color, Modifier, Style},
     widgets::{Block, Borders, List, ListItem},
+    Frame,
 };
 use std::path::{Path, PathBuf};
 
 use crate::models::constants::ICONS;
-use crate::tui::state::AppState;
+use crate::tui::state::{AppState, SelectionState};
 
 pub struct FileList;
 
 impl FileList {
-    pub fn render<'a>(app_state: &AppState) -> List<'a> {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub fn render(
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        app_state: &AppState,
+        selection_state: &SelectionState,
+    ) {
         let display_items = app_state.get_display_items();
 
         let items: Vec<ListItem> = display_items
             .iter()
-            .map(|path| {
+            .enumerate()
+            .map(|(index, path)| {
                 let depth = path
                     .strip_prefix(&app_state.current_dir)
                     .map(|p| p.components().count())
@@ -45,14 +58,23 @@ impl FileList {
                     format!("{}{}{} {}", indent, prefix, icon, name)
                 };
 
-                ListItem::new(display_name)
+                let is_selected_line = selection_state.list_state.selected() == Some(index);
+                let style = if is_selected_line {
+                    Style::default().bg(Color::Gray).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
+
+                ListItem::new(display_name).style(style)
             })
             .collect();
 
-        List::new(items)
-            .block(Block::default().borders(Borders::ALL))
-            .highlight_style(Style::default().bg(Color::Gray))
-            .highlight_symbol("> ")
+        let list_widget = List::new(items)
+            .block(Block::default().title("Files").borders(Borders::ALL));
+
+        let mut list_state = app_state.list_state.clone();
+
+        f.render_stateful_widget(list_widget, area, &mut list_state);
     }
 
     fn get_icon(path: &Path) -> &'static str {

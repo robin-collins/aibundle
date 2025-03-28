@@ -1,5 +1,5 @@
 use crate::fs::add_items_iterative;
-use crate::models::{constants, AppConfig, CopyStats, IgnoreConfig, OutputFormat};
+use crate::models::{app_config::Node, constants, AppConfig, CopyStats, IgnoreConfig, OutputFormat,};
 use crate::output::format_selected_items;
 use crate::tui::components::modal::Modal;
 use crate::clipboard::copy_to_clipboard as copy_text_to_clipboard;
@@ -9,6 +9,34 @@ use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
+use std::time::Instant;
+
+/// Enum to represent the type of message to display
+#[derive(Clone, Debug)]
+pub enum MessageType {
+    Info,
+    Success,
+    Warning,
+    Error,
+}
+
+/// Struct to hold message details
+#[derive(Clone, Debug)]
+pub struct AppMessage {
+    pub content: String,
+    pub message_type: MessageType,
+    pub timestamp: Instant,
+}
+
+impl AppMessage {
+    pub fn new(content: String, message_type: MessageType) -> Self {
+        Self {
+            content,
+            message_type,
+            timestamp: Instant::now(),
+        }
+    }
+}
 
 /// Core application state, separated from behavior
 pub struct AppState {
@@ -33,6 +61,8 @@ pub struct AppState {
 
     // Modal state
     pub modal: Option<Modal>,
+    pub show_help: bool,
+    pub show_message: bool,
 
     // Selection state
     pub counting_path: Option<PathBuf>,
@@ -45,6 +75,10 @@ pub struct AppState {
     pub search_query: String,
     pub filtered_items: Vec<PathBuf>,
     pub is_searching: bool,
+
+    // New fields
+    pub message: Option<AppMessage>,
+    pub file_tree: Option<Node>,
 }
 
 impl Default for AppState {
@@ -52,12 +86,16 @@ impl Default for AppState {
         let config = AppConfig::default();
         let ignore_config = IgnoreConfig::default();
         let initial_dir = std::env::current_dir().unwrap_or_default();
-        Self::new(config, initial_dir, ignore_config)
+        Self::new(config, initial_dir, ignore_config).expect("Failed to create default AppState")
     }
 }
 
 impl AppState {
-    pub fn new(config: AppConfig, initial_dir: PathBuf, ignore_config: IgnoreConfig) -> Self {
+    pub fn new(
+        config: AppConfig,
+        initial_dir: PathBuf,
+        ignore_config: IgnoreConfig,
+    ) -> Result<Self, io::Error> {
         let selection_limit = config
             .selection_limit
             .unwrap_or(constants::DEFAULT_SELECTION_LIMIT);
@@ -69,13 +107,15 @@ impl AppState {
             .unwrap_or_default();
         let show_line_numbers = config.default_line_numbers.unwrap_or(false);
 
-        Self {
+        let slf = Self {
             current_dir: initial_dir,
             items: Vec::new(),
             list_state: ListState::default(),
             selected_items: HashSet::new(),
             expanded_folders: HashSet::new(),
             modal: None,
+            show_help: false,
+            show_message: false,
             config,
             ignore_config,
             output_format,
@@ -90,7 +130,10 @@ impl AppState {
             search_query: String::new(),
             filtered_items: Vec::new(),
             is_searching: false,
-        }
+            message: None,
+            file_tree: None,
+        };
+        Ok(slf)
     }
 
     pub fn selected_count(&self) -> usize {
@@ -351,6 +394,16 @@ impl AppState {
                 }
             }
         }
+    }
+
+    /// Sets or updates the message to be displayed.
+    pub fn set_message(&mut self, content: String, message_type: MessageType) {
+        self.message = Some(AppMessage::new(content, message_type));
+    }
+
+    /// Clears the current message.
+    pub fn clear_message(&mut self) {
+        self.message = None;
     }
 
     // TODO: Implement `update_folder_selection` based on monolithic version

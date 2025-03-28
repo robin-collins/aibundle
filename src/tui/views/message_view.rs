@@ -1,11 +1,12 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Span, Spans},
+    text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
 use std::time::{Duration, Instant};
+use crate::tui::state::{AppState, MessageType};
 
 pub struct MessageView {
     // Duration to show messages for
@@ -19,7 +20,7 @@ impl MessageView {
         }
     }
 
-    pub fn render(&self, f: &mut Frame, area: Rect, app_state: &crate::tui::state::AppState) {
+    pub fn render(&self, f: &mut Frame, area: Rect, app_state: &AppState) {
         // Only render if there's a message to show
         if let Some(message) = &app_state.message {
             // Check if the message should be expired
@@ -38,20 +39,20 @@ impl MessageView {
 
             // Determine message style based on message type
             let message_style = match message.message_type {
-                crate::tui::state::MessageType::Info => Style::default().fg(Color::Cyan),
-                crate::tui::state::MessageType::Success => Style::default().fg(Color::Green),
-                crate::tui::state::MessageType::Warning => Style::default().fg(Color::Yellow),
-                crate::tui::state::MessageType::Error => Style::default().fg(Color::Red),
+                MessageType::Info => Style::default().fg(Color::Cyan),
+                MessageType::Success => Style::default().fg(Color::Green),
+                MessageType::Warning => Style::default().fg(Color::Yellow),
+                MessageType::Error => Style::default().fg(Color::Red),
             };
 
-            // Create the message paragraph with styled spans
-            let message_content = Spans::from(vec![
+            // Create the message paragraph with styled spans within Lines
+            let message_content = Line::from(vec![
                 Span::styled(
                     match message.message_type {
-                        crate::tui::state::MessageType::Info => "INFO: ",
-                        crate::tui::state::MessageType::Success => "SUCCESS: ",
-                        crate::tui::state::MessageType::Warning => "WARNING: ",
-                        crate::tui::state::MessageType::Error => "ERROR: ",
+                        MessageType::Info => "INFO: ",
+                        MessageType::Success => "SUCCESS: ",
+                        MessageType::Warning => "WARNING: ",
+                        MessageType::Error => "ERROR: ",
                     },
                     message_style.add_modifier(Modifier::BOLD),
                 ),
@@ -59,10 +60,10 @@ impl MessageView {
             ]);
 
             let message_paragraph = Paragraph::new(vec![
-                Spans::from(""),
+                Line::from(""),
                 message_content,
-                Spans::from(""),
-                Spans::from(Span::styled(
+                Line::from(""),
+                Line::from(Span::styled(
                     "Press any key to dismiss",
                     Style::default().fg(Color::DarkGray),
                 )),

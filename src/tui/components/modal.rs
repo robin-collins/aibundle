@@ -1,4 +1,12 @@
 use std::time::Instant;
+use ratatui::{
+    layout::Rect,
+    style::{Color, Style},
+    text::Text,
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    Frame,
+};
+use crate::models::OutputFormat;
 
 pub struct Modal {
     pub message: String,
@@ -24,29 +32,17 @@ impl Modal {
         folder_count: usize,
         line_count: usize,
         byte_size: usize,
-        format: &crate::models::OutputFormat,
+        format: &OutputFormat,
     ) -> Self {
-        Self::new(
-            format!(
-                "Files copied: {}\n\
-                 Folders copied: {}\n\
-                 Total lines: {}\n\
-                 Total size: {}\n\
-                 Format: {}\n",
-                file_count,
-                folder_count,
-                line_count,
-                crate::utils::human_readable_size(byte_size),
-                match format {
-                    crate::models::OutputFormat::Xml => "XML",
-                    crate::models::OutputFormat::Markdown => "Markdown",
-                    crate::models::OutputFormat::Json => "JSON",
-                    crate::models::OutputFormat::Llm => "LLM",
-                }
-            ),
-            45,
-            8,
-        )
+        let message = format!(
+            "Copied to clipboard ({:?})\n\nFiles: {}\nFolders: {}\nLines: {}\nSize: {}",
+            format,
+            file_count,
+            folder_count,
+            line_count,
+            crate::utils::human_readable_size(byte_size)
+        );
+        Self::new(message, 60, 8)
     }
 
     pub fn help() -> Self {
@@ -68,7 +64,7 @@ Space      - Select/deselect item\n\
 Actions\n\
 ───────\n\
 c          - Copy to clipboard\n\
-f          - Toggle format (XML/MD/JSON)\n\
+f          - Toggle format (XML/MD/JSON/LLM)\n\
 n          - Toggle line numbers\n\
 /          - Search (ESC to cancel)\n\
 \n\
@@ -88,13 +84,8 @@ Help Navigation\n\
 PgUp/PgDn  - Scroll help pages\n\
 Any key    - Close help"
             .to_string();
-        Self {
-            message: help_text,
-            timestamp: Instant::now(),
-            width: 60,
-            height: 30,
-            page: 0,
-        }
+
+        Self::new(help_text, 60, 30)
     }
 
     pub fn get_visible_content(&self, available_height: u16) -> (String, bool) {
@@ -135,5 +126,20 @@ Any key    - Close help"
         if total_pages > 1 {
             self.page = (self.page + total_pages - 1) % total_pages;
         }
+    }
+
+    pub fn render(&self, f: &mut Frame, area: Rect) {
+        let block = Block::default()
+            .title(" Message ")
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::Yellow));
+
+        let text = Text::from(self.message.as_str());
+        let paragraph = Paragraph::new(text)
+            .wrap(Wrap { trim: true })
+            .block(block);
+
+        f.render_widget(Clear, area);
+        f.render_widget(paragraph, area);
     }
 }

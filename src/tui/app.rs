@@ -1,7 +1,7 @@
 use crossterm::{
-    event::{self, Event, KeyCode},
+    event::{self, Event},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -43,13 +43,17 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
-        let app_state = AppState::new();
+    pub fn new(
+        config: AppConfig,
+        start_dir: PathBuf,
+        ignore_config: crate::models::IgnoreConfig,
+    ) -> Result<Self, io::Error> {
+        let app_state = AppState::new(config.clone(), start_dir, ignore_config)?;
 
         // Create a new instance with all components initialized
         let mut app = Self {
             current_dir: app_state.current_dir.clone(),
-            config: app_state.config.clone(),
+            config,
             ignore_config: app_state.ignore_config.clone(),
             selected_items: std::collections::HashSet::new(),
             output_format: app_state.output_format,
@@ -71,7 +75,7 @@ impl App {
         // Initialize compatibility properties
         app.sync_state_to_properties();
 
-        app
+        Ok(app)
     }
 
     // Synchronizes internal state to public properties for compatibility
@@ -126,14 +130,19 @@ impl App {
 
             // Render UI
             terminal.draw(|f| {
-                self.main_view
-                    .render(f, &self.state, &self.selection_state, &self.search_state)
+                self.main_view.render(
+                    f,
+                    f.area(),
+                    &self.state,
+                    &self.selection_state,
+                    &self.search_state,
+                )
             })?;
 
             // Handle events with timeout
             if event::poll(Duration::from_millis(50))? {
                 if let Event::Key(key) = event::read()? {
-                    self.keyboard_handler.handle_key(
+                    KeyboardHandler::handle_key(
                         key,
                         &mut self.state,
                         &mut self.selection_state,
@@ -193,7 +202,7 @@ impl App {
 
     pub fn format_selected_items(&mut self) -> io::Result<String> {
         self.sync_properties_to_state();
-        ClipboardHandler::format_selected_items(&mut self.state)
+        ClipboardHandler::format_selected_items(&mut self.state).map(|(s, _stats)| s)
     }
 
     // Other delegating methods as needed...

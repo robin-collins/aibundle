@@ -230,33 +230,50 @@ pub fn get_output_format(cli_opts: &CliOptions) -> OutputFormat {
 
 /// This function runs the tool in CLI mode, bypassing the TUI entirely.
 pub fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
-    let mut app = App::new();
-    app.current_dir = PathBuf::from(options.source_dir);
-    app.ignore_config.use_gitignore = options.gitignore;
-    app.output_format = match options.format.to_lowercase().as_str() {
-        "markdown" => OutputFormat::Markdown,
-        "json" => OutputFormat::Json,
-        "llm" => OutputFormat::Llm,
-        _ => OutputFormat::Xml,
+    // 1. Create AppConfig
+    let app_config = AppConfig {
+        default_format: Some(options.format.clone()),
+        default_gitignore: Some(options.gitignore),
+        default_ignore: Some(options.ignore_list.clone()),
+        default_line_numbers: Some(options.line_numbers),
+        default_recursive: Some(options.recursive),
+        selection_limit: None, // Selection limit override handled later
     };
-    app.show_line_numbers = options.line_numbers && app.output_format != OutputFormat::Json;
+    // 2. Create IgnoreConfig
+    let ignore_config = IgnoreConfig {
+        use_default_ignores: options.ignore_list.contains(&"default".to_string()),
+        use_gitignore: options.gitignore,
+        include_binary_files: false, // Assuming false for CLI
+        extra_ignore_patterns: options.ignore_list.clone(),
+    };
+    // 3. Create start_dir PathBuf
+    let start_dir = PathBuf::from(options.source_dir.clone());
 
-    // Set the recursive flag based on the CLI parameter.
-    app.recursive = options.recursive;
+    // 4. Call App::new with arguments and handle Result
+    let mut app = App::new(app_config, start_dir.clone(), ignore_config)?;
 
-    // Set up ignore patterns from the CLI flag (--ignore)
-    app.config.default_ignore = Some(options.ignore_list.to_vec());
-    app.ignore_config.extra_ignore_patterns = options.ignore_list.to_vec();
+    // Subsequent operations should now work on the unwrapped `app`
+    // No need to change these lines as App has compatibility fields
+    // app.current_dir = start_dir; // Set implicitly by App::new
+    // app.ignore_config.use_gitignore = options.gitignore; // Set implicitly by App::new
+    // app.output_format = ... // Set implicitly by App::new
+    // app.show_line_numbers = ... // Set implicitly by App::new
+    // app.recursive = options.recursive; // Set implicitly by App::new
+    // app.config.default_ignore = Some(options.ignore_list.to_vec()); // Set implicitly by App::new
+    // app.ignore_config.extra_ignore_patterns = options.ignore_list.to_vec(); // Set implicitly by App::new
 
-    // Override selection limit from CLI config if provided.
-    if let Some(cli_conf) = crate::config::load_config()?.cli {
-        if let Some(limit) = cli_conf.selection_limit {
-            app.selection_limit = limit;
+    // Override selection limit from loaded CLI config if provided.
+    // Note: load_config might need adjustment to handle potential errors better
+    if let Ok(full_config) = crate::config::load_config() {
+        if let Some(cli_conf) = full_config.cli {
+            if let Some(limit) = cli_conf.selection_limit {
+                app.selection_limit = limit;
+            }
         }
     }
 
     // Load items based on patterns and recursion setting
-    if options.recursive {
+    if app.recursive { // Check app.recursive which was set via AppConfig
         app.expanded_folders =
             crate::fs::collect_all_subdirs(&app.current_dir, &app.ignore_config)?;
         app.load_items()?;

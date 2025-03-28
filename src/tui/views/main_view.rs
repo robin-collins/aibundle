@@ -1,13 +1,11 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    text::{Span, Spans},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    style::{Color, Style},
+    widgets::Paragraph,
     Frame,
 };
 
-use crate::models::constants::ICONS;
-use crate::tui::components::{FileList, Modal, StatusBar};
+use crate::tui::components::{FileList, StatusBar};
 use crate::tui::state::{AppState, SearchState, SelectionState};
 use crate::tui::views::{HelpView, MessageView};
 
@@ -34,7 +32,7 @@ impl MainView {
         area: Rect,
         app_state: &AppState,
         selection_state: &SelectionState,
-        search_state: &Option<SearchState>,
+        search_state: &SearchState,
     ) {
         // Create the main layout with file list and status bar
         let chunks = Layout::default()
@@ -54,7 +52,7 @@ impl MainView {
             .render(f, chunks[1], app_state, selection_state);
 
         // Render search UI if in search mode
-        if let Some(search_state) = search_state {
+        if app_state.is_searching {
             let search_area = Rect {
                 x: area.x + 1,
                 y: area.y + area.height - 2,
@@ -62,13 +60,8 @@ impl MainView {
                 height: 1,
             };
             let search_text = format!(
-                "{} {}",
-                if search_state.is_regex {
-                    "Regex:"
-                } else {
-                    "Search:"
-                },
-                search_state.query
+                "Search: {}",
+                search_state.search_query
             );
             let search_para = Paragraph::new(search_text).style(Style::default().fg(Color::Yellow));
             f.render_widget(search_para, search_area);

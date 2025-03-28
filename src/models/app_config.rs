@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 // use std::path::PathBuf;
 use crate::models::constants::DEFAULT_IGNORED_DIRS;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppConfig {
     pub default_format: Option<String>,
     pub default_gitignore: Option<bool>,

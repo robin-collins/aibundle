@@ -9,11 +9,8 @@ mod utils;
 
 use clap::Parser;
 use cli::{run_cli_mode, CliModeOptions, CliOptions};
-use crossterm::{
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use models::{FullConfig, ModeConfig};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use crate::models::app_config::{FullConfig, ModeConfig};
 use std::io;
 use std::path::PathBuf;
 
@@ -38,7 +35,7 @@ fn main() -> io::Result<()> {
         // If saving config is requested, save a default config file (with both [cli] and [tui] sections)
         if cli_args.save_config {
             // Define our default ignored directories as a Vec<String>
-            let default_ignore: Vec<String> = models::DEFAULT_IGNORED_DIRS
+            let default_ignore: Vec<String> = models::constants::DEFAULT_IGNORED_DIRS
                 .iter()
                 .map(|s| s.to_string())
                 .collect();
@@ -103,20 +100,34 @@ fn main() -> io::Result<()> {
         };
 
         run_cli_mode(CliModeOptions {
-            files_pattern: files.as_deref(),
-            source_dir: source_dir.as_str(),
-            format: format.as_str(),
+            files_pattern: files,
+            source_dir: source_dir,
+            format: format,
             gitignore,
             line_numbers,
             recursive,
-            ignore_list: &ignore,
-            output_file: cli_args.output_file.as_deref(),
+            ignore_list: ignore,
+            output_file: cli_args.output_file,
             output_console: cli_args.output_console,
         })
     } else {
         // Run in TUI mode: start in the effective source directory.
-        let mut app = tui::App::new();
-        app.current_dir = PathBuf::from(effective_source_dir.clone());
+        let default_config = models::AppConfig {
+            default_format: None,
+            default_gitignore: None,
+            default_ignore: None,
+            default_line_numbers: None,
+            default_recursive: None,
+            selection_limit: Some(crate::models::DEFAULT_SELECTION_LIMIT),
+        };
+
+        let ignore_config = models::IgnoreConfig::default();
+
+        let mut app = tui::App::new(
+            default_config,
+            PathBuf::from(effective_source_dir.clone()),
+            ignore_config
+        )?;
 
         if let Some(tui_conf) = full_config.tui {
             if let Some(format) = tui_conf.format {
@@ -153,8 +164,8 @@ fn main() -> io::Result<()> {
         }
 
         enable_raw_mode()?;
-        let result = app.run();
+        let result = app.run()?;
         disable_raw_mode()?;
-        result
+        Ok(result)
     }
 }
