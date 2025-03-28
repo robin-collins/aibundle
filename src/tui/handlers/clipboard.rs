@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::models::{CopyStats, Node, OutputFormat};
+use crate::models::{app_config::Node, CopyStats, OutputFormat};
 use crate::tui::state::AppState;
 
 pub struct ClipboardHandler;
@@ -13,20 +13,19 @@ impl ClipboardHandler {
     }
 
     pub fn copy_selected_to_clipboard(app_state: &mut AppState) -> io::Result<()> {
-        let output = Self::format_selected_items(app_state)?;
+        // Get formatted output and computed stats
+        let (output, stats) = Self::format_selected_items(app_state)?;
 
         let result = crate::clipboard::copy_to_clipboard(&output);
 
-        // Get the counts for the status message
-        let (file_count, folder_count) = Self::count_selected_items(app_state);
+        // Use the computed stats from format_selected_items
+        let file_count = stats.files;
+        let folder_count = stats.folders;
         let line_count = output.lines().count();
         let byte_size = output.len();
 
         // Set last copy stats for display in the UI
-        app_state.last_copy_stats = Some(CopyStats {
-            files: file_count,
-            folders: folder_count,
-        });
+        app_state.last_copy_stats = Some(stats);
 
         // Display a modal with the copy stats
         app_state.modal = Some(crate::tui::components::Modal::copy_stats(
@@ -55,7 +54,7 @@ impl ClipboardHandler {
         (files, folders)
     }
 
-    pub fn format_selected_items(app_state: &AppState) -> io::Result<String> {
+    pub fn format_selected_items(app_state: &AppState) -> io::Result<(String, CopyStats)> {
         let mut output = String::new();
         let selected_items: Vec<_> = app_state
             .selected_items
@@ -65,11 +64,16 @@ impl ClipboardHandler {
             .collect();
 
         if selected_items.is_empty() {
-            return Ok("No items selected or all items are ignored.".to_string());
+            return Ok(("No items selected or all items are ignored.".to_string(), CopyStats { files: 0, folders: 0 }));
         }
 
         let base_path = &app_state.current_dir;
         let mut file_contents = Vec::new();
+        // Initialize stats for tracking processed files and folders
+        let mut total_stats = CopyStats {
+            files: 0,
+            folders: 0,
+        };
 
         // Process all selected items
         for path in &selected_items {
@@ -86,21 +90,43 @@ impl ClipboardHandler {
         // Format the output based on the selected format
         match app_state.output_format {
             OutputFormat::Xml => {
-                crate::output::format_xml_output(
-                    &mut output,
-                    &file_contents,
+                let (xml_output, xml_stats) = crate::output::format_xml_output(
+                    &app_state.selected_items,
+                    &app_state.current_dir,
                     app_state.show_line_numbers,
-                );
+                    &app_state.ignore_config,
+                )?;
+                output.push_str(&xml_output);
+                // Update total stats with the format-specific stats
+                total_stats.files += xml_stats.files;
+                total_stats.folders += xml_stats.folders;
             }
             OutputFormat::Markdown => {
-                crate::output::format_markdown_output(
-                    &mut output,
-                    &file_contents,
+                let (md_output, md_stats) = crate::output::format_markdown_output(
+                    &app_state.selected_items,
+                    &app_state.current_dir,
                     app_state.show_line_numbers,
-                );
+                    &app_state.ignore_config,
+                )?;
+                output.push_str(&md_output);
+                // Update total stats with the format-specific stats
+                total_stats.files += md_stats.files;
+                total_stats.folders += md_stats.folders;
             }
             OutputFormat::Json => {
-                crate::output::format_json_output(&mut output, &file_contents);
+                // Call the function with the correct parameters and handle the returned tuple
+                let (json_output, json_stats) = crate::output::format_json_output(
+                    &app_state.selected_items,
+                    &app_state.current_dir,
+                    &app_state.ignore_config,
+                )?;
+
+                // Append the generated JSON string to our output
+                output.push_str(&json_output);
+
+                // Update total stats with the format-specific stats
+                total_stats.files += json_stats.files;
+                total_stats.folders += json_stats.folders;
             }
             OutputFormat::Llm => {
                 // For LLM format, we need to build a tree structure
@@ -120,17 +146,35 @@ impl ClipboardHandler {
                 let dependencies = crate::output::analyze_dependencies(&file_contents, base_path);
 
                 // Format the output
-                crate::output::format_llm_output(
+                crate::output::format_llm_output_internal(
                     &mut output,
                     &file_contents,
                     base_path,
                     &root_node,
                     &dependencies,
                 );
+
+                // For LLM format, directly calculate stats from file_contents
+                total_stats.files = file_contents.len();
+
+                // Count unique folders (using HashSet to avoid duplicates)
+                let mut folders = HashSet::new();
+                for (path, _) in &file_contents {
+                    let path_obj = Path::new(path);
+                    let mut parent = path_obj.parent();
+                    while let Some(dir) = parent {
+                        if !dir.as_os_str().is_empty() {
+                            folders.insert(dir.to_path_buf());
+                        }
+                        parent = dir.parent();
+                    }
+                }
+                total_stats.folders = folders.len();
             }
         }
 
-        Ok(output)
+        // Return both the output string and the stats
+        Ok((output, total_stats))
     }
 
     fn process_directory(
@@ -144,11 +188,22 @@ impl ClipboardHandler {
             return Ok(());
         }
 
+        // Use HashSet to track processed paths and avoid duplicates
+        let mut processed_paths = HashSet::new();
+
         // Try to read the directory entries
         match std::fs::read_dir(path) {
             Ok(entries) => {
                 for entry in entries.filter_map(Result::ok) {
                     let entry_path = entry.path();
+
+                    // Skip if already processed (prevents duplicates)
+                    if processed_paths.contains(&entry_path) {
+                        continue;
+                    }
+
+                    processed_paths.insert(entry_path.clone());
+
                     if entry_path.is_dir() {
                         Self::process_directory(app_state, &entry_path, file_contents, base_path)?;
                     } else {
@@ -176,7 +231,7 @@ impl ClipboardHandler {
         }
 
         // Skip binary files unless explicitly included
-        if !app_state.ignore_config.include_binary_files && crate::tui::App::is_binary_file(path) {
+        if !app_state.ignore_config.include_binary_files && crate::output::is_binary_file(path) {
             return Ok(());
         }
 
@@ -196,15 +251,25 @@ impl ClipboardHandler {
         Ok(())
     }
 
-    fn add_to_tree(path_str: &str, root: &mut Node, base_dir: &Path) {
+    fn add_to_tree(path_str: &str, root: &mut Node, _base_dir: &Path) {
         let path = Path::new(path_str);
         let mut current = root;
+
+        // Use HashSet to track processed components
+        let mut processed_components = HashSet::new();
 
         for component in path.components() {
             let name = component.as_os_str().to_string_lossy().to_string();
             if name.is_empty() {
                 continue;
             }
+
+            // Skip if we've seen this component before (prevents duplicates in complex paths)
+            if processed_components.contains(&name) {
+                continue;
+            }
+
+            processed_components.insert(name.clone());
 
             let is_dir = component != path.components().last().unwrap();
 
@@ -218,7 +283,7 @@ impl ClipboardHandler {
                 children.insert(
                     name.clone(),
                     Node {
-                        name,
+                        name: name.clone(),
                         is_dir,
                         children: if is_dir {
                             Some(std::collections::HashMap::new())

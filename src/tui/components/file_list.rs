@@ -4,21 +4,16 @@ use ratatui::{
 };
 use std::path::{Path, PathBuf};
 
-use crate::models::ICONS;
+use crate::models::constants::ICONS;
 use crate::tui::state::AppState;
 
-pub struct FileList {
-    pub current_dir: PathBuf,
-}
+pub struct FileList;
 
 impl FileList {
-    pub fn new(current_dir: PathBuf) -> Self {
-        Self { current_dir }
-    }
+    pub fn render<'a>(app_state: &AppState) -> List<'a> {
+        let display_items = app_state.get_display_items();
 
-    pub fn render<'a>(&self, app_state: &AppState) -> List<'a> {
-        let items: Vec<ListItem> = app_state
-            .filtered_items
+        let items: Vec<ListItem> = display_items
             .iter()
             .map(|path| {
                 let depth = path

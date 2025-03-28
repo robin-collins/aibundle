@@ -85,8 +85,8 @@ pub fn process_directory(
     selected_items: &HashSet<PathBuf>,
     output_format: &OutputFormat,
     show_line_numbers: bool,
-    include_binary_files: bool,
-) -> io::Result<(usize, usize)> {
+    ignore_config: &IgnoreConfig,
+) -> io::Result<CopyStats> {
     let mut files = 0;
     let mut folders = 0;
 
@@ -110,7 +110,7 @@ pub fn process_directory(
 
                 if entry.is_file() {
                     if is_binary_file(&entry) {
-                        if include_binary_files {
+                        if ignore_config.include_binary_files {
                             output.push_str(&format!(
                                 "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":true}}",
                                 normalized_path
@@ -138,17 +138,17 @@ pub fn process_directory(
                         normalized_path
                     ));
                     let mut dir_contents = String::new();
-                    let (f, d) = process_directory(
+                    let stats = process_directory(
                         &entry,
                         &mut dir_contents,
                         base_path,
                         selected_items,
                         output_format,
                         show_line_numbers,
-                        include_binary_files,
+                        ignore_config,
                     )?;
-                    files += f;
-                    folders += d;
+                    files += stats.files;
+                    folders += stats.folders;
                     output.push_str(&dir_contents);
                     output.push_str("]}");
                 }
@@ -162,7 +162,7 @@ pub fn process_directory(
 
                 if entry.is_file() {
                     if is_binary_file(&entry) {
-                        if include_binary_files {
+                        if ignore_config.include_binary_files {
                             match output_format {
                                 OutputFormat::Xml => {
                                     output.push_str(&format!(
@@ -213,34 +213,34 @@ pub fn process_directory(
                         OutputFormat::Xml => {
                             output.push_str(&format!("<folder name=\"{}\">\n", normalized_path));
                             let mut dir_contents = String::new();
-                            let (f, d) = process_directory(
+                            let stats = process_directory(
                                 &entry,
                                 &mut dir_contents,
                                 base_path,
                                 selected_items,
                                 output_format,
                                 show_line_numbers,
-                                include_binary_files,
+                                ignore_config,
                             )?;
-                            files += f;
-                            folders += d;
+                            files += stats.files;
+                            folders += stats.folders;
                             output.push_str(&dir_contents);
                             output.push_str("</folder>\n");
                         }
                         OutputFormat::Markdown => {
                             output.push_str(&format!("### {}/\n\n", normalized_path));
                             let mut dir_contents = String::new();
-                            let (f, d) = process_directory(
+                            let stats = process_directory(
                                 &entry,
                                 &mut dir_contents,
                                 base_path,
                                 selected_items,
                                 output_format,
                                 show_line_numbers,
-                                include_binary_files,
+                                ignore_config,
                             )?;
-                            files += f;
-                            folders += d;
+                            files += stats.files;
+                            folders += stats.folders;
                             output.push_str(&dir_contents);
                         }
                         _ => {} // Other formats handled elsewhere
@@ -250,5 +250,5 @@ pub fn process_directory(
         }
     }
 
-    Ok((files, folders))
+    Ok(CopyStats { files, folders })
 }

@@ -11,7 +11,7 @@ use crate::output::format::{is_binary_file, process_directory};
 pub fn format_json_output(
     selected_items: &HashSet<PathBuf>,
     current_dir: &PathBuf,
-    include_binary_files: bool,
+    ignore_config: &crate::models::IgnoreConfig,
 ) -> io::Result<(String, CopyStats)> {
     let mut output = String::new();
     let mut stats = CopyStats {
@@ -46,7 +46,7 @@ pub fn format_json_output(
 
             if path.is_file() {
                 if is_binary_file(path) {
-                    if include_binary_files {
+                    if ignore_config.include_binary_files {
                         output.push_str(&format!(
                             "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":true}}",
                             normalized_path
@@ -74,18 +74,18 @@ pub fn format_json_output(
                     normalized_path
                 ));
                 let mut dir_contents = String::new();
-                if let Ok((files, folders)) = process_directory(
+                if let Ok(dir_stats) = process_directory(
                     path,
                     &mut dir_contents,
                     current_dir,
                     selected_items,
                     &crate::models::OutputFormat::Json,
                     false, // JSON format doesn't use line numbers
-                    include_binary_files,
+                    ignore_config,
                 ) {
                     output.push_str(&dir_contents);
-                    stats.files += files;
-                    stats.folders += folders;
+                    stats.files += dir_stats.files;
+                    stats.folders += dir_stats.folders;
                 }
                 output.push_str("]}");
                 stats.folders += 1;

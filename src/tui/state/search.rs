@@ -1,11 +1,12 @@
 use glob::Pattern;
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-/// Manages search state and operations
+/// Manages search state and operations, along with item selection
 pub struct SearchState {
     pub search_query: String,
     pub is_searching: bool,
+    pub selected_items: HashSet<PathBuf>,
 }
 
 impl Default for SearchState {
@@ -13,6 +14,7 @@ impl Default for SearchState {
         Self {
             search_query: String::new(),
             is_searching: false,
+            selected_items: HashSet::new(),
         }
     }
 }
@@ -70,4 +72,82 @@ impl SearchState {
             Box::new(move |name: &str| name.to_lowercase().contains(&query))
         }
     }
+
+    /// Toggle selection status of a single item
+    pub fn toggle_selection(&mut self, path: PathBuf) {
+        if self.selected_items.contains(&path) {
+            self.selected_items.remove(&path);
+        } else {
+            self.selected_items.insert(path);
+        }
+    }
+
+    /// Toggle selection for all items in the current view (filtered or unfiltered)
+    pub fn toggle_select_all(&mut self, visible_items: &[PathBuf]) {
+        // If all visible items are selected, deselect them all
+        // Otherwise, select all visible items
+        let all_selected = visible_items.iter().all(|item| self.selected_items.contains(item));
+
+        if all_selected {
+            // Deselect all visible items
+            for item in visible_items {
+                self.selected_items.remove(item);
+            }
+        } else {
+            // Select all visible items
+            for item in visible_items {
+                self.selected_items.insert(item.clone());
+            }
+        }
+    }
+
+    /// Check if an item is selected
+    pub fn is_selected(&self, path: &Path) -> bool {
+        self.selected_items.contains(path)
+    }
+
+    /// Get the number of selected items
+    pub fn selected_count(&self) -> usize {
+        self.selected_items.len()
+    }
+
+    /// Clear all selections
+    pub fn clear_selections(&mut self) {
+        self.selected_items.clear();
+    }
+
+    /// Get a reference to the set of selected items
+    pub fn get_selected_items(&self) -> &HashSet<PathBuf> {
+        &self.selected_items
+    }
 }
+
+/// Performs a search on the list of items based on the query.
+/// Returns a vector of indices corresponding to the items in the original list that match the query.
+pub fn perform_search(items: &[PathBuf], query: &str) -> Vec<usize> {
+    if query.is_empty() {
+        // If query is empty, return all indices
+        return (0..items.len()).collect();
+    }
+
+    let lower_query = query.to_lowercase();
+    let mut filtered_indices = Vec::new();
+
+    for (index, item_path_buf) in items.iter().enumerate() {
+        // Explicitly borrow as Path to use its methods and satisfy the linter
+        let item_path: &Path = item_path_buf.as_path();
+
+        // Check filename containment (matching monolithic logic)
+        if let Some(filename) = item_path.file_name() {
+            if let Some(filename_str) = filename.to_str() {
+                if filename_str.to_lowercase().contains(&lower_query) {
+                    filtered_indices.push(index);
+                }
+            }
+        }
+    }
+
+    filtered_indices
+}
+
+// Potential future functions related to search state management could go here.

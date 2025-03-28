@@ -1,6 +1,6 @@
-mod file_list;
-mod modal;
-mod status_bar;
+pub mod file_list;
+pub mod modal;
+pub mod status_bar;
 
 pub use file_list::FileList;
 pub use modal::Modal;

@@ -12,7 +12,7 @@ pub fn format_markdown_output(
     selected_items: &HashSet<PathBuf>,
     current_dir: &PathBuf,
     show_line_numbers: bool,
-    include_binary_files: bool,
+    ignore_config: &crate::models::IgnoreConfig,
 ) -> io::Result<(String, CopyStats)> {
     let mut output = String::new();
     let mut stats = CopyStats {
@@ -39,7 +39,7 @@ pub fn format_markdown_output(
 
             if path.is_file() {
                 if is_binary_file(path) {
-                    if include_binary_files {
+                    if ignore_config.include_binary_files {
                         output.push_str(&format!("```{}\n<binary file>\n```\n\n", normalized_path));
                         stats.files += 1;
                     }
@@ -54,17 +54,17 @@ pub fn format_markdown_output(
             } else if path.is_dir() {
                 output.push_str(&format!("## {}/\n\n", normalized_path));
                 let mut dir_contents = String::new();
-                if let Ok((files, folders)) = process_directory(
+                if let Ok(dir_stats) = process_directory(
                     path,
                     &mut dir_contents,
                     current_dir,
                     selected_items,
                     &crate::models::OutputFormat::Markdown,
                     show_line_numbers,
-                    include_binary_files,
+                    ignore_config,
                 ) {
-                    stats.files += files;
-                    stats.folders += folders;
+                    stats.files += dir_stats.files;
+                    stats.folders += dir_stats.folders;
                 }
                 output.push_str(&dir_contents);
                 stats.folders += 1;

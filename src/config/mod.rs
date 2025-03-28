@@ -1,4 +1,5 @@
-use crate::models::{AppConfig, FullConfig};
+use crate::models::AppConfig;
+use crate::models::app_config::FullConfig;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

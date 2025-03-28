@@ -1,4 +1,5 @@
 use crate::models::IgnoreConfig;
+use crate::tui::state::AppState;
 use ignore::{gitignore::GitignoreBuilder, Match};
 use std::collections::HashSet;
 use std::fs;
@@ -85,7 +86,7 @@ pub fn is_path_ignored_for_iterative(
     }
     if ignore_config.use_default_ignores {
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if crate::models::DEFAULT_IGNORED_DIRS.contains(&name) {
+            if crate::models::constants::DEFAULT_IGNORED_DIRS.contains(&name) {
                 return true;
             }
         }
@@ -208,4 +209,51 @@ pub fn is_binary_file(path: &Path) -> bool {
         return binary_files.contains(&name);
     }
     false
+}
+
+// NEW FUNCTION: recursively search for items matching the query up to a given depth.
+// This generic function uses a custom matcher to determine if a file/directory matches.
+pub fn recursive_search_helper_generic<F>(
+    app_state: &AppState,
+    path: &Path,
+    depth: usize,
+    max_depth: usize,
+    matcher: &F,
+    results: &mut HashSet<PathBuf>,
+) -> bool
+where
+    F: Fn(&str) -> bool + ?Sized,
+{
+    if app_state.is_path_ignored(path) {
+        return false;
+    }
+    let mut found = false;
+    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+        if matcher(name) {
+            results.insert(path.to_path_buf());
+            found = true;
+        }
+    }
+    if path.is_dir() && depth < max_depth {
+        if let Ok(entries) = fs::read_dir(path) {
+            let mut children: Vec<_> = entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
+            children.sort();
+            for child in children {
+                if recursive_search_helper_generic(
+                    app_state,
+                    &child,
+                    depth + 1,
+                    max_depth,
+                    matcher,
+                    results,
+                ) {
+                    found = true;
+                }
+            }
+        }
+        if found {
+            results.insert(path.to_path_buf());
+        }
+    }
+    found
 }

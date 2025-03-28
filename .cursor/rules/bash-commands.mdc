@@ -1,0 +1,6 @@
+---
+description: bash shell commands
+globs: 
+alwaysApply: false
+---
+When responding with bash shell commands, make them 'bash 1liners' aka long lines of text, do not split lines using the `\`

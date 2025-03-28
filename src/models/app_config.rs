@@ -1,14 +1,29 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::path::PathBuf;
+// use std::collections::HashSet;
+// use std::path::PathBuf;
+use crate::models::constants::DEFAULT_IGNORED_DIRS;
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AppConfig {
     pub default_format: Option<String>,
     pub default_gitignore: Option<bool>,
     pub default_ignore: Option<Vec<String>>,
     pub default_line_numbers: Option<bool>,
     pub default_recursive: Option<bool>,
+    pub selection_limit: Option<usize>,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            default_format: Some("llm".to_string()),
+            default_gitignore: Some(true),
+            default_ignore: Some(DEFAULT_IGNORED_DIRS.iter().map(|s| s.to_string()).collect()),
+            default_line_numbers: Some(false),
+            default_recursive: Some(false),
+            selection_limit: None,
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]

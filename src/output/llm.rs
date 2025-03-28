@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use itertools::Itertools;
 
 use crate::fs::normalize_path;
-use crate::models::{CopyStats, FileDependencies, Node};
+use crate::models::CopyStats;
+use crate::models::app_config::{FileDependencies, Node};
 use crate::output::format::is_binary_file;
 use crate::output::get_language_name;
 
@@ -14,6 +15,7 @@ use crate::output::get_language_name;
 pub fn format_llm_output(
     selected_items: &HashSet<PathBuf>,
     current_dir: &PathBuf,
+    _ignore_config: &crate::models::IgnoreConfig,
 ) -> io::Result<(String, CopyStats)> {
     let mut output = String::new();
     let mut stats = CopyStats {
@@ -127,7 +129,7 @@ pub fn format_llm_output(
 }
 
 // Helper function to analyze dependencies between files
-fn analyze_dependencies(
+pub fn analyze_dependencies(
     file_contents: &[(String, String)],
     _base_dir: &Path,
 ) -> HashMap<String, FileDependencies> {
@@ -392,7 +394,7 @@ fn count_files(node: &Node) -> usize {
 }
 
 // Internal function to format LLM output
-fn format_llm_output_internal(
+pub fn format_llm_output_internal(
     output: &mut String,
     file_contents: &[(String, String)],
     root_path: &Path,

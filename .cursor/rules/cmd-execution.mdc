@@ -1,0 +1,6 @@
+---
+description: When executing command line cmds
+globs: 
+alwaysApply: false
+---
+Use the bash shell `/bin/bash` (or git bash shell `C:/Program Files/Git/bin/bash.exe`) when agents run commands, do NOT USE /usr/bin/pwsh or pwsh.

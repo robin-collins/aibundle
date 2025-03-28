@@ -6,19 +6,23 @@ use std::sync::mpsc;
 use std::thread;
 
 use crate::fs as crate_fs;
-use crate::models::IgnoreConfig;
 use crate::tui::state::AppState;
 
 /// Handles selection state operations
 pub struct SelectionState {
     pub list_state: ratatui::widgets::ListState,
+    // Tracking selected paths in a HashSet for efficient lookups
+    pub local_selected: HashSet<PathBuf>,
 }
 
 impl Default for SelectionState {
     fn default() -> Self {
         let mut list_state = ratatui::widgets::ListState::default();
         list_state.select(Some(0));
-        Self { list_state }
+        Self {
+            list_state,
+            local_selected: HashSet::new(),
+        }
     }
 }
 
@@ -67,33 +71,37 @@ impl SelectionState {
                 let path_clone = path.clone();
                 let selection_limit = app_state.selection_limit;
 
-                thread::spawn(move || {
-                    let result = crate_fs::count_selection_items_async(
-                        &path_clone,
-                        &base_path,
-                        &ignore_config,
-                        selection_limit,
-                    );
-                    let _ = tx.send(result);
-                });
+                // Use IgnoreConfig to check if path should be ignored before counting
+                if !app_state.is_path_ignored(&path) {
+                    thread::spawn(move || {
+                        let result = crate_fs::count_selection_items_async(
+                            &path_clone,
+                            &base_path,
+                            &ignore_config,
+                            selection_limit,
+                        );
+                        let _ = tx.send(result);
+                    });
 
-                app_state.pending_count = Some(rx);
-                app_state.counting_path = Some(path);
-                app_state.is_counting = true;
+                    app_state.pending_count = Some(rx);
+                    app_state.counting_path = Some(path);
+                    app_state.is_counting = true;
+                }
             }
         }
 
         Ok(())
     }
 
+
     pub fn update_folder_selection(
         app_state: &mut AppState,
-        path: &PathBuf,
+        path: &Path,
         selected: bool,
     ) -> io::Result<()> {
         if path.is_dir() {
             if selected {
-                app_state.selected_items.insert(path.clone());
+                app_state.selected_items.insert(path.to_path_buf());
             } else {
                 app_state.selected_items.remove(path);
             }
@@ -111,7 +119,7 @@ impl SelectionState {
                 }
             }
         } else if selected {
-            app_state.selected_items.insert(path.clone());
+            app_state.selected_items.insert(path.to_path_buf());
         } else {
             app_state.selected_items.remove(path);
         }
@@ -120,30 +128,37 @@ impl SelectionState {
     }
 
     pub fn toggle_select_all(&mut self, app_state: &mut AppState) -> io::Result<()> {
+        // Check if all items are already selected
         let all_selected = app_state
             .filtered_items
             .iter()
-            .filter(|path| !path.ends_with(".."))
+            .filter(|path| !path.file_name().map_or(false, |n| n == ".."))
             .all(|path| app_state.selected_items.contains(path));
 
         if all_selected {
             app_state.selected_items.clear();
         } else {
+            // Collect paths to process before modifying app_state to avoid borrow issues
+            let paths_to_process: Vec<PathBuf> = app_state
+                .filtered_items
+                .iter()
+                .filter(|path| !path.file_name().map_or(false, |n| n == ".."))
+                .filter(|path| path.is_dir() &&
+                        (app_state.recursive || app_state.expanded_folders.contains(*path)))
+                .cloned()
+                .collect();
+
             // Select all items in filtered_items, except ".."
             for path in &app_state.filtered_items {
                 if path.file_name().map_or(false, |n| n == "..") {
                     continue;
                 }
-
                 app_state.selected_items.insert(path.clone());
+            }
 
-                // If this is a directory, also select all its children
-                // but only if we're in recursive mode or the folder is expanded
-                if path.is_dir()
-                    && (app_state.recursive || app_state.expanded_folders.contains(path))
-                {
-                    Self::update_folder_selection(app_state, path, true)?;
-                }
+            // Process collected directory paths
+            for path in &paths_to_process {
+                Self::update_folder_selection(app_state, path, true)?;
             }
 
             // Count total selected items for the warning
@@ -154,10 +169,13 @@ impl SelectionState {
                 let ignore_config = app_state.ignore_config.clone();
                 let selection_limit = app_state.selection_limit;
 
+                // Clone before moving into the closure
+                let counting_path_for_closure = counting_path.clone();
+
                 // Spawn a background thread to count items
                 thread::spawn(move || {
                     let result = crate_fs::count_selection_items_async(
-                        &counting_path,
+                        &counting_path_for_closure,
                         &base_dir,
                         &ignore_config,
                         selection_limit,
