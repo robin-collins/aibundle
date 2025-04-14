@@ -6,12 +6,11 @@ use std::path::{Path, PathBuf};
 use itertools::Itertools;
 
 use crate::fs::normalize_path;
-use crate::models::CopyStats;
 use crate::models::app_config::{FileDependencies, Node};
+use crate::models::CopyStats;
 use crate::output::format::is_binary_file;
 use crate::output::get_language_name;
 
-/// Format selected items as LLM (AI-friendly markdown)
 pub fn format_llm_output(
     selected_items: &HashSet<PathBuf>,
     current_dir: &PathBuf,
@@ -407,7 +406,7 @@ pub fn format_llm_output_internal(
     // General project information
     let total_files = count_files(root_node);
     let selected_files = file_contents.len();
-    output.push_str("## 📦 GENERAL INFORMATION\n\n");
+    output.push_str("## GENERAL INFORMATION\n\n");
     output.push_str(&format!("- **Project path**: `{}`\n", root_path.display()));
     output.push_str(&format!("- **Total files**: {}\n", total_files));
     output.push_str(&format!(
@@ -439,7 +438,7 @@ pub fn format_llm_output_internal(
     output.push('\n');
 
     // Project structure
-    output.push_str("## 🗂️ PROJECT STRUCTURE\n\n");
+    output.push_str("## PROJECT STRUCTURE\n\n");
     output.push_str("```\n");
     output.push_str(&format!("{}\n", root_path.display()));
     output.push_str(&write_file_tree_to_string(root_node, "", true));
@@ -453,7 +452,7 @@ pub fn format_llm_output_internal(
         .unwrap_or_default();
 
     if !main_dirs.is_empty() {
-        output.push_str("### 📂 Main Components\n\n");
+        output.push_str("### Main Components\n\n");
         for dir_node in main_dirs {
             let dir_files: Vec<_> = file_contents
                 .iter()
@@ -491,7 +490,7 @@ pub fn format_llm_output_internal(
     }
 
     // File relationship graph
-    output.push_str("## 🔄 FILE RELATIONSHIPS\n\n");
+    output.push_str("## FILE RELATIONSHIPS\n\n");
 
     // Find most referenced files
     let mut referenced_by: HashMap<String, Vec<String>> = HashMap::new();
@@ -565,7 +564,7 @@ pub fn format_llm_output_internal(
     output.push('\n');
 
     // File contents
-    output.push_str("## 🔄 FILE CONTENTS\n\n");
+    output.push_str("## FILE CONTENTS\n\n");
     output.push_str("*Note: The content below includes only selected files.*\n\n");
 
     for (path, content) in file_contents {

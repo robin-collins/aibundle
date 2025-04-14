@@ -1,3 +1,4 @@
+// Monolithic version of aibundle fs/mod.rs
 use std::io;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -25,4 +26,4 @@ fn is_excluded(path: &std::path::Path) -> bool {
     let excluded = ["node_modules", ".git", "target"];
     path.components()
         .any(|c| excluded.contains(&c.as_os_str().to_str().unwrap_or("")))
-} 
+}

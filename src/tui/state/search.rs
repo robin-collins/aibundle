@@ -2,21 +2,11 @@ use glob::Pattern;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-/// Manages search state and operations, along with item selection
+#[derive(Default)]
 pub struct SearchState {
     pub search_query: String,
     pub is_searching: bool,
     pub selected_items: HashSet<PathBuf>,
-}
-
-impl Default for SearchState {
-    fn default() -> Self {
-        Self {
-            search_query: String::new(),
-            is_searching: false,
-            selected_items: HashSet::new(),
-        }
-    }
 }
 
 impl SearchState {
@@ -73,7 +63,6 @@ impl SearchState {
         }
     }
 
-    /// Toggle selection status of a single item
     pub fn toggle_selection(&mut self, path: PathBuf) {
         if self.selected_items.contains(&path) {
             self.selected_items.remove(&path);
@@ -82,11 +71,12 @@ impl SearchState {
         }
     }
 
-    /// Toggle selection for all items in the current view (filtered or unfiltered)
     pub fn toggle_select_all(&mut self, visible_items: &[PathBuf]) {
         // If all visible items are selected, deselect them all
         // Otherwise, select all visible items
-        let all_selected = visible_items.iter().all(|item| self.selected_items.contains(item));
+        let all_selected = visible_items
+            .iter()
+            .all(|item| self.selected_items.contains(item));
 
         if all_selected {
             // Deselect all visible items
@@ -101,29 +91,23 @@ impl SearchState {
         }
     }
 
-    /// Check if an item is selected
     pub fn is_selected(&self, path: &Path) -> bool {
         self.selected_items.contains(path)
     }
 
-    /// Get the number of selected items
     pub fn selected_count(&self) -> usize {
         self.selected_items.len()
     }
 
-    /// Clear all selections
     pub fn clear_selections(&mut self) {
         self.selected_items.clear();
     }
 
-    /// Get a reference to the set of selected items
     pub fn get_selected_items(&self) -> &HashSet<PathBuf> {
         &self.selected_items
     }
 }
 
-/// Performs a search on the list of items based on the query.
-/// Returns a vector of indices corresponding to the items in the original list that match the query.
 pub fn perform_search(items: &[PathBuf], query: &str) -> Vec<usize> {
     if query.is_empty() {
         // If query is empty, return all indices

@@ -7,7 +7,6 @@ use crate::fs::normalize_path;
 use crate::models::CopyStats;
 use crate::output::format::{format_file_content, is_binary_file, process_directory};
 
-/// Format selected items as Markdown
 pub fn format_markdown_output(
     selected_items: &HashSet<PathBuf>,
     current_dir: &PathBuf,

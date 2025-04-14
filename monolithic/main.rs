@@ -1,3 +1,4 @@
+// Monolithic version of aibundle main.rs
 use clap::Parser;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -61,7 +62,6 @@ struct FullConfig {
     tui: Option<ModeConfig>,
 }
 
-/// Command-line options parsed via clap.
 #[derive(Parser, Debug)]
 #[command(name = "aibundle", version = VERSION)]
 #[command(about = "AIBUNDLE: A CLI & TUI file aggregator and formatter")]
@@ -75,47 +75,36 @@ EXAMPLES:
     aibundle --files \"*.rs\"                              # CLI mode, current folder, files that match \"*.rs\"
     aibundle --files \"*.rs\" /mnt/d/projects/rust_aiformat  # CLI mode, starting in specified directory")]
 struct CliOptions {
-    /// Optional positional source directory.
     #[arg(value_name = "SOURCE_DIR", index = 1)]
     source_dir_pos: Option<String>,
 
-    /// Write output to file instead of clipboard
     #[arg(short = 'o', long)]
     output_file: Option<String>,
 
-    /// Write output to console instead of clipboard
     #[arg(short = 'p', long)]
     output_console: bool,
 
-    /// File pattern to match (e.g., "*.rs" or "*.{rs,toml}")
     #[arg(short = 'f', long)]
     files: Option<String>,
 
-    /// Search pattern to match file contents (e.g., "test" to match files containing 'test')
     #[arg(short = 's', long)]
     search: Option<String>,
 
-    /// Output format to use [possible values: markdown, xml, json, llm]
     #[arg(short = 'm', long, value_parser = ["markdown", "xml", "json", "llm"], default_value = "llm")]
     format: String,
 
-    /// Source directory to start from (overridden by the positional SOURCE_DIR if supplied)
     #[arg(short = 'd', long, default_value = ".")]
     source_dir: String,
 
-    /// Include subfolders (recursively) in CLI mode
     #[arg(short = 'r', long, default_value = "false")]
     recursive: bool,
 
-    /// Show line numbers in output (ignored in JSON format)
     #[arg(short = 'n', long, default_value = "false")]
     line_numbers: bool,
 
-    /// Use .gitignore files for filtering
     #[arg(short = 'g', long, default_value = "true")]
     gitignore: bool,
 
-    /// Ignore patterns (comma-separated list)
     #[arg(
         short = 'i',
         long,
@@ -124,7 +113,6 @@ struct CliOptions {
     )]
     ignore: Vec<String>,
 
-    /// Save current settings to .aibundle.config
     #[arg(short = 'S', long)]
     save_config: bool,
 }
@@ -1292,7 +1280,6 @@ impl App {
         Ok((file_count, folder_count))
     }
 
-    /// Updated method that **bails early** when partial count exceeds SELECTION_LIMIT.
     fn count_selection_items(&self, path: &Path) -> io::Result<usize> {
         if path.is_file() {
             return Ok(1);
@@ -2827,8 +2814,6 @@ fn is_wsl() -> bool {
         .unwrap_or(false)
 }
 
-/// Asynchronous helper replicating `count_selection_items` logic without blocking the UI.
-/// Now accepts a `selection_limit` parameter.
 fn count_selection_items_async(
     path: &Path,
     base_dir: &PathBuf,
@@ -2870,7 +2855,6 @@ fn count_selection_items_async(
     }
 }
 
-/// Returns the config file path in the user's home directory.
 fn config_file_path() -> io::Result<PathBuf> {
     let home = if cfg!(windows) {
         std::env::var("USERPROFILE").map(PathBuf::from)
@@ -2881,7 +2865,6 @@ fn config_file_path() -> io::Result<PathBuf> {
     Ok(home.join(".aibundle.config.toml"))
 }
 
-/// Loads a config file from the user's home directory if present.
 fn load_config() -> io::Result<FullConfig> {
     let config_path = config_file_path()?;
     if config_path.exists() {
@@ -2894,7 +2877,6 @@ fn load_config() -> io::Result<FullConfig> {
     }
 }
 
-/// Options for running in CLI mode
 struct CliModeOptions<'a> {
     files_pattern: Option<&'a str>,
     source_dir: &'a str,
@@ -2907,7 +2889,6 @@ struct CliModeOptions<'a> {
     output_console: bool,
 }
 
-/// This function runs the tool in CLI mode, bypassing the TUI entirely.
 fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
     let mut app = App::new();
     app.current_dir = PathBuf::from(options.source_dir);

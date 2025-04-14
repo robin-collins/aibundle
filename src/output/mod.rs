@@ -15,7 +15,6 @@ use std::collections::HashSet;
 use std::io;
 use std::path::PathBuf;
 
-/// Main dispatcher function for formatting output based on the selected format.
 pub fn format_selected_items(
     selected_items: &HashSet<PathBuf>,
     base_dir: &PathBuf,
@@ -24,9 +23,7 @@ pub fn format_selected_items(
     ignore_config: &IgnoreConfig,
 ) -> io::Result<(String, CopyStats)> {
     match output_format {
-        OutputFormat::Json => {
-            format_json_output(selected_items, base_dir, ignore_config)
-        }
+        OutputFormat::Json => format_json_output(selected_items, base_dir, ignore_config),
         OutputFormat::Markdown => {
             format_markdown_output(selected_items, base_dir, show_line_numbers, ignore_config)
         }

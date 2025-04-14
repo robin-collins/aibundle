@@ -4,7 +4,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem},
     Frame,
 };
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::models::constants::ICONS;
 use crate::tui::state::{AppState, SelectionState};
@@ -21,7 +21,7 @@ impl FileList {
         f: &mut Frame,
         area: Rect,
         app_state: &AppState,
-        selection_state: &SelectionState,
+        selection_state: &mut SelectionState,
     ) {
         let display_items = app_state.get_display_items();
 
@@ -60,7 +60,9 @@ impl FileList {
 
                 let is_selected_line = selection_state.list_state.selected() == Some(index);
                 let style = if is_selected_line {
-                    Style::default().bg(Color::Gray).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .bg(Color::Gray)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default()
                 };
@@ -69,12 +71,10 @@ impl FileList {
             })
             .collect();
 
-        let list_widget = List::new(items)
-            .block(Block::default().title("Files").borders(Borders::ALL));
+        let list_widget =
+            List::new(items).block(Block::default().title("Files").borders(Borders::ALL));
 
-        let mut list_state = app_state.list_state.clone();
-
-        f.render_stateful_widget(list_widget, area, &mut list_state);
+        f.render_stateful_widget(list_widget, area, &mut selection_state.list_state);
     }
 
     fn get_icon(path: &Path) -> &'static str {

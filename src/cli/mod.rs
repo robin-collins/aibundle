@@ -1,3 +1,4 @@
+// src/cli/mod.rs
 mod options;
 
 pub use options::run_cli_mode;

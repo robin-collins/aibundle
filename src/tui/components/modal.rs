@@ -1,4 +1,4 @@
-use std::time::Instant;
+use crate::models::OutputFormat;
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
     Frame,
 };
-use crate::models::OutputFormat;
+use std::time::Instant;
 
 pub struct Modal {
     pub message: String,
@@ -135,9 +135,7 @@ Any key    - Close help"
             .style(Style::default().fg(Color::Yellow));
 
         let text = Text::from(self.message.as_str());
-        let paragraph = Paragraph::new(text)
-            .wrap(Wrap { trim: true })
-            .block(block);
+        let paragraph = Paragraph::new(text).wrap(Wrap { trim: true }).block(block);
 
         f.render_widget(Clear, area);
         f.render_widget(paragraph, area);

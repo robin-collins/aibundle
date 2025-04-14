@@ -16,7 +16,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            default_format: Some("llm".to_string()),
+            default_format: Some("xml".to_string()),
             default_gitignore: Some(true),
             default_ignore: Some(DEFAULT_IGNORED_DIRS.iter().map(|s| s.to_string()).collect()),
             default_line_numbers: Some(false),

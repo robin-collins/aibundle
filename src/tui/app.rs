@@ -132,9 +132,9 @@ impl App {
             terminal.draw(|f| {
                 self.main_view.render(
                     f,
-                    f.area(),
+                    f.size(),
                     &self.state,
-                    &self.selection_state,
+                    &mut self.selection_state,
                     &self.search_state,
                 )
             })?;

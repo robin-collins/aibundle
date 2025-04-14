@@ -1,52 +1,63 @@
-use crate::tui::state::{AppState, SearchState};
-use crate::tui::handlers::FileOpsHandler; // Need FileOpsHandler for update_search
+use crate::tui::handlers::FileOpsHandler;
+use crate::tui::state::{AppState, SearchState, SelectionState};
 use std::io;
 
 pub struct SearchHandler;
 
 impl SearchHandler {
-    /// Toggles the search mode on/off.
-    pub fn toggle_search(app_state: &mut AppState, search_state: &mut SearchState) {
-        app_state.is_searching = !app_state.is_searching;
-        if !app_state.is_searching {
-            // Exiting search mode
-            search_state.search_query.clear();
-            // Reset filtered items to the full list when exiting search
-            app_state.filtered_items = app_state.items.clone();
-            // TODO: Consider if selection needs adjustment when exiting search
+    pub fn toggle_search(
+        app_state: &mut AppState,
+        search_state: &mut SearchState,
+        selection_state: &mut SelectionState,
+    ) -> io::Result<()> {
+        if app_state.is_searching {
+            // We are currently searching, so exit
+            // Update search results based on the final query *before* changing mode
+            FileOpsHandler::update_search(app_state, search_state)?;
+            // Reset selection to the top of the filtered list
+            selection_state.list_state.select(Some(0));
+            app_state.is_searching = false; // Change mode *after* updates
         } else {
-            // Entering search mode - input will be handled by handle_search_input
-            // Ensure filtered_items is initially empty or reflects current items before filtering?
-            // update_search will handle the filtering based on the query as it's typed.
+            // We are not searching, so enter
+            app_state.is_searching = true; // Change mode
+                                           // No update needed here, input will trigger updates
         }
+        Ok(())
     }
 
-    /// Handles character input or backspace during search.
     pub fn handle_search_input(
         app_state: &mut AppState,
         search_state: &mut SearchState,
+        selection_state: &mut SelectionState,
         input: Option<char>,
-    ) -> io::Result<()> { // Return io::Result because update_search returns it
+    ) -> io::Result<()> {
         match input {
             Some(c) => {
                 search_state.search_query.push(c);
             }
-            None => { // Represents Backspace
+            None => {
+                // Represents Backspace
                 search_state.search_query.pop();
             }
         }
         // Update the filtered list based on the new query
         FileOpsHandler::update_search(app_state, search_state)?;
+        // Reset selection to top after each input change during search
+        selection_state.list_state.select(Some(0));
         Ok(())
     }
 
-     /// Clears the current search query and results.
-     pub fn clear_search(app_state: &mut AppState, search_state: &mut SearchState) -> io::Result<()> {
+    pub fn clear_search(
+        app_state: &mut AppState,
+        search_state: &mut SearchState,
+        selection_state: &mut SelectionState,
+    ) -> io::Result<()> {
         search_state.search_query.clear();
         app_state.is_searching = false; // Ensure search mode is off
-        // Reload items or just reset filtered_items? Resetting is simpler.
-        app_state.filtered_items = app_state.items.clone();
-        // FileOpsHandler::load_items(app_state)?; // Alternative: reload everything
+                                        // Update search results (will show full list as query is empty)
+        FileOpsHandler::update_search(app_state, search_state)?;
+        // Reset selection to the top
+        selection_state.list_state.select(Some(0));
         Ok(())
-     }
+    }
 }

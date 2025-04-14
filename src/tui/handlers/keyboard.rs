@@ -40,21 +40,43 @@ impl KeyboardHandler {
         if app_state.is_searching {
             match key_event.code {
                 KeyCode::Esc => {
-                    SearchHandler::toggle_search(app_state, search_state);
-                    Ok(())
+                    SearchHandler::clear_search(app_state, search_state, selection_state)
                 }
                 KeyCode::Enter => {
-                    SearchHandler::toggle_search(app_state, search_state);
-                    Ok(())
+                    SearchHandler::toggle_search(app_state, search_state, selection_state)
                 }
-                KeyCode::Backspace => SearchHandler::handle_search_input(app_state, search_state, None),
-                KeyCode::Char(c) => SearchHandler::handle_search_input(app_state, search_state, Some(c)),
+                KeyCode::Backspace => SearchHandler::handle_search_input(
+                    app_state,
+                    search_state,
+                    selection_state,
+                    None,
+                ),
+                KeyCode::Char(c) => {
+                    if c == '/' {
+                        SearchHandler::toggle_search(app_state, search_state, selection_state)
+                    } else {
+                        SearchHandler::handle_search_input(
+                            app_state,
+                            search_state,
+                            selection_state,
+                            Some(c),
+                        )
+                    }
+                }
                 _ => Ok(()),
             }
         } else {
             match key_event.code {
-                KeyCode::Char('q') => { app_state.quit = true; Ok(()) }
-                KeyCode::Char('c') if key_event.modifiers == KeyModifiers::CONTROL => { app_state.quit = true; Ok(()) }
+                KeyCode::Char('q') => {
+                    ClipboardHandler::copy_selected_to_clipboard(app_state)?;
+                    app_state.quit = true;
+                    Ok(())
+                }
+                KeyCode::Char('c') if key_event.modifiers == KeyModifiers::CONTROL => {
+                    ClipboardHandler::copy_selected_to_clipboard(app_state)?;
+                    app_state.quit = true;
+                    Ok(())
+                }
                 KeyCode::Char('j') | KeyCode::Down => {
                     let total = app_state.get_display_items().len();
                     SelectionState::move_selection(selection_state, 1_i32, total);
@@ -75,10 +97,15 @@ impl KeyboardHandler {
                     SelectionState::move_selection(selection_state, -10_i32, total);
                     Ok(())
                 }
-                KeyCode::Home => { selection_state.list_state.select(Some(0)); Ok(()) }
+                KeyCode::Home => {
+                    selection_state.list_state.select(Some(0));
+                    Ok(())
+                }
                 KeyCode::End => {
                     let total = app_state.get_display_items().len();
-                    selection_state.list_state.select(Some(total.saturating_sub(1)));
+                    selection_state
+                        .list_state
+                        .select(Some(total.saturating_sub(1)));
                     Ok(())
                 }
                 KeyCode::Enter => FileOpsHandler::handle_enter(app_state, selection_state),
@@ -87,11 +114,11 @@ impl KeyboardHandler {
                     SelectionState::toggle_select_all(selection_state, app_state);
                     Ok(())
                 }
-                KeyCode::Char('y') => ClipboardHandler::copy_selected_to_clipboard(app_state),
+                KeyCode::Char('c') => ClipboardHandler::copy_selected_to_clipboard(app_state),
                 KeyCode::Char('d') => FileOpsHandler::toggle_default_ignores(app_state),
                 KeyCode::Char('g') => FileOpsHandler::toggle_gitignore(app_state),
                 KeyCode::Char('b') => FileOpsHandler::toggle_binary_files(app_state),
-                KeyCode::Char('m') => FileOpsHandler::toggle_output_format(app_state),
+                KeyCode::Char('f') => FileOpsHandler::toggle_output_format(app_state),
                 KeyCode::Char('n') => FileOpsHandler::toggle_line_numbers(app_state),
                 KeyCode::Char('r') => {
                     app_state.recursive = !app_state.recursive;
@@ -101,16 +128,18 @@ impl KeyboardHandler {
                         FileOpsHandler::load_items_nonrecursive(app_state)?;
                     }
                     selection_state.list_state.select(Some(0));
-                    if app_state.is_searching {
+                    if !search_state.search_query.is_empty() {
                         FileOpsHandler::update_search(app_state, search_state)?;
                     }
                     Ok(())
                 }
                 KeyCode::Char('/') => {
-                    SearchHandler::toggle_search(app_state, search_state);
-                    Ok(())
+                    SearchHandler::toggle_search(app_state, search_state, selection_state)
                 }
                 KeyCode::Tab => FileOpsHandler::toggle_folder_expansion(app_state, selection_state),
+                KeyCode::BackTab => {
+                    FileOpsHandler::toggle_folder_expansion_recursive(app_state, selection_state)
+                }
                 KeyCode::Char('S') => FileOpsHandler::save_config(app_state),
                 KeyCode::F(1) | KeyCode::Char('?') => FileOpsHandler::show_help(app_state),
                 _ => Ok(()),

@@ -4,17 +4,13 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum OutputFormat {
     Xml,
     Markdown,
     Json,
+    #[default]
     Llm,
-}
-
-impl Default for OutputFormat {
-    fn default() -> Self {
-        OutputFormat::Llm
-    }
 }
 
 impl fmt::Display for OutputFormat {

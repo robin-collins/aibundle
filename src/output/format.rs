@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -117,20 +117,18 @@ pub fn process_directory(
                             ));
                             files += 1;
                         }
-                    } else {
-                        if let Ok(content) = fs::read_to_string(&entry) {
-                            let escaped_content = content
-                                .replace('\\', "\\\\")
-                                .replace('\"', "\\\"")
-                                .replace('\n', "\\n")
-                                .replace('\r', "\\r");
-                            output.push_str(&format!(
-                                "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
-                                normalized_path,
-                                escaped_content
-                            ));
-                            files += 1;
-                        }
+                    } else if let Ok(content) = fs::read_to_string(&entry) {
+                        let escaped_content = content
+                            .replace('\\', "\\\\")
+                            .replace('\"', "\\\"")
+                            .replace('\n', "\\n")
+                            .replace('\r', "\\r");
+                        output.push_str(&format!(
+                            "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
+                            normalized_path,
+                            escaped_content
+                        ));
+                        files += 1;
                     }
                 } else if entry.is_dir() {
                     output.push_str(&format!(

@@ -1,8 +1,10 @@
+use crate::clipboard::copy_to_clipboard as copy_text_to_clipboard;
 use crate::fs::add_items_iterative;
-use crate::models::{app_config::Node, constants, AppConfig, CopyStats, IgnoreConfig, OutputFormat,};
+use crate::models::{
+    app_config::Node, constants, AppConfig, CopyStats, IgnoreConfig, OutputFormat,
+};
 use crate::output::format_selected_items;
 use crate::tui::components::modal::Modal;
-use crate::clipboard::copy_to_clipboard as copy_text_to_clipboard;
 use ignore::{gitignore::GitignoreBuilder, Match};
 use ratatui::widgets::ListState;
 use std::collections::HashSet;
@@ -11,7 +13,6 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Instant;
 
-/// Enum to represent the type of message to display
 #[derive(Clone, Debug)]
 pub enum MessageType {
     Info,
@@ -20,7 +21,6 @@ pub enum MessageType {
     Error,
 }
 
-/// Struct to hold message details
 #[derive(Clone, Debug)]
 pub struct AppMessage {
     pub content: String,
@@ -38,7 +38,6 @@ impl AppMessage {
     }
 }
 
-/// Core application state, separated from behavior
 pub struct AppState {
     // File system state
     pub current_dir: PathBuf,
@@ -160,7 +159,11 @@ impl AppState {
             }
         }
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if self.ignore_config.extra_ignore_patterns.contains(&name.to_string()) {
+            if self
+                .ignore_config
+                .extra_ignore_patterns
+                .contains(&name.to_string())
+            {
                 return true;
             }
         }
@@ -169,10 +172,8 @@ impl AppState {
             let mut dir = self.current_dir.clone();
             while let Some(parent) = dir.parent() {
                 let gitignore = dir.join(".gitignore");
-                if gitignore.exists() {
-                    if builder.add(gitignore).is_some() {
-                        break;
-                    }
+                if gitignore.exists() && builder.add(gitignore).is_some() {
+                    break;
                 }
                 if dir.parent() == Some(&dir) {
                     break;
@@ -191,10 +192,8 @@ impl AppState {
 
     pub fn update_search(&mut self) {
         if self.is_searching && !self.search_query.is_empty() {
-            let filtered_indices = crate::tui::state::search::perform_search(
-                &self.items,
-                &self.search_query,
-            );
+            let filtered_indices =
+                crate::tui::state::search::perform_search(&self.items, &self.search_query);
             self.filtered_items = filtered_indices
                 .iter()
                 .filter_map(|&idx| self.items.get(idx).cloned())
@@ -205,14 +204,12 @@ impl AppState {
         let filtered_len = self.filtered_items.len();
         if filtered_len == 0 {
             self.list_state.select(None);
-        } else {
-            if let Some(selected) = self.list_state.selected() {
-                if selected >= filtered_len {
-                    self.list_state.select(Some(0));
-                }
-            } else {
+        } else if let Some(selected) = self.list_state.selected() {
+            if selected >= filtered_len {
                 self.list_state.select(Some(0));
             }
+        } else {
+            self.list_state.select(Some(0));
         }
     }
 
@@ -233,7 +230,8 @@ impl AppState {
         let current_selection = self.list_state.selected();
         if let Some(selected) = current_selection {
             if selected >= self.items.len() {
-                self.list_state.select(if self.items.is_empty() { None } else { Some(0) });
+                self.list_state
+                    .select(if self.items.is_empty() { None } else { Some(0) });
             }
         } else if !self.items.is_empty() {
             self.list_state.select(Some(0));
@@ -251,20 +249,32 @@ impl AppState {
             &self.ignore_config,
         )?;
 
-        copy_text_to_clipboard(&formatted_string)?;
-
-        self.last_copy_stats = Some(stats.clone());
-        let line_count = formatted_string.lines().count();
-        let byte_size = formatted_string.len();
-        self.modal = Some(Modal::copy_stats(
-            stats.files,
-            stats.folders,
-            line_count,
-            byte_size,
-            &self.output_format,
-        ));
-
-        Ok(())
+        match copy_text_to_clipboard(&formatted_string) {
+            Ok(_) => {
+                self.last_copy_stats = Some(stats.clone());
+                let line_count = formatted_string.lines().count();
+                let byte_size = formatted_string.len();
+                self.modal = Some(Modal::copy_stats(
+                    stats.files,
+                    stats.folders,
+                    line_count,
+                    byte_size,
+                    &self.output_format,
+                ));
+                self.set_message(
+                    "Copied selected items to clipboard successfully.".to_string(),
+                    MessageType::Info,
+                );
+                Ok(())
+            }
+            Err(e) => {
+                self.set_message(
+                    format!("Failed to copy to clipboard: {}", e),
+                    MessageType::Error,
+                );
+                Err(e)
+            }
+        }
     }
 
     pub fn move_selection(&mut self, delta: i32) {
@@ -274,20 +284,25 @@ impl AppState {
             return;
         }
         let current_selection = self.list_state.selected().unwrap_or(0);
-        let new_selected = (current_selection as i32 + delta).clamp(0, items_len as i32 - 1) as usize;
+        let new_selected =
+            (current_selection as i32 + delta).clamp(0, items_len as i32 - 1) as usize;
         self.list_state.select(Some(new_selected));
     }
 
     pub fn select_first(&mut self) {
-        self.list_state.select(if self.filtered_items.is_empty() { None } else { Some(0) });
+        self.list_state.select(if self.filtered_items.is_empty() {
+            None
+        } else {
+            Some(0)
+        });
     }
 
     pub fn select_last(&mut self) {
         let len = self.filtered_items.len();
-        self.list_state.select(if len == 0 { None } else { Some(len - 1) });
+        self.list_state
+            .select(if len == 0 { None } else { Some(len - 1) });
     }
 
-    /// Handles character input when in search mode.
     pub fn handle_search_input(&mut self, c: char) {
         if self.is_searching {
             self.search_query.push(c);
@@ -295,7 +310,6 @@ impl AppState {
         }
     }
 
-    /// Handles backspace key when in search mode.
     pub fn handle_search_backspace(&mut self) {
         if self.is_searching {
             self.search_query.pop();
@@ -303,7 +317,6 @@ impl AppState {
         }
     }
 
-    /// Toggles the search mode on/off.
     pub fn toggle_search(&mut self) {
         self.is_searching = !self.is_searching;
         if !self.is_searching {
@@ -312,7 +325,6 @@ impl AppState {
         self.update_search();
     }
 
-    /// Clears the current search query.
     pub fn clear_search(&mut self) {
         if !self.search_query.is_empty() {
             self.search_query.clear();
@@ -322,7 +334,6 @@ impl AppState {
         }
     }
 
-    /// Toggles the selection state of the currently highlighted item.
     pub fn toggle_selection(&mut self) {
         if let Some(selected_display_index) = self.list_state.selected() {
             // Get the path directly from filtered_items using the display index
@@ -335,20 +346,20 @@ impl AppState {
                     if self.selected_items.len() < self.selection_limit {
                         self.selected_items.insert(path_to_toggle.clone());
                     } else {
-                        // Optionally show a modal indicating the limit is reached
-                        let message = format!("Selection Limit Reached\n\nSelection limit ({}) reached.", self.selection_limit);
-                        self.modal = Some(Modal::new(
-                            message,
-                            50, // Added default width
-                            5 // Added default height
-                        ));
+                        // Show a warning message for selection limit
+                        self.set_message(
+                            format!(
+                                "Selection Limit Reached\n\nSelection limit ({}) reached.",
+                                self.selection_limit
+                            ),
+                            MessageType::Error,
+                        );
                     }
                 }
             }
         }
     }
 
-    /// Toggles the selection state for all currently visible items (filtered or full list).
     pub fn toggle_select_all(&mut self) {
         let display_items_paths: Vec<PathBuf> = self
             .get_display_items()
@@ -376,15 +387,13 @@ impl AppState {
             let mut selection_count = self.selected_items.len();
             for path in display_items_paths {
                 if selection_count >= self.selection_limit {
-                    let message = format!(
-                        "Selection Limit Reached\n\nSelection limit ({}) reached during select all.",
-                        self.selection_limit
+                    self.set_message(
+                        format!(
+                            "Selection Limit Reached\n\nSelection limit ({}) reached during select all.",
+                            self.selection_limit
+                        ),
+                        MessageType::Error,
                     );
-                    self.modal = Some(Modal::new(
-                        message,
-                        50, // Added default width
-                        5 // Added default height
-                    ));
                     break; // Stop selecting once limit is hit
                 }
                 // Use HashSet insert's return value to check if it was newly inserted
@@ -396,14 +405,16 @@ impl AppState {
         }
     }
 
-    /// Sets or updates the message to be displayed.
+    /// Sets a typed message and shows the message view.
     pub fn set_message(&mut self, content: String, message_type: MessageType) {
         self.message = Some(AppMessage::new(content, message_type));
+        self.show_message = true;
     }
 
-    /// Clears the current message.
+    /// Clears the current message and hides the message view.
     pub fn clear_message(&mut self) {
         self.message = None;
+        self.show_message = false;
     }
 
     // TODO: Implement `update_folder_selection` based on monolithic version

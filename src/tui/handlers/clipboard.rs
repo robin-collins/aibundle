@@ -64,7 +64,13 @@ impl ClipboardHandler {
             .collect();
 
         if selected_items.is_empty() {
-            return Ok(("No items selected or all items are ignored.".to_string(), CopyStats { files: 0, folders: 0 }));
+            return Ok((
+                "No items selected or all items are ignored.".to_string(),
+                CopyStats {
+                    files: 0,
+                    folders: 0,
+                },
+            ));
         }
 
         let base_path = &app_state.current_dir;

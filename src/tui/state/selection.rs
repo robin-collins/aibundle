@@ -8,7 +8,6 @@ use std::thread;
 use crate::fs as crate_fs;
 use crate::tui::state::AppState;
 
-/// Handles selection state operations
 pub struct SelectionState {
     pub list_state: ratatui::widgets::ListState,
     // Tracking selected paths in a HashSet for efficient lookups
@@ -47,7 +46,7 @@ impl SelectionState {
             }
 
             let path = app_state.filtered_items[selected_index].clone();
-            if path.file_name().map_or(false, |n| n == "..") {
+            if path.file_name().is_some_and(|n| n == "..") {
                 return Ok(());
             }
 
@@ -93,7 +92,6 @@ impl SelectionState {
         Ok(())
     }
 
-
     pub fn update_folder_selection(
         app_state: &mut AppState,
         path: &Path,
@@ -132,7 +130,7 @@ impl SelectionState {
         let all_selected = app_state
             .filtered_items
             .iter()
-            .filter(|path| !path.file_name().map_or(false, |n| n == ".."))
+            .filter(|path| path.file_name().is_none_or(|n| n != ".."))
             .all(|path| app_state.selected_items.contains(path));
 
         if all_selected {
@@ -142,15 +140,17 @@ impl SelectionState {
             let paths_to_process: Vec<PathBuf> = app_state
                 .filtered_items
                 .iter()
-                .filter(|path| !path.file_name().map_or(false, |n| n == ".."))
-                .filter(|path| path.is_dir() &&
-                        (app_state.recursive || app_state.expanded_folders.contains(*path)))
+                .filter(|path| path.file_name().is_none_or(|n| n != ".."))
+                .filter(|path| {
+                    path.is_dir()
+                        && (app_state.recursive || app_state.expanded_folders.contains(*path))
+                })
                 .cloned()
                 .collect();
 
             // Select all items in filtered_items, except ".."
             for path in &app_state.filtered_items {
-                if path.file_name().map_or(false, |n| n == "..") {
+                if path.file_name().is_some_and(|n| n == "..") {
                     continue;
                 }
                 app_state.selected_items.insert(path.clone());

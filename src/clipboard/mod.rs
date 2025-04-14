@@ -1,3 +1,4 @@
+// src/clipboard/mod.rs
 use std::env::consts::OS;
 use std::fs;
 use std::io::{self, Write};

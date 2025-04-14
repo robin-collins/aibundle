@@ -1,7 +1,7 @@
-use crate::models::{AppConfig, IgnoreConfig, OutputFormat};
 use crate::models::app_config::FullConfig;
-use crate::ModeConfig;
+use crate::models::{AppConfig, IgnoreConfig, OutputFormat};
 use crate::tui::App;
+use crate::ModeConfig;
 use clap::Parser;
 use std::fs;
 use std::io;
@@ -9,7 +9,6 @@ use std::path::{Path, PathBuf};
 
 use crate::models::constants::VERSION;
 
-/// Command-line options parsed via clap.
 #[derive(Parser, Debug)]
 #[command(name = "aibundle", version = VERSION)]
 #[command(about = "AIBUNDLE: A CLI & TUI file aggregator and formatter")]
@@ -23,47 +22,36 @@ EXAMPLES:
     aibundle --files \"*.rs\"                              # CLI mode, current folder, files that match \"*.rs\"
     aibundle --files \"*.rs\" /mnt/d/projects/rust_aiformat  # CLI mode, starting in specified directory")]
 pub struct CliOptions {
-    /// Optional positional source directory.
     #[arg(value_name = "SOURCE_DIR", index = 1)]
     pub source_dir_pos: Option<String>,
 
-    /// Write output to file instead of clipboard
     #[arg(short = 'o', long)]
     pub output_file: Option<String>,
 
-    /// Write output to console instead of clipboard
     #[arg(short = 'p', long)]
     pub output_console: bool,
 
-    /// File pattern to match (e.g., "*.rs" or "*.{rs,toml}")
     #[arg(short = 'f', long)]
     pub files: Option<String>,
 
-    /// Search pattern to match file contents (e.g., "test" to match files containing 'test')
     #[arg(short = 's', long)]
     pub search: Option<String>,
 
-    /// Output format to use [possible values: markdown, xml, json, llm]
     #[arg(short = 'm', long, value_parser = ["markdown", "xml", "json", "llm"], default_value = "llm")]
     pub format: String,
 
-    /// Source directory to start from (overridden by the positional SOURCE_DIR if supplied)
     #[arg(short = 'd', long, default_value = ".")]
     pub source_dir: String,
 
-    /// Include subfolders (recursively) in CLI mode
     #[arg(short = 'r', long, default_value = "false")]
     pub recursive: bool,
 
-    /// Show line numbers in output (ignored in JSON format)
     #[arg(short = 'n', long, default_value = "false")]
     pub line_numbers: bool,
 
-    /// Use .gitignore files for filtering
     #[arg(short = 'g', long, default_value = "true")]
     pub gitignore: bool,
 
-    /// Ignore patterns (comma-separated list)
     #[arg(
         short = 'i',
         long,
@@ -72,12 +60,10 @@ pub struct CliOptions {
     )]
     pub ignore: Vec<String>,
 
-    /// Save current settings to .aibundle.config
     #[arg(short = 'S', long)]
     pub save_config: bool,
 }
 
-/// Options for running in CLI mode
 pub struct CliModeOptions {
     pub files_pattern: Option<String>,
     pub source_dir: String,
@@ -91,7 +77,6 @@ pub struct CliModeOptions {
 }
 
 impl CliOptions {
-    /// Convert CLI options to a configuration object
     pub fn to_app_config(&self) -> AppConfig {
         AppConfig {
             default_format: Some(self.format.clone()),
@@ -103,7 +88,6 @@ impl CliOptions {
         }
     }
 
-    /// Convert CLI options to mode config
     pub fn to_mode_config(&self) -> ModeConfig {
         ModeConfig {
             files: self.files.clone(),
@@ -118,12 +102,12 @@ impl CliOptions {
         }
     }
 
-    /// Get the effective source directory (considering both positional and named arguments)
     pub fn effective_source_dir(&self) -> String {
-        self.source_dir_pos.clone().unwrap_or_else(|| self.source_dir.clone())
+        self.source_dir_pos
+            .clone()
+            .unwrap_or_else(|| self.source_dir.clone())
     }
 
-    /// Convert CLI options to CLI mode options
     pub fn to_cli_mode_options(&self) -> CliModeOptions {
         CliModeOptions {
             files_pattern: self.files.clone(),
@@ -139,7 +123,6 @@ impl CliOptions {
     }
 }
 
-/// Load configuration and merge with CLI options
 pub fn load_merged_config(cli_opts: &CliOptions) -> io::Result<FullConfig> {
     let mut config = load_config()?;
 
@@ -152,7 +135,6 @@ pub fn load_merged_config(cli_opts: &CliOptions) -> io::Result<FullConfig> {
     Ok(config)
 }
 
-/// Load configuration from file
 pub fn load_config() -> io::Result<FullConfig> {
     // Determine config file path
     let config_path = config_file_path()?;
@@ -173,7 +155,6 @@ pub fn load_config() -> io::Result<FullConfig> {
     })
 }
 
-/// Get the path to the configuration file
 pub fn config_file_path() -> io::Result<PathBuf> {
     // Fixed error handling for environment variable
     let home = match std::env::var("HOME") {
@@ -185,14 +166,14 @@ pub fn config_file_path() -> io::Result<PathBuf> {
                     Err(_) => {
                         return Err(io::Error::new(
                             io::ErrorKind::NotFound,
-                            "Home directory not found"
+                            "Home directory not found",
                         ));
                     }
                 }
             } else {
                 return Err(io::Error::new(
                     io::ErrorKind::NotFound,
-                    "Home directory not found"
+                    "Home directory not found",
                 ));
             }
         }
@@ -201,7 +182,6 @@ pub fn config_file_path() -> io::Result<PathBuf> {
     Ok(PathBuf::from(home).join(".aibundle.config"))
 }
 
-/// Create ignore configuration from CLI options
 pub fn create_ignore_config(cli_opts: &CliOptions) -> IgnoreConfig {
     let use_default_ignores = cli_opts.ignore.contains(&"default".to_string());
 
@@ -213,7 +193,6 @@ pub fn create_ignore_config(cli_opts: &CliOptions) -> IgnoreConfig {
     }
 }
 
-/// Convert a string format to OutputFormat enum
 pub fn string_to_output_format(format: &str) -> OutputFormat {
     match format.to_lowercase().as_str() {
         "markdown" => OutputFormat::Markdown,
@@ -223,12 +202,10 @@ pub fn string_to_output_format(format: &str) -> OutputFormat {
     }
 }
 
-/// Convert CLI options to output format
 pub fn get_output_format(cli_opts: &CliOptions) -> OutputFormat {
     string_to_output_format(&cli_opts.format)
 }
 
-/// This function runs the tool in CLI mode, bypassing the TUI entirely.
 pub fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
     // 1. Create AppConfig
     let app_config = AppConfig {
@@ -273,7 +250,8 @@ pub fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
     }
 
     // Load items based on patterns and recursion setting
-    if app.recursive { // Check app.recursive which was set via AppConfig
+    if app.recursive {
+        // Check app.recursive which was set via AppConfig
         app.expanded_folders =
             crate::fs::collect_all_subdirs(&app.current_dir, &app.ignore_config)?;
         app.load_items()?;

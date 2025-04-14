@@ -7,7 +7,6 @@ use crate::fs::normalize_path;
 use crate::models::CopyStats;
 use crate::output::format::{is_binary_file, process_directory};
 
-/// Format selected items as JSON
 pub fn format_json_output(
     selected_items: &HashSet<PathBuf>,
     current_dir: &PathBuf,
@@ -53,20 +52,17 @@ pub fn format_json_output(
                         ));
                         stats.files += 1;
                     }
-                } else {
-                    if let Ok(content) = fs::read_to_string(path) {
-                        let escaped_content = content
-                            .replace('\\', "\\\\")
-                            .replace('\"', "\\\"")
-                            .replace('\n', "\\n")
-                            .replace('\r', "\\r");
-                        output.push_str(&format!(
-                            "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
-                            normalized_path,
-                            escaped_content
-                        ));
-                        stats.files += 1;
-                    }
+                } else if let Ok(content) = fs::read_to_string(path) {
+                    let escaped_content = content
+                        .replace('\\', "\\\\")
+                        .replace('\"', "\\\"")
+                        .replace('\n', "\\n")
+                        .replace('\r', "\\r");
+                    output.push_str(&format!(
+                        "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
+                        normalized_path, escaped_content
+                    ));
+                    stats.files += 1;
                 }
             } else if path.is_dir() {
                 output.push_str(&format!(

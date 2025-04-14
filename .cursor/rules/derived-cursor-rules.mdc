@@ -160,32 +160,11 @@ globs: *
 - Add `use crate::models::constants::DEFAULT_SELECTION_LIMIT;` to `src/main.rs` (Added 2025-03-28 based on interaction resolving missing field)
 - Wrap the `DEFAULT_SELECTION_LIMIT` in `Some()` in `src/main.rs` line 124 to resolve type mismatch. (Added 2025-03-28)
 - When resolving type mismatches related to `Option<usize>` vs `usize`, ensure that the `Option` type is used consistently throughout the codebase to represent optional values. (Added 2025-03-28 based on interaction resolving type mismatches)
-
-
-## FOLDER ORGANIZATION
-
-(No content provided in new interactions to update this section)
-
-## TECH STACK
-
-- Rust (version information will need to be added as it becomes available)
-- Cargo (version information will need to be added as it becomes available)
-- Clippy (version information will need to be added as it becomes available)
-- clap (version information will need to be added as it becomes available) (Added 2025-03-23)
-- dirs (version information will need to be added as it becomes available) (Added 2025-03-23)
-- clipboard (version information will need to be added as it becomes available) (Added 2025-03-26)
-
-
-## PROJECT-SPECIFIC STANDARDS
-
-(No content provided in new interactions to update this section)
-
-
-## WORKFLOW & RELEASE RULES
-
-- Regularly run `cargo clippy --all-targets --all-features` before commits and releases.
-- Address all Clippy warnings before merging code.
-- Carefully review code for borrow checker issues and potential move errors before commits and releases. (Added 2025-03-23)
-- During refactoring from a monolithic codebase, ensure that all functionality is preserved.  Address any lingering unused imports by either removing them or implementing the functionality they represent. (Added 2025-03-23)
-- During refactoring from a monolithic codebase, retain unused imports that represent planned functionality. Implement this functionality and remove the `#[allow(unused_imports)]` attribute or remove the import once implemented. (Added 2025-03-23)
-- Thoroughly
+- In `src/main.rs`, wrap `DEFAULT_SELECTION_LIMIT` in `Some()` when initializing `AppConfig` to resolve type mismatch between `Option<usize>` and `usize`. (Added 2025-03-28)
+- In `src/main.rs`, remove unused imports `execute`, `EnterAlternateScreen`, and `LeaveAlternateScreen`. (Added 2025-03-28)
+- Collapsible `if` statements in `src/config/mod.rs`, `src/tui/state/app_state.rs` should be collapsed to improve readability and efficiency. (Added 2025-03-28)
+- Collapsible `else { if }` blocks in `src/output/format.rs`, `src/output/json.rs`, `src/tui/state/app_state.rs` should be collapsed. (Added 2025-03-28)
+- Unused `HashMap` import in `src/output/format.rs` and `PathBuf` import in `src/tui/components/file_list.rs` should be removed. (Added 2025-03-28)
+- Redundant field names in `src/main.rs` should be simplified. (Added 2025-03-28)
+- Missing field `selection_limit` in `src/main.rs` should be added to the `AppConfig` struct initialization. (Added 2025-03-28)
+- Unused `execute` import in `src/main.rs` should be removed. (Added

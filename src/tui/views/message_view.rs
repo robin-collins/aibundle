@@ -1,3 +1,4 @@
+use crate::tui::state::{AppState, MessageType};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -6,7 +7,6 @@ use ratatui::{
     Frame,
 };
 use std::time::{Duration, Instant};
-use crate::tui::state::{AppState, MessageType};
 
 pub struct MessageView {
     // Duration to show messages for

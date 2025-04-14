@@ -7,10 +7,10 @@ mod output;
 mod tui;
 mod utils;
 
+use crate::models::app_config::{FullConfig, ModeConfig};
 use clap::Parser;
 use cli::{run_cli_mode, CliModeOptions, CliOptions};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use crate::models::app_config::{FullConfig, ModeConfig};
 use std::io;
 use std::path::PathBuf;
 
@@ -101,8 +101,8 @@ fn main() -> io::Result<()> {
 
         run_cli_mode(CliModeOptions {
             files_pattern: files,
-            source_dir: source_dir,
-            format: format,
+            source_dir,
+            format,
             gitignore,
             line_numbers,
             recursive,
@@ -126,7 +126,7 @@ fn main() -> io::Result<()> {
         let mut app = tui::App::new(
             default_config,
             PathBuf::from(effective_source_dir.clone()),
-            ignore_config
+            ignore_config,
         )?;
 
         if let Some(tui_conf) = full_config.tui {
@@ -164,8 +164,8 @@ fn main() -> io::Result<()> {
         }
 
         enable_raw_mode()?;
-        let result = app.run()?;
+        app.run()?;
         disable_raw_mode()?;
-        Ok(result)
+        Ok(())
     }
 }

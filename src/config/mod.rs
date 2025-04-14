@@ -1,10 +1,10 @@
-use crate::models::AppConfig;
+// src/config/mod.rs
 use crate::models::app_config::FullConfig;
+use crate::models::AppConfig;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// Returns the config file path in the user's home directory.
 pub fn config_file_path() -> io::Result<PathBuf> {
     let home = if cfg!(windows) {
         std::env::var("USERPROFILE").map(PathBuf::from)
@@ -15,7 +15,6 @@ pub fn config_file_path() -> io::Result<PathBuf> {
     Ok(home.join(".aibundle.config.toml"))
 }
 
-/// Loads a config file from the user's home directory if present.
 pub fn load_config() -> io::Result<FullConfig> {
     let config_path = config_file_path()?;
     if config_path.exists() {
@@ -28,13 +27,10 @@ pub fn load_config() -> io::Result<FullConfig> {
     }
 }
 
-/// Save configuration to a file
 pub fn save_config(config: &AppConfig, file_path: &str) -> io::Result<()> {
-    if Path::new(file_path).exists() {
-        if !crate::fs::confirm_overwrite(file_path)? {
-            println!("Aborted saving configuration.");
-            return Ok(());
-        }
+    if Path::new(file_path).exists() && !crate::fs::confirm_overwrite(file_path)? {
+        println!("Aborted saving configuration.");
+        return Ok(());
     }
 
     let toml_str = toml::to_string_pretty(config)

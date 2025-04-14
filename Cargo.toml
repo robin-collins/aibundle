@@ -23,6 +23,7 @@ toml = "0.8"
 itertools = "0.14.0"
 regex = "1.9"
 clipboard = "0.5"
+rustdoc-stripper = "0.1.19"
 
 [features]
 default = []

@@ -1,14 +1,14 @@
 use std::collections::HashSet;
+use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::fs;
 
+use crate::config::{config_file_path, save_config};
+use crate::fs::is_path_ignored_for_iterative;
 use crate::models::{CopyStats, OutputFormat};
+use crate::output::format_selected_items;
 use crate::tui::state::AppState;
 use crate::tui::state::{SearchState, SelectionState};
-use crate::fs::is_path_ignored_for_iterative;
-use crate::output::format_selected_items;
-use crate::config::{save_config, config_file_path};
 
 pub struct FileOpsHandler;
 
@@ -20,11 +20,12 @@ impl FileOpsHandler {
         if let Some(parent) = app_state.current_dir.parent() {
             // Check if parent is different from current_dir to avoid adding ".." at root
             if parent != app_state.current_dir {
-                 // Check if parent path is valid before adding ".."
-                 // This avoids adding ".." for paths like "/" where parent is also "/"
-                 if parent.parent().is_some() || parent == Path::new("/") { // Simplified root check
+                // Check if parent path is valid before adding ".."
+                // This avoids adding ".." for paths like "/" where parent is also "/"
+                if parent.parent().is_some() || parent == Path::new("/") {
+                    // Simplified root check
                     app_state.items.push(app_state.current_dir.join(".."));
-                 }
+                }
             }
         }
 
@@ -44,12 +45,11 @@ impl FileOpsHandler {
 
         // Reset selection if items list is not empty, otherwise clear selection
         if !app_state.items.is_empty() {
-             // TODO: Preserve selection if possible/desired? For now, reset.
-             // selection_state.list_state.select(Some(0)); // Requires mutable selection_state
+            // TODO: Preserve selection if possible/desired? For now, reset.
+            // selection_state.list_state.select(Some(0)); // Requires mutable selection_state
         } else {
-             // selection_state.list_state.select(None); // Requires mutable selection_state
+            // selection_state.list_state.select(None); // Requires mutable selection_state
         }
-
 
         Ok(())
     }
@@ -69,7 +69,9 @@ impl FileOpsHandler {
         let entries = fs::read_dir(&app_state.current_dir)?
             .filter_map(|e| e.ok())
             .map(|e| e.path())
-            .filter(|p| !is_path_ignored_for_iterative(p, &app_state.current_dir, &app_state.ignore_config))
+            .filter(|p| {
+                !is_path_ignored_for_iterative(p, &app_state.current_dir, &app_state.ignore_config)
+            })
             .collect::<Vec<_>>();
 
         // Sort entries (directories first, then files)
@@ -109,11 +111,7 @@ impl FileOpsHandler {
             app_state.filtered_items = app_state
                 .items
                 .iter()
-                .filter(|&p| {
-                    p.file_name()
-                        .and_then(|n| n.to_str())
-                        .map_or(false, |name| matcher(name))
-                })
+                .filter(|&p| p.file_name().and_then(|n| n.to_str()).is_some_and(&matcher))
                 .cloned()
                 .collect();
             return Ok(());
@@ -126,7 +124,11 @@ impl FileOpsHandler {
         // Recursively search each immediate child of the current directory
         if let Ok(entries) = fs::read_dir(&app_state.current_dir) {
             for entry in entries.filter_map(|e| e.ok()).map(|e| e.path()) {
-                if !is_path_ignored_for_iterative(&entry, &app_state.current_dir, &app_state.ignore_config) {
+                if !is_path_ignored_for_iterative(
+                    &entry,
+                    &app_state.current_dir,
+                    &app_state.ignore_config,
+                ) {
                     crate::fs::recursive_search_helper_generic(
                         app_state,
                         &entry,
@@ -153,10 +155,15 @@ impl FileOpsHandler {
         for item in &app_state.filtered_items {
             let mut current = item.as_path();
             while let Some(parent) = current.parent() {
-                if parent == app_state.current_dir || parent == Path::new("/") || parent == Path::new("") {
+                if parent == app_state.current_dir
+                    || parent == Path::new("/")
+                    || parent == Path::new("")
+                {
                     break;
                 }
-                if !app_state.expanded_folders.contains(parent) && parent.starts_with(&app_state.current_dir) {
+                if !app_state.expanded_folders.contains(parent)
+                    && parent.starts_with(&app_state.current_dir)
+                {
                     parents_to_expand.insert(parent.to_path_buf());
                 }
                 current = parent;
@@ -232,7 +239,8 @@ impl FileOpsHandler {
     }
 
     pub fn toggle_binary_files(app_state: &mut AppState) -> io::Result<()> {
-        app_state.ignore_config.include_binary_files = !app_state.ignore_config.include_binary_files;
+        app_state.ignore_config.include_binary_files =
+            !app_state.ignore_config.include_binary_files;
         Self::load_items(app_state)
     }
 
@@ -249,16 +257,25 @@ impl FileOpsHandler {
         Ok(())
     }
 
-    pub fn save_config(app_state: &AppState) -> io::Result<()> {
+    pub fn save_config(app_state: &mut AppState) -> io::Result<()> {
         let config_path = config_file_path()?;
-        if let Some(config_path_str) = config_path.to_str() {
-            save_config(&app_state.config, config_path_str)
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Config path is not valid UTF-8",
-            ))
+        if config_path.exists() {
+            // Prompt for overwrite (not interactive in TUI, so just warn)
+            app_state.set_message(
+                format!("Configuration file already exists: {}", config_path.display()),
+                crate::tui::state::MessageType::Warning,
+            );
+            // In a real TUI, you might want to prompt the user for confirmation
+            // For now, just return an error
+            return Err(io::Error::new(io::ErrorKind::AlreadyExists, "Config file exists"));
         }
+        save_config(&app_state.config, config_path.to_str().unwrap_or(""))?;
+        // Success message
+        app_state.set_message(
+            format!("Configuration saved successfully to {}", config_path.display()),
+            crate::tui::state::MessageType::Success,
+        );
+        Ok(())
     }
 
     pub fn check_pending_selection(
@@ -315,6 +332,88 @@ impl FileOpsHandler {
                         app_state.expanded_folders.insert(path_buf);
                     }
                     Self::load_items(app_state)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    // Helper function for recursive expansion
+    fn expand_all(app_state: &mut AppState, path: &PathBuf) -> io::Result<()> {
+        if !path.is_dir() || app_state.is_path_ignored(path) {
+            return Ok(());
+        }
+
+        app_state.expanded_folders.insert(path.clone());
+
+        match fs::read_dir(path) {
+            Ok(entries) => {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let child_path = entry.path();
+                    if child_path.is_dir() && !app_state.is_path_ignored(&child_path) {
+                        // Check if the child path is already expanded to prevent infinite loops in case of symlinks
+                        if !app_state.expanded_folders.contains(&child_path) {
+                            Self::expand_all(app_state, &child_path)?;
+                        }
+                    }
+                }
+            }
+            Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+                // Ignore permission denied errors and continue
+            }
+            Err(e) => return Err(e), // Propagate other errors
+        }
+
+        Ok(())
+    }
+
+    // Helper function for recursive collapse
+    fn collapse_all(app_state: &mut AppState, path: &PathBuf) -> io::Result<()> {
+        if !path.is_dir() {
+            return Ok(());
+        }
+
+        // Use retain to efficiently remove the path and all its descendants
+        // Convert path to string to perform prefix check efficiently
+        if let Some(path_str) = path.to_str() {
+            app_state.expanded_folders.retain(|expanded_path| {
+                // Keep paths that are not the target path itself and do not start with the target path's prefix
+                expanded_path != path
+                    && expanded_path
+                        .to_str()
+                        .map_or(true, |ep_str| !ep_str.starts_with(path_str))
+            });
+        } else {
+            // Fallback if path is not valid UTF-8 (less likely but good to handle)
+            app_state.expanded_folders.remove(path);
+            // This fallback won't remove children, but it's better than erroring.
+        }
+
+        Ok(())
+    }
+
+    pub fn toggle_folder_expansion_recursive(
+        app_state: &mut AppState,
+        selection_state: &mut SelectionState,
+    ) -> io::Result<()> {
+        if let Some(selected_index) = selection_state.list_state.selected() {
+            if selected_index < app_state.filtered_items.len() {
+                let path = &app_state.filtered_items[selected_index];
+                if path.is_dir() && !path.ends_with("..") {
+                    let path_buf = path.to_path_buf();
+                    if app_state.expanded_folders.contains(&path_buf) {
+                        // Currently expanded, so collapse all descendants
+                        Self::collapse_all(app_state, &path_buf)?;
+                    } else {
+                        // Currently collapsed, so expand all descendants
+                        Self::expand_all(app_state, &path_buf)?;
+                    }
+                    // Reload items to reflect changes
+                    Self::load_items(app_state)?;
+                    // Try to keep the selection, might need adjustment if the item disappears
+                    selection_state.list_state.select(Some(
+                        selected_index.min(app_state.filtered_items.len().saturating_sub(1)),
+                    ));
                 }
             }
         }
