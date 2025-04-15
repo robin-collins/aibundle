@@ -1,3 +1,20 @@
+// src/output/llm.rs
+//!
+//! # LLM Output Formatter
+//!
+//! This module provides functions for formatting selected files and directories as LLM-friendly output, including dependency analysis and project structure.
+//! It is used to generate structured, annotated output for AI assistants and code analysis tools.
+//!
+//! ## Usage
+//! Use `format_llm_output` to generate a Markdown report with file contents, dependencies, and project structure.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::output::llm::format_llm_output;
+//! let (output, stats) = format_llm_output(&selected_items, &current_dir, &ignore_config).unwrap();
+//! println!("{}", output);
+//! ```
+
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
@@ -9,8 +26,23 @@ use crate::fs::normalize_path;
 use crate::models::app_config::{FileDependencies, Node};
 use crate::models::CopyStats;
 use crate::output::format::is_binary_file;
-use crate::output::get_language_name;
+use crate::models::constants::get_language_name;
 
+/// Formats selected files and directories as LLM-friendly Markdown output, including dependencies and structure.
+///
+/// # Arguments
+/// * `selected_items` - Set of selected file and directory paths.
+/// * `current_dir` - The root directory for relative paths.
+/// * `_ignore_config` - Ignore configuration (currently unused).
+///
+/// # Returns
+/// * `io::Result<(String, CopyStats)>` - The formatted output and copy statistics.
+///
+/// # Examples
+/// ```rust
+/// let (output, stats) = crate::output::llm::format_llm_output(&selected_items, &current_dir, &ignore_config).unwrap();
+/// println!("{}", output);
+/// ```
 pub fn format_llm_output(
     selected_items: &HashSet<PathBuf>,
     current_dir: &PathBuf,
@@ -127,7 +159,19 @@ pub fn format_llm_output(
     Ok((output, stats))
 }
 
-// Helper function to analyze dependencies between files
+/// Analyzes dependencies between files based on language-specific import/include patterns.
+///
+/// # Arguments
+/// * `file_contents` - List of (relative path, file content) tuples.
+/// * `_base_dir` - The base directory (unused).
+///
+/// # Returns
+/// * `HashMap<String, FileDependencies>` - Map of file paths to their dependencies.
+///
+/// # Examples
+/// ```rust
+/// let deps = crate::output::llm::analyze_dependencies(&file_contents, &base_dir);
+/// ```
 pub fn analyze_dependencies(
     file_contents: &[(String, String)],
     _base_dir: &Path,
@@ -392,7 +436,19 @@ fn count_files(node: &Node) -> usize {
     count
 }
 
-// Internal function to format LLM output
+/// Formats the LLM output, including project info, structure, dependencies, and file contents.
+///
+/// # Arguments
+/// * `output` - Mutable string to write output to.
+/// * `file_contents` - List of (relative path, file content) tuples.
+/// * `root_path` - The root directory path.
+/// * `root_node` - The root node of the file tree.
+/// * `dependencies` - Map of file dependencies.
+///
+/// # Examples
+/// ```rust
+/// crate::output::llm::format_llm_output_internal(&mut output, &file_contents, &root_path, &root_node, &dependencies);
+/// ```
 pub fn format_llm_output_internal(
     output: &mut String,
     file_contents: &[(String, String)],
@@ -626,3 +682,7 @@ pub fn format_llm_output_internal(
         output.push_str("```\n\n");
     }
 }
+
+// TODO: Add support for more language-specific dependency patterns.
+// TODO: Add options for output granularity (e.g., summary only, full content, etc.).
+// TODO: Add error handling for malformed or missing files.

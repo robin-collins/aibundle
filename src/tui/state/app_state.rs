@@ -1,5 +1,21 @@
+//!
+//! # Application State Module
+//!
+//! This module defines the main application state (`AppState`) and related types for the TUI system.
+//! It manages file system state, configuration, UI state, selection, search, and modal/message handling.
+//!
+//! ## Usage
+//! Use `AppState` to track and mutate the state of the TUI application, including file navigation, selection, and clipboard operations.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::tui::state::AppState;
+//! let mut state = AppState::default();
+//! state.load_items().unwrap();
+//! ```
+
 use crate::clipboard::copy_to_clipboard as copy_text_to_clipboard;
-use crate::fs::add_items_iterative;
+use crate::fs::add_items_recursively;
 use crate::models::{
     app_config::Node, constants, AppConfig, CopyStats, IgnoreConfig, OutputFormat,
 };
@@ -13,6 +29,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Instant;
 
+/// Message type for user feedback and modal dialogs.
 #[derive(Clone, Debug)]
 pub enum MessageType {
     Info,
@@ -21,6 +38,7 @@ pub enum MessageType {
     Error,
 }
 
+/// Represents a message to be shown to the user, with type and timestamp.
 #[derive(Clone, Debug)]
 pub struct AppMessage {
     pub content: String,
@@ -29,6 +47,7 @@ pub struct AppMessage {
 }
 
 impl AppMessage {
+    /// Creates a new `AppMessage` with the current timestamp.
     pub fn new(content: String, message_type: MessageType) -> Self {
         Self {
             content,
@@ -38,6 +57,35 @@ impl AppMessage {
     }
 }
 
+/// Main application state for the TUI system.
+///
+/// Tracks file system, configuration, UI, selection, search, and modal/message state.
+///
+/// # Fields
+/// * `current_dir` - The current working directory.
+/// * `items` - List of all items in the current directory.
+/// * `list_state` - List selection state for the file list.
+/// * `selected_items` - Set of selected file/folder paths.
+/// * `expanded_folders` - Set of expanded folder paths.
+/// * `config` - Application configuration.
+/// * `ignore_config` - Ignore configuration for file filtering.
+/// * `output_format` - Current output format.
+/// * `show_line_numbers` - Whether to show line numbers in output.
+/// * `selection_limit` - Maximum number of items that can be selected.
+/// * `recursive` - Whether recursive traversal is enabled.
+/// * `quit` - Whether the application should quit.
+/// * `is_counting` - Whether a selection count operation is in progress.
+/// * `modal` - Current modal dialog, if any.
+/// * `show_help` - Whether the help view is active.
+/// * `show_message` - Whether the message view is active.
+/// * `counting_path` - Path being counted for selection.
+/// * `pending_count` - Channel for pending selection count results.
+/// * `last_copy_stats` - Statistics from the last copy operation.
+/// * `search_query` - Current search query string.
+/// * `filtered_items` - List of items matching the search query.
+/// * `is_searching` - Whether search mode is active.
+/// * `message` - Current message to display.
+/// * `file_tree` - File tree structure for LLM output.
 pub struct AppState {
     // File system state
     pub current_dir: PathBuf,
@@ -81,6 +129,7 @@ pub struct AppState {
 }
 
 impl Default for AppState {
+    /// Returns a default-initialized `AppState` using the current directory and default config.
     fn default() -> Self {
         let config = AppConfig::default();
         let ignore_config = IgnoreConfig::default();
@@ -90,6 +139,7 @@ impl Default for AppState {
 }
 
 impl AppState {
+    /// Creates a new `AppState` with the given config, directory, and ignore config.
     pub fn new(
         config: AppConfig,
         initial_dir: PathBuf,
@@ -135,18 +185,22 @@ impl AppState {
         Ok(slf)
     }
 
+    /// Returns the number of selected items.
     pub fn selected_count(&self) -> usize {
         self.selected_items.len()
     }
 
+    /// Returns the number of items in the current directory.
     pub fn item_count(&self) -> usize {
         self.items.len()
     }
 
+    /// Returns true if the given file is selected.
     pub fn is_file_selected(&self, path: &PathBuf) -> bool {
         self.selected_items.contains(path)
     }
 
+    /// Returns true if the given path should be ignored based on ignore config and .gitignore.
     pub fn is_path_ignored(&self, path: &Path) -> bool {
         if !self.ignore_config.use_default_ignores && !self.ignore_config.use_gitignore {
             return false;
@@ -190,6 +244,7 @@ impl AppState {
         false
     }
 
+    /// Updates the filtered items list based on the current search query.
     pub fn update_search(&mut self) {
         if self.is_searching && !self.search_query.is_empty() {
             let filtered_indices =
@@ -213,13 +268,15 @@ impl AppState {
         }
     }
 
+    /// Returns the list of items to display (filtered by search if active).
     pub fn get_display_items(&self) -> &Vec<PathBuf> {
         &self.filtered_items
     }
 
+    /// Loads items from the current directory, applying ignore and expansion rules.
     pub fn load_items(&mut self) -> io::Result<()> {
         let mut loaded_items = Vec::new();
-        add_items_iterative(
+        add_items_recursively(
             &mut loaded_items,
             &self.current_dir,
             &self.expanded_folders,
@@ -240,6 +297,7 @@ impl AppState {
         Ok(())
     }
 
+    /// Copies the selected items to the clipboard, showing a modal with stats.
     pub fn copy_selected_to_clipboard(&mut self) -> io::Result<()> {
         let (formatted_string, stats) = format_selected_items(
             &self.selected_items,
@@ -277,6 +335,7 @@ impl AppState {
         }
     }
 
+    /// Moves the selection up or down by the given delta.
     pub fn move_selection(&mut self, delta: i32) {
         let items_len = self.filtered_items.len();
         if items_len == 0 {
@@ -289,6 +348,7 @@ impl AppState {
         self.list_state.select(Some(new_selected));
     }
 
+    /// Selects the first item in the list.
     pub fn select_first(&mut self) {
         self.list_state.select(if self.filtered_items.is_empty() {
             None
@@ -297,12 +357,14 @@ impl AppState {
         });
     }
 
+    /// Selects the last item in the list.
     pub fn select_last(&mut self) {
         let len = self.filtered_items.len();
         self.list_state
             .select(if len == 0 { None } else { Some(len - 1) });
     }
 
+    /// Handles a character input for search, updating the search query.
     pub fn handle_search_input(&mut self, c: char) {
         if self.is_searching {
             self.search_query.push(c);
@@ -310,6 +372,7 @@ impl AppState {
         }
     }
 
+    /// Handles backspace in the search query.
     pub fn handle_search_backspace(&mut self) {
         if self.is_searching {
             self.search_query.pop();
@@ -317,6 +380,7 @@ impl AppState {
         }
     }
 
+    /// Toggles search mode on or off, clearing the query if turning off.
     pub fn toggle_search(&mut self) {
         self.is_searching = !self.is_searching;
         if !self.is_searching {
@@ -325,6 +389,7 @@ impl AppState {
         self.update_search();
     }
 
+    /// Clears the current search query.
     pub fn clear_search(&mut self) {
         if !self.search_query.is_empty() {
             self.search_query.clear();
@@ -334,6 +399,7 @@ impl AppState {
         }
     }
 
+    /// Toggles selection of the currently highlighted item.
     pub fn toggle_selection(&mut self) {
         if let Some(selected_display_index) = self.list_state.selected() {
             // Get the path directly from filtered_items using the display index
@@ -360,6 +426,7 @@ impl AppState {
         }
     }
 
+    /// Toggles selection of all currently visible items, respecting the selection limit.
     pub fn toggle_select_all(&mut self) {
         let display_items_paths: Vec<PathBuf> = self
             .get_display_items()

@@ -1,9 +1,41 @@
 // src/clipboard/mod.rs
+//!
+//! # Clipboard Utilities Module
+//!
+//! This module provides cross-platform clipboard utilities for copying to and reading from the system clipboard.
+//! It supports Windows, macOS, Linux (Wayland/X11), and WSL environments.
+//!
+//! ## Usage
+//! Use these functions to copy text to the clipboard or retrieve clipboard contents in a platform-agnostic way.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::clipboard::{copy_to_clipboard, get_clipboard_contents};
+//! copy_to_clipboard("Hello, clipboard!").unwrap();
+//! let contents = get_clipboard_contents().unwrap();
+//! assert!(contents.contains("Hello"));
+//! ```
+
 use std::env::consts::OS;
 use std::fs;
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
 
+/// Copies the given text to the system clipboard, supporting Windows, macOS, Linux (Wayland/X11), and WSL.
+///
+/// # Arguments
+/// * `text` - The text to copy to the clipboard.
+///
+/// # Returns
+/// * `io::Result<()>` - Ok on success, or an error if the operation fails.
+///
+/// # Panics
+/// * Never panics. Returns an error on failure.
+///
+/// # Examples
+/// ```rust
+/// crate::clipboard::copy_to_clipboard("Copied!").unwrap();
+/// ```
 pub fn copy_to_clipboard(text: &str) -> io::Result<()> {
     if is_wsl() {
         // For WSL2, write to a temporary file and use PowerShell to read it
@@ -106,6 +138,21 @@ pub fn copy_to_clipboard(text: &str) -> io::Result<()> {
     Ok(())
 }
 
+/// Retrieves the current contents of the system clipboard as a String.
+///
+/// Supports Windows, macOS, Linux (Wayland/X11), and WSL.
+///
+/// # Returns
+/// * `io::Result<String>` - The clipboard contents, or an error if the operation fails.
+///
+/// # Panics
+/// * Never panics. Returns an error on failure.
+///
+/// # Examples
+/// ```rust
+/// let contents = crate::clipboard::get_clipboard_contents().unwrap();
+/// assert!(contents.len() >= 0);
+/// ```
 pub fn get_clipboard_contents() -> io::Result<String> {
     if is_wsl() {
         // For WSL2, use PowerShell with UTF-8 encoding and error handling
@@ -171,6 +218,19 @@ pub fn get_clipboard_contents() -> io::Result<String> {
     }
 }
 
+/// Returns true if running under Windows Subsystem for Linux (WSL).
+///
+/// Used to determine clipboard strategy for Linux environments.
+///
+/// # Returns
+/// * `bool` - True if running under WSL, false otherwise.
+///
+/// # Examples
+/// ```rust
+/// if crate::clipboard::is_wsl() {
+///     println!("Running under WSL");
+/// }
+/// ```
 pub fn is_wsl() -> bool {
     std::fs::read_to_string("/proc/version")
         .map(|version| {
@@ -178,3 +238,6 @@ pub fn is_wsl() -> bool {
         })
         .unwrap_or(false)
 }
+
+// TODO: Add support for additional clipboard managers if needed (e.g., OSC52 for SSH/tmux).
+// TODO: Add error messages for common clipboard failures (e.g., missing xclip/wl-copy).

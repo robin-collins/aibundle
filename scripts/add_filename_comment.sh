@@ -1,26 +1,24 @@
 #!/bin/bash
 
-# Change to the project root if not already there
-cd "$(dirname "$0")" || exit 1
-
-# Ensure GNU sed (on macOS use "brew install gnu-sed" and alias 'gsed' to 'sed')
-# SED=$(which gsed || which sed)
+# Should be run from your project root.
 
 find src -type f -name '*.rs' | while read -r file; do
-    # Get the relative path from src/ onward, using forward slashes
-    rel_path="${file#src/}"
+    # Get path relative to project root and remove any leading ./
+    rel_path="${file#./}"
 
-    # Compose the comment line
-    comment="// src/${rel_path}"
+    comment="// ${rel_path}"
 
-    # Check if the first line is already the intended comment
-    first_line=$(head -n 1 "$file")
-    if [[ "$first_line" != "$comment" ]]; then
-        # Insert the comment as the first line, preserving file permissions and content
-        (
-            echo "$comment"
-            cat "$file"
-        ) > "${file}.tmp" && mv "${file}.tmp" "$file"
+    # Read the first line
+    read -r first_line < "$file"
+
+    # Check if first line is a comment (starts with '//')
+    if [[ "$first_line" =~ ^// ]]; then
+        echo "Previous comment found in $file"
+        # Remove the first line, prepend the correct file path comment, and write back
+        { echo "$comment"; tail -n +2 "$file"; } > "${file}.tmp" && mv "${file}.tmp" "$file"
+    elif [[ "$first_line" != "$comment" ]]; then
+        # No comment, just add the correct file path comment line
+        { echo "$comment"; cat "$file"; } > "${file}.tmp" && mv "${file}.tmp" "$file"
         echo "Added header to $file"
     else
         echo "Header already present in $file"

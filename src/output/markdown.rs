@@ -1,3 +1,20 @@
+// src/output/markdown.rs
+//!
+//! # Markdown Output Module
+//!
+//! This module provides functions for formatting selected files and directories as Markdown output.
+//! It is used to generate Markdown-formatted code/documentation bundles for export or clipboard.
+//!
+//! ## Usage
+//! Use `format_markdown_output` to convert a set of selected files and folders into a Markdown string.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::output::markdown::format_markdown_output;
+//! let (md, stats) = format_markdown_output(&selected, &current_dir, true, &ignore_config).unwrap();
+//! assert!(md.contains("```"));
+//! ```
+
 use std::collections::HashSet;
 use std::fs;
 use std::io;
@@ -7,6 +24,24 @@ use crate::fs::normalize_path;
 use crate::models::CopyStats;
 use crate::output::format::{format_file_content, is_binary_file, process_directory};
 
+/// Formats the selected files and directories as Markdown output.
+///
+/// Each file is wrapped in a code block with its relative path as the language tag.
+/// Directories are rendered as Markdown headers, and their contents are recursively included.
+///
+/// # Arguments
+/// * `selected_items` - Set of selected file and directory paths.
+/// * `current_dir` - The base directory for relative path calculation.
+/// * `show_line_numbers` - Whether to include line numbers in code blocks.
+/// * `ignore_config` - Ignore configuration for filtering files.
+///
+/// # Returns
+/// * `io::Result<(String, CopyStats)>` - The Markdown output and copy statistics.
+///
+/// # Examples
+/// ```rust
+/// // Used internally by clipboard and file export logic.
+/// ```
 pub fn format_markdown_output(
     selected_items: &HashSet<PathBuf>,
     current_dir: &PathBuf,
@@ -73,3 +108,6 @@ pub fn format_markdown_output(
 
     Ok((output, stats))
 }
+
+// TODO: Add support for Markdown frontmatter or summary sections if needed.
+// TODO: Add option to customize code block language tags based on file extension.

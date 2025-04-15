@@ -1,22 +1,42 @@
+// src/tui/handlers/keyboard.rs
+//!
+//! # Keyboard Handler
+//!
+//! This module defines the `KeyboardHandler` for managing keyboard input and keybindings in the TUI.
+//! It handles navigation, selection, search, clipboard, and command execution.
+//!
+//! ## Usage
+//! Use `KeyboardHandler` to process key events and update application state accordingly.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::tui::handlers::KeyboardHandler;
+//! KeyboardHandler::handle_key(key_event, &mut app_state, &mut selection_state, &mut search_state).unwrap();
+//! ```
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::io;
 
 use crate::tui::handlers::{ClipboardHandler, FileOpsHandler, SearchHandler};
 use crate::tui::state::{AppState, SearchState, SelectionState};
 
+/// Handler for keyboard input and keybindings in the TUI.
 pub struct KeyboardHandler;
 
 impl KeyboardHandler {
+    /// Creates a new `KeyboardHandler` instance.
     pub fn new() -> Self {
         Self
     }
 
+    /// Handles a key event, updating application state and triggering actions.
     pub fn handle_key(
         key_event: KeyEvent,
         app_state: &mut AppState,
         selection_state: &mut SelectionState,
         search_state: &mut SearchState,
     ) -> io::Result<()> {
+        // If counting items (for selection limit), allow cancel with Esc
         if app_state.is_counting {
             if key_event.code == KeyCode::Esc {
                 app_state.is_counting = false;
@@ -27,6 +47,7 @@ impl KeyboardHandler {
             return Ok(());
         }
 
+        // If a modal is open, handle modal navigation/close
         if let Some(modal) = &mut app_state.modal {
             match key_event.code {
                 KeyCode::Esc | KeyCode::Char('q') => app_state.modal = None,
@@ -37,6 +58,7 @@ impl KeyboardHandler {
             return Ok(());
         }
 
+        // If searching, handle search input and navigation
         if app_state.is_searching {
             match key_event.code {
                 KeyCode::Esc => {
@@ -136,7 +158,9 @@ impl KeyboardHandler {
                 KeyCode::Char('/') => {
                     SearchHandler::toggle_search(app_state, search_state, selection_state)
                 }
+                // Tab: Toggle expansion of the currently selected folder (single-level)
                 KeyCode::Tab => FileOpsHandler::toggle_folder_expansion(app_state, selection_state),
+                // Shift+Tab: Toggle expansion recursively (all subfolders)
                 KeyCode::BackTab => {
                     FileOpsHandler::toggle_folder_expansion_recursive(app_state, selection_state)
                 }
@@ -147,3 +171,6 @@ impl KeyboardHandler {
         }
     }
 }
+
+// TODO: Add support for customizable keybindings.
+// TODO: Add support for multi-key command sequences.

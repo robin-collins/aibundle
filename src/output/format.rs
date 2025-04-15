@@ -1,3 +1,21 @@
+// src/output/format.rs
+//!
+//! # Output Format Utilities
+//!
+//! This module provides utilities for formatting files and directories as XML, Markdown, or JSON for output and clipboard operations.
+//! It includes helpers for binary detection, line numbering, and recursive directory processing.
+//!
+//! ## Usage
+//! Use these functions to format selected files for output, clipboard, or export in various formats.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::output::format::{process_directory, format_file_content};
+//! let mut output = String::new();
+//! let stats = process_directory(&path, &mut output, &base_path, &selected_items, &output_format, show_line_numbers, &ignore_config).unwrap();
+//! println!("{}", output);
+//! ```
+
 use std::collections::HashSet;
 use std::fs;
 use std::io;
@@ -5,39 +23,20 @@ use std::path::{Path, PathBuf};
 
 use crate::fs::normalize_path;
 use crate::models::{CopyStats, IgnoreConfig, OutputFormat};
+use crate::models::constants::get_language_name;
 
-// Get language name from file extension
-pub fn get_language_name(extension: &str) -> &'static str {
-    match extension {
-        "py" => "Python",
-        "c" => "C",
-        "cpp" => "C++",
-        "h" => "C/C++ Header",
-        "hpp" => "C++ Header",
-        "js" => "JavaScript",
-        "ts" => "TypeScript",
-        "java" => "Java",
-        "html" => "HTML",
-        "css" => "CSS",
-        "php" => "PHP",
-        "rb" => "Ruby",
-        "go" => "Go",
-        "rs" => "Rust",
-        "swift" => "Swift",
-        "kt" => "Kotlin",
-        "sh" => "Shell",
-        "md" => "Markdown",
-        "json" => "JSON",
-        "xml" => "XML",
-        "yaml" => "YAML",
-        "yml" => "YAML",
-        "sql" => "SQL",
-        "r" => "R",
-        _ => "Plain Text",
-    }
-}
-
-// Helper function to check if a file is binary
+/// Returns true if the given path is a binary file, based on extension or name.
+///
+/// # Arguments
+/// * `path` - The path to check.
+///
+/// # Returns
+/// * `bool` - True if the file is binary, false otherwise.
+///
+/// # Examples
+/// ```rust
+/// assert!(!crate::output::format::is_binary_file(std::path::Path::new("main.rs")));
+/// ```
 pub fn is_binary_file(path: &Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         let binary_extensions = [
@@ -59,7 +58,19 @@ pub fn is_binary_file(path: &Path) -> bool {
     false
 }
 
-// Format files with line numbers if needed
+/// Formats file content with optional line numbers.
+///
+/// # Arguments
+/// * `content` - The file content as a string.
+/// * `show_line_numbers` - Whether to include line numbers.
+///
+/// # Returns
+/// * `String` - The formatted content.
+///
+/// # Examples
+/// ```rust
+/// let formatted = crate::output::format::format_file_content("line1\nline2", true);
+/// ```
 pub fn format_file_content(content: &str, show_line_numbers: bool) -> String {
     let mut output = String::new();
 
@@ -77,7 +88,25 @@ pub fn format_file_content(content: &str, show_line_numbers: bool) -> String {
     output
 }
 
-// Process a directory recursively and add its contents to the output
+/// Recursively processes a directory and adds its contents to the output in the specified format.
+///
+/// # Arguments
+/// * `path` - The directory to process.
+/// * `output` - Mutable string to write output to.
+/// * `base_path` - The base directory for relative paths.
+/// * `selected_items` - Set of selected file and directory paths.
+/// * `output_format` - The output format (XML, Markdown, JSON).
+/// * `show_line_numbers` - Whether to include line numbers in file content.
+/// * `ignore_config` - Ignore configuration.
+///
+/// # Returns
+/// * `io::Result<CopyStats>` - The number of files and folders processed.
+///
+/// # Examples
+/// ```rust
+/// let mut output = String::new();
+/// let stats = crate::output::format::process_directory(&path, &mut output, &base_path, &selected_items, &output_format, true, &ignore_config).unwrap();
+/// ```
 pub fn process_directory(
     path: &PathBuf,
     output: &mut String,
@@ -250,3 +279,7 @@ pub fn process_directory(
 
     Ok(CopyStats { files, folders })
 }
+
+// TODO: Add support for additional output formats (YAML, TOML, etc.).
+// TODO: Add error handling for missing or unreadable files.
+// TODO: Add options for output customization (e.g., file headers, summaries).

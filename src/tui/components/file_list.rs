@@ -1,3 +1,20 @@
+// src/tui/components/file_list.rs
+//!
+//! # File List Component
+//!
+//! This module defines the `FileList` component for rendering the file/folder list in the TUI.
+//! It handles display, selection highlighting, icons, and indentation for directory structure.
+//!
+//! ## Usage
+//! Use `FileList` in the main TUI view to render the current directory contents and selection state.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::tui::components::FileList;
+//! let file_list = FileList::new();
+//! file_list.render(f, area, app_state, selection_state);
+//! ```
+
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
@@ -9,13 +26,22 @@ use std::path::Path;
 use crate::models::constants::ICONS;
 use crate::tui::state::{AppState, SelectionState};
 
+/// File list component for rendering files and folders in the TUI.
 pub struct FileList;
 
 impl FileList {
+    /// Creates a new `FileList` component.
     pub fn new() -> Self {
         Self
     }
 
+    /// Renders the file list in the given area, using the current app and selection state.
+    ///
+    /// # Arguments
+    /// * `f` - The TUI frame to render into.
+    /// * `area` - The area to render the file list in.
+    /// * `app_state` - The current application state.
+    /// * `selection_state` - The current selection state.
     pub fn render(
         &self,
         f: &mut Frame,
@@ -29,6 +55,7 @@ impl FileList {
             .iter()
             .enumerate()
             .map(|(index, path)| {
+                // Calculate indentation based on directory depth
                 let depth = path
                     .strip_prefix(&app_state.current_dir)
                     .map(|p| p.components().count())
@@ -77,6 +104,7 @@ impl FileList {
         f.render_stateful_widget(list_widget, area, &mut selection_state.list_state);
     }
 
+    /// Returns the icon for a given path, based on file extension or directory status.
     fn get_icon(path: &Path) -> &'static str {
         if path.is_dir() {
             return ICONS
@@ -99,3 +127,6 @@ impl FileList {
             )
     }
 }
+
+// TODO: Add support for custom icons or color themes.
+// TODO: Add file size or modified date display in the file list.

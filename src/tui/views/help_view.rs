@@ -1,3 +1,20 @@
+// src/tui/views/help_view.rs
+//!
+//! # Help View
+//!
+//! This module defines the `HelpView` component for rendering the help popup in the TUI.
+//! It displays keyboard shortcuts, navigation, and usage instructions.
+//!
+//! ## Usage
+//! Use `HelpView` to show a modal with help and keybindings in the TUI.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::tui::views::HelpView;
+//! let help_view = HelpView::new();
+//! help_view.render(f, area, app_state);
+//! ```
+
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -6,13 +23,16 @@ use ratatui::{
     Frame,
 };
 
+/// Help view component for rendering the help popup/modal in the TUI.
 pub struct HelpView;
 
 impl HelpView {
+    /// Creates a new `HelpView` component.
     pub fn new() -> Self {
         Self
     }
 
+    /// Renders the help popup/modal with keyboard shortcuts and usage info.
     pub fn render(&self, f: &mut Frame, area: Rect, _app_state: &crate::tui::state::AppState) {
         // Create a centered area for the help content
         let help_area = centered_rect(80, 90, area);
@@ -81,7 +101,7 @@ impl HelpView {
     }
 }
 
-// Helper function to create a centered rectangle for the help view
+/// Helper function to create a centered rectangle for the help view
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -101,3 +121,5 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         ])
         .split(popup_layout[1])[1]
 }
+
+// TODO: Add support for paginated help or dynamic keybinding display.

@@ -1,3 +1,20 @@
+// src/output/xml.rs
+//!
+//! # XML Output Module
+//!
+//! This module provides functions for formatting selected files and directories as XML output.
+//! It is used to generate XML-formatted code/documentation bundles for export or clipboard.
+//!
+//! ## Usage
+//! Use `format_xml_output` to convert a set of selected files and folders into an XML string.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::output::xml::format_xml_output;
+//! let (xml, stats) = format_xml_output(&selected, &current_dir, true, &ignore_config).unwrap();
+//! assert!(xml.contains("<file name="));
+//! ```
+
 use std::collections::HashSet;
 use std::fs;
 use std::io;
@@ -7,6 +24,23 @@ use crate::fs::normalize_path;
 use crate::models::CopyStats;
 use crate::output::format::{format_file_content, is_binary_file, process_directory};
 
+/// Formats the selected files and directories as XML output.
+///
+/// Each file is represented as a <file> element with its path as an attribute. Directories are represented as <folder> elements.
+///
+/// # Arguments
+/// * `selected_items` - Set of selected file and directory paths.
+/// * `current_dir` - The base directory for relative path calculation.
+/// * `show_line_numbers` - Whether to include line numbers in file contents.
+/// * `ignore_config` - Ignore configuration for filtering files.
+///
+/// # Returns
+/// * `io::Result<(String, CopyStats)>` - The XML output and copy statistics.
+///
+/// # Examples
+/// ```rust
+/// // Used internally by clipboard and file export logic.
+/// ```
 pub fn format_xml_output(
     selected_items: &HashSet<PathBuf>,
     current_dir: &PathBuf,
@@ -73,3 +107,6 @@ pub fn format_xml_output(
 
     Ok((output, stats))
 }
+
+// TODO: Add option to pretty-print XML output for readability.
+// TODO: Add support for additional metadata attributes if needed.

@@ -1,3 +1,19 @@
+// src/tui/handlers/clipboard.rs
+//!
+//! # Clipboard Handler
+//!
+//! This module defines the `ClipboardHandler` for managing copy-to-clipboard operations in the TUI.
+//! It handles formatting, stats, and tree-building for selected items, and supports multiple output formats.
+//!
+//! ## Usage
+//! Use `ClipboardHandler` to copy selected files/folders to the clipboard in the desired format.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::tui::handlers::ClipboardHandler;
+//! ClipboardHandler::copy_selected_to_clipboard(&mut app_state).unwrap();
+//! ```
+
 use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -5,13 +21,16 @@ use std::path::{Path, PathBuf};
 use crate::models::{app_config::Node, CopyStats, OutputFormat};
 use crate::tui::state::AppState;
 
+/// Handler for clipboard operations (copying selected items, formatting, stats).
 pub struct ClipboardHandler;
 
 impl ClipboardHandler {
+    /// Creates a new `ClipboardHandler` instance.
     pub fn new() -> Self {
         Self
     }
 
+    /// Copies selected items to the clipboard, displaying a modal with stats.
     pub fn copy_selected_to_clipboard(app_state: &mut AppState) -> io::Result<()> {
         // Get formatted output and computed stats
         let (output, stats) = Self::format_selected_items(app_state)?;
@@ -39,6 +58,7 @@ impl ClipboardHandler {
         result
     }
 
+    /// Counts the number of selected files and folders.
     fn count_selected_items(app_state: &AppState) -> (usize, usize) {
         let mut files = 0;
         let mut folders = 0;
@@ -54,6 +74,7 @@ impl ClipboardHandler {
         (files, folders)
     }
 
+    /// Formats the selected items for clipboard output and returns stats.
     pub fn format_selected_items(app_state: &AppState) -> io::Result<(String, CopyStats)> {
         let mut output = String::new();
         let selected_items: Vec<_> = app_state
@@ -183,6 +204,7 @@ impl ClipboardHandler {
         Ok((output, total_stats))
     }
 
+    /// Recursively processes a directory, collecting file contents and stats.
     fn process_directory(
         app_state: &AppState,
         path: &PathBuf,
@@ -225,6 +247,7 @@ impl ClipboardHandler {
         Ok(())
     }
 
+    /// Processes a file, collecting its contents if not ignored or binary (unless allowed).
     fn process_file(
         app_state: &AppState,
         path: &PathBuf,
@@ -257,6 +280,7 @@ impl ClipboardHandler {
         Ok(())
     }
 
+    /// Adds a file or directory path to the tree structure for LLM output.
     fn add_to_tree(path_str: &str, root: &mut Node, _base_dir: &Path) {
         let path = Path::new(path_str);
         let mut current = root;
@@ -305,3 +329,6 @@ impl ClipboardHandler {
         }
     }
 }
+
+// TODO: Add support for progress reporting during large copy operations.
+// TODO: Add support for filtering or transforming output before copying.

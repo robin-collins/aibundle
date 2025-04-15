@@ -1,3 +1,20 @@
+//!
+//! # CLI Options Module
+//!
+//! This module defines the command-line options, argument parsing, and CLI mode logic for the application.
+//! It provides conversion utilities for config and output format handling.
+//!
+//! ## Usage
+//! Use `CliOptions` for parsing CLI arguments, and `run_cli_mode` to execute the CLI workflow.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::cli::options::{CliOptions, run_cli_mode};
+//! let opts = CliOptions::parse();
+//! run_cli_mode(opts.to_cli_mode_options()).unwrap();
+//! ```
+
+// src/cli/options.rs
 use crate::models::app_config::FullConfig;
 use crate::models::{AppConfig, IgnoreConfig, OutputFormat};
 use crate::tui::App;
@@ -9,6 +26,21 @@ use std::path::{Path, PathBuf};
 
 use crate::models::constants::VERSION;
 
+/// Command-line options for the application, parsed via clap.
+///
+/// # Fields
+/// * `source_dir_pos` - Optional positional source directory.
+/// * `output_file` - Output file path.
+/// * `output_console` - Whether to print output to console.
+/// * `files` - File pattern(s) to include.
+/// * `search` - Search query.
+/// * `format` - Output format (markdown, xml, json, llm).
+/// * `source_dir` - Source directory (default: ".").
+/// * `recursive` - Whether to enable recursive traversal.
+/// * `line_numbers` - Whether to show line numbers.
+/// * `gitignore` - Whether to use .gitignore rules.
+/// * `ignore` - Additional ignore patterns.
+/// * `save_config` - Whether to save the current config.
 #[derive(Parser, Debug)]
 #[command(name = "aibundle", version = VERSION)]
 #[command(about = "AIBUNDLE: A CLI & TUI file aggregator and formatter")]
@@ -64,6 +96,18 @@ pub struct CliOptions {
     pub save_config: bool,
 }
 
+/// CLI mode options, derived from `CliOptions` for internal use.
+///
+/// # Fields
+/// * `files_pattern` - File pattern(s) to include.
+/// * `source_dir` - Source directory.
+/// * `format` - Output format.
+/// * `gitignore` - Whether to use .gitignore rules.
+/// * `line_numbers` - Whether to show line numbers.
+/// * `recursive` - Whether to enable recursive traversal.
+/// * `ignore_list` - Additional ignore patterns.
+/// * `output_file` - Output file path.
+/// * `output_console` - Whether to print output to console.
 pub struct CliModeOptions {
     pub files_pattern: Option<String>,
     pub source_dir: String,
@@ -77,6 +121,7 @@ pub struct CliModeOptions {
 }
 
 impl CliOptions {
+    /// Converts CLI options to an `AppConfig` for use in the application.
     pub fn to_app_config(&self) -> AppConfig {
         AppConfig {
             default_format: Some(self.format.clone()),
@@ -88,6 +133,7 @@ impl CliOptions {
         }
     }
 
+    /// Converts CLI options to a `ModeConfig` for config serialization.
     pub fn to_mode_config(&self) -> ModeConfig {
         ModeConfig {
             files: self.files.clone(),
@@ -102,12 +148,14 @@ impl CliOptions {
         }
     }
 
+    /// Returns the effective source directory, preferring the positional argument if present.
     pub fn effective_source_dir(&self) -> String {
         self.source_dir_pos
             .clone()
             .unwrap_or_else(|| self.source_dir.clone())
     }
 
+    /// Converts CLI options to `CliModeOptions` for running CLI mode.
     pub fn to_cli_mode_options(&self) -> CliModeOptions {
         CliModeOptions {
             files_pattern: self.files.clone(),
@@ -123,77 +171,20 @@ impl CliOptions {
     }
 }
 
-pub fn load_merged_config(cli_opts: &CliOptions) -> io::Result<FullConfig> {
-    let mut config = load_config()?;
-
-    // If saving is requested, update config with current CLI options
-    if cli_opts.save_config {
-        // Update CLI mode config
-        config.cli = Some(cli_opts.to_mode_config());
-    }
-
-    Ok(config)
-}
-
-pub fn load_config() -> io::Result<FullConfig> {
-    // Determine config file path
-    let config_path = config_file_path()?;
-
-    // Check if config file exists
-    if !Path::new(&config_path).exists() {
-        return Ok(FullConfig {
-            cli: None,
-            tui: None,
-        });
-    }
-
-    // Load and parse config file (simplified implementation)
-    // In a real implementation, this would read and parse the file
-    Ok(FullConfig {
-        cli: None,
-        tui: None,
-    })
-}
-
-pub fn config_file_path() -> io::Result<PathBuf> {
-    // Fixed error handling for environment variable
-    let home = match std::env::var("HOME") {
-        Ok(path) => path,
-        Err(_) => {
-            if cfg!(windows) {
-                match std::env::var("USERPROFILE") {
-                    Ok(path) => path,
-                    Err(_) => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::NotFound,
-                            "Home directory not found",
-                        ));
-                    }
-                }
-            } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "Home directory not found",
-                ));
-            }
-        }
-    };
-
-    Ok(PathBuf::from(home).join(".aibundle.config"))
-}
-
-pub fn create_ignore_config(cli_opts: &CliOptions) -> IgnoreConfig {
-    let use_default_ignores = cli_opts.ignore.contains(&"default".to_string());
-
-    IgnoreConfig {
-        use_default_ignores,
-        use_gitignore: cli_opts.gitignore,
-        include_binary_files: false, // Default to false, could be a CLI option
-        extra_ignore_patterns: cli_opts.ignore.clone(),
-    }
-}
-
-pub fn string_to_output_format(format: &str) -> OutputFormat {
+/// Converts a string to an `OutputFormat` enum.
+///
+/// # Arguments
+/// * `format` - The format string (e.g., "markdown", "xml").
+///
+/// # Returns
+/// * `OutputFormat` - The corresponding enum variant.
+///
+/// # Examples
+/// ```rust
+/// use crate::cli::options::to_output_format;
+/// assert_eq!(to_output_format("json"), crate::models::OutputFormat::Json);
+/// ```
+pub fn to_output_format(format: &str) -> OutputFormat {
     match format.to_lowercase().as_str() {
         "markdown" => OutputFormat::Markdown,
         "xml" => OutputFormat::Xml,
@@ -202,10 +193,60 @@ pub fn string_to_output_format(format: &str) -> OutputFormat {
     }
 }
 
-pub fn get_output_format(cli_opts: &CliOptions) -> OutputFormat {
-    string_to_output_format(&cli_opts.format)
+/// Loads and merges the CLI config with the current options, saving if requested.
+///
+/// # Arguments
+/// * `cli_opts` - The CLI options to merge.
+///
+/// # Returns
+/// * `io::Result<FullConfig>` - The merged configuration.
+///
+/// # Examples
+/// ```rust
+/// // Used internally by CLI entrypoint.
+/// ```
+pub fn get_merged_config(cli_opts: &CliOptions) -> io::Result<FullConfig> {
+    let mut config = crate::config::load_config()?;
+    if cli_opts.save_config {
+        config.cli = Some(cli_opts.to_mode_config());
+    }
+    Ok(config)
 }
 
+/// Converts CLI options to an `IgnoreConfig` for file filtering.
+///
+/// # Arguments
+/// * `cli_opts` - The CLI options to convert.
+///
+/// # Returns
+/// * `IgnoreConfig` - The ignore configuration.
+///
+/// # Examples
+/// ```rust
+/// // Used internally by CLI entrypoint.
+/// ```
+pub fn to_ignore_config(cli_opts: &CliOptions) -> IgnoreConfig {
+    let use_default_ignores = cli_opts.ignore.contains(&"default".to_string());
+    IgnoreConfig {
+        use_default_ignores,
+        use_gitignore: cli_opts.gitignore,
+        include_binary_files: false, // Default to false, could be a CLI option
+        extra_ignore_patterns: cli_opts.ignore.clone(),
+    }
+}
+
+/// Runs the CLI mode workflow, including file loading, filtering, and output generation.
+///
+/// # Arguments
+/// * `options` - The CLI mode options.
+///
+/// # Returns
+/// * `io::Result<()>` - Ok on success, or error if any step fails.
+///
+/// # Examples
+/// ```rust
+/// // Used as the main entrypoint for CLI mode.
+/// ```
 pub fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
     // 1. Create AppConfig
     let app_config = AppConfig {
@@ -229,69 +270,59 @@ pub fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
     // 4. Call App::new with arguments and handle Result
     let mut app = App::new(app_config, start_dir.clone(), ignore_config)?;
 
-    // Subsequent operations should now work on the unwrapped `app`
-    // No need to change these lines as App has compatibility fields
-    // app.current_dir = start_dir; // Set implicitly by App::new
-    // app.ignore_config.use_gitignore = options.gitignore; // Set implicitly by App::new
-    // app.output_format = ... // Set implicitly by App::new
-    // app.show_line_numbers = ... // Set implicitly by App::new
-    // app.recursive = options.recursive; // Set implicitly by App::new
-    // app.config.default_ignore = Some(options.ignore_list.to_vec()); // Set implicitly by App::new
-    // app.ignore_config.extra_ignore_patterns = options.ignore_list.to_vec(); // Set implicitly by App::new
-
     // Override selection limit from loaded CLI config if provided.
-    // Note: load_config might need adjustment to handle potential errors better
     if let Ok(full_config) = crate::config::load_config() {
         if let Some(cli_conf) = full_config.cli {
             if let Some(limit) = cli_conf.selection_limit {
-                app.selection_limit = limit;
+                app.state.selection_limit = limit;
             }
         }
     }
 
     // Load items based on patterns and recursion setting
-    if app.recursive {
-        // Check app.recursive which was set via AppConfig
-        app.expanded_folders =
-            crate::fs::collect_all_subdirs(&app.current_dir, &app.ignore_config)?;
-        app.load_items()?;
+    if app.state.recursive {
+        app.state.expanded_folders =
+            crate::fs::collect_all_subdirs(&app.state.current_dir, &app.state.ignore_config)?;
+        crate::tui::handlers::FileOpsHandler::load_items(&mut app.state)?;
     } else {
-        app.load_items_nonrecursive()?;
+        crate::tui::handlers::FileOpsHandler::load_items_nonrecursive(&mut app.state)?;
     }
 
     // Apply file pattern filter
     if let Some(pattern) = options.files_pattern {
-        app.search_query = pattern.to_string();
-        app.update_search();
+        app.state.search_query = pattern.to_string();
+        let mut search_state = crate::tui::state::SearchState::new();
+        search_state.search_query = pattern.to_string();
+        let _ = crate::tui::handlers::FileOpsHandler::update_search(&mut app.state, &mut search_state);
         // In CLI mode, only select files that match the pattern (exclude directories)
         // For LLM format, we need to keep directories to build a proper structure
-        if app.output_format != OutputFormat::Llm {
-            app.filtered_items.retain(|p| p.is_file());
+        if app.state.output_format != OutputFormat::Llm {
+            app.state.filtered_items.retain(|p| p.is_file());
         }
     }
 
     // Select all filtered items
-    app.selected_items
-        .extend(app.filtered_items.iter().cloned());
+    app.state.selected_items
+        .extend(app.state.filtered_items.iter().cloned());
 
     // For LLM format, we need the whole directory structure
-    if app.output_format == OutputFormat::Llm {
+    if app.state.output_format == OutputFormat::Llm {
         // Add all parent directories of selected files
         let mut to_add = std::collections::HashSet::new();
-        for path in &app.selected_items {
+        for path in &app.state.selected_items {
             let mut current = path.as_path();
             while let Some(parent) = current.parent() {
-                if parent.starts_with(&app.current_dir) && parent != app.current_dir {
+                if parent.starts_with(&app.state.current_dir) && parent != app.state.current_dir {
                     to_add.insert(parent.to_path_buf());
                 }
                 current = parent;
             }
         }
-        app.selected_items.extend(to_add);
+        app.state.selected_items.extend(to_add);
     }
 
     // Generate output
-    let output = app.format_selected_items()?;
+    let (output, _stats) = crate::tui::handlers::ClipboardHandler::format_selected_items(&mut app.state)?;
 
     // Handle output
     if let Some(file_path) = options.output_file {
@@ -307,3 +338,6 @@ pub fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
 
     Ok(())
 }
+
+// TODO: Add support for additional CLI flags (e.g., include-binary, config-path).
+// TODO: Add validation for CLI argument combinations.

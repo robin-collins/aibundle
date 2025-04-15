@@ -1,3 +1,20 @@
+//!
+//! # AIBundle Main Entry Point
+//!
+//! This is the main entry point for the AIBundle application. It parses CLI arguments, loads configuration, and launches either the CLI or TUI mode.
+//!
+//! ## Usage
+//! Run the binary with CLI arguments for batch operations, or without arguments for the interactive TUI.
+//!
+//! ## Examples
+//! ```sh
+//! # Run in TUI mode
+//! aibundle
+//!
+//! # Run in CLI mode
+//! aibundle --files "src/**/*.rs" --format json --output-file out.json
+//! ```
+
 mod cli;
 mod clipboard;
 mod config;
@@ -14,6 +31,7 @@ use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use std::io;
 use std::path::PathBuf;
 
+/// Main entry point. Parses CLI args, loads config, and launches CLI or TUI mode.
 fn main() -> io::Result<()> {
     let cli_args = CliOptions::parse();
 
@@ -121,7 +139,7 @@ fn main() -> io::Result<()> {
             selection_limit: Some(crate::models::DEFAULT_SELECTION_LIMIT),
         };
 
-        let ignore_config = models::IgnoreConfig::default();
+        let ignore_config = crate::models::IgnoreConfig::default();
 
         let mut app = tui::App::new(
             default_config,
@@ -131,7 +149,7 @@ fn main() -> io::Result<()> {
 
         if let Some(tui_conf) = full_config.tui {
             if let Some(format) = tui_conf.format {
-                app.output_format = match format.to_lowercase().as_str() {
+                app.state.output_format = match format.to_lowercase().as_str() {
                     "markdown" => models::OutputFormat::Markdown,
                     "json" => models::OutputFormat::Json,
                     "llm" => models::OutputFormat::Llm,
@@ -139,27 +157,27 @@ fn main() -> io::Result<()> {
                 };
             }
             if let Some(git) = tui_conf.gitignore {
-                app.ignore_config.use_gitignore = git;
+                app.state.ignore_config.use_gitignore = git;
             }
             if let Some(ignore) = tui_conf.ignore {
-                app.config.default_ignore = Some(ignore.clone());
-                app.ignore_config.extra_ignore_patterns = ignore;
+                app.state.config.default_ignore = Some(ignore.clone());
+                app.state.ignore_config.extra_ignore_patterns = ignore;
             }
             if let Some(ln) = tui_conf.line_numbers {
-                app.show_line_numbers = ln;
+                app.state.show_line_numbers = ln;
             }
             // Only override the current directory from saved config when no explicit directory was provided.
             if effective_source_dir == "." {
                 if let Some(src) = tui_conf.source_dir {
-                    app.current_dir = PathBuf::from(src);
+                    app.state.current_dir = PathBuf::from(src);
                 }
             }
             if let Some(limit) = tui_conf.selection_limit {
-                app.selection_limit = limit;
+                app.state.selection_limit = limit;
             }
             // Set the recursive flag from the saved TUI config, if provided.
             if let Some(recursive) = tui_conf.recursive {
-                app.recursive = recursive;
+                app.state.recursive = recursive;
             }
         }
 
@@ -169,3 +187,6 @@ fn main() -> io::Result<()> {
         Ok(())
     }
 }
+
+// TODO: Add support for additional CLI subcommands or modes.
+// TODO: Add support for config migration/versioning.

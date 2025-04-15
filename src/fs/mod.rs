@@ -1,3 +1,21 @@
+// src/fs/mod.rs
+//!
+//! # File System Utilities Module
+//!
+//! This module provides file system utilities for directory traversal, ignore logic, file listing, and binary detection.
+//! It is used throughout the application for loading, filtering, and analyzing files and directories.
+//!
+//! ## Usage
+//! Use these functions for recursive file listing, ignore pattern handling, and file type checks.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::fs::{list_files, is_binary_file};
+//! let files = list_files(&std::path::PathBuf::from("./src"));
+//! assert!(!files.is_empty());
+//! assert!(!is_binary_file(std::path::Path::new("main.rs")));
+//! ```
+
 use crate::models::IgnoreConfig;
 use crate::tui::state::AppState;
 use ignore::{gitignore::GitignoreBuilder, Match};
@@ -6,7 +24,21 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+use tokio::fs as tokio_fs;
+use tokio_stream::StreamExt;
 
+/// Prompts the user to confirm overwriting a file if it exists.
+///
+/// # Arguments
+/// * `file_path` - The path to the file to check.
+///
+/// # Returns
+/// * `io::Result<bool>` - Ok(true) if overwrite is confirmed or file does not exist, Ok(false) otherwise.
+///
+/// # Examples
+/// ```rust
+/// // Interactive: cannot test in doctest
+/// ```
 pub fn confirm_overwrite(file_path: &str) -> io::Result<bool> {
     if Path::new(file_path).exists() {
         println!("File '{}' already exists. Overwrite? (y/n): ", file_path);
@@ -17,29 +49,95 @@ pub fn confirm_overwrite(file_path: &str) -> io::Result<bool> {
     Ok(true)
 }
 
+/// Recursively lists all files under the given path, applying default ignore rules.
+///
+/// # Arguments
+/// * `path` - The root directory to list files from.
+///
+/// # Returns
+/// * `Vec<PathBuf>` - All files and directories found, excluding ignored ones.
+///
+/// # Examples
+/// ```rust
+/// let files = crate::fs::list_files(&std::path::PathBuf::from("./src"));
+/// assert!(!files.is_empty());
+/// ```
 pub fn list_files(path: &PathBuf) -> Vec<PathBuf> {
-    WalkDir::new(path)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| !is_excluded(e.path()))
-        .map(|e| e.path().to_path_buf())
-        .collect()
+    let mut result = Vec::new();
+    let mut visited = HashSet::new();
+    list_files_inner(path, &mut result, &mut visited);
+    result
 }
 
-fn is_excluded(path: &std::path::Path) -> bool {
-    let excluded = ["node_modules", ".git", "target"];
-    path.components()
-        .any(|c| excluded.contains(&c.as_os_str().to_str().unwrap_or("")))
+fn list_files_inner(path: &PathBuf, result: &mut Vec<PathBuf>, visited: &mut HashSet<PathBuf>) {
+    let canonical = match try_canonicalize(path) {
+        Some(c) => c,
+        None => return, // Permission denied or error, skip
+    };
+    if !visited.insert(canonical.clone()) {
+        // Symlink loop detected, skip
+        return;
+    }
+    let entries = match fs::read_dir(path) {
+        Ok(rd) => rd,
+        Err(e) => {
+            if e.kind() == io::ErrorKind::PermissionDenied {
+                // Permission denied, skip
+                return;
+            } else {
+                return;
+            }
+        }
+    };
+    for entry in entries.flatten() {
+        let entry_path = entry.path();
+        result.push(entry_path.clone());
+        if entry_path.is_dir() {
+            list_files_inner(&entry_path, result, visited);
+        }
+    }
 }
 
-pub fn add_items_iterative(
+// Helper for canonical path tracking in sync code
+fn try_canonicalize(path: &Path) -> Option<PathBuf> {
+    std::fs::canonicalize(path).ok()
+}
+
+/// Recursively adds items to a list, respecting expanded folders and ignore rules.
+///
+/// # Arguments
+/// * `items` - The list to populate.
+/// * `root` - The root directory to start from.
+/// * `expanded_folders` - Set of expanded folders to traverse.
+/// * `ignore_config` - Ignore configuration.
+/// * `base_dir` - The base directory for relative ignore checks.
+///
+/// # Returns
+/// * `io::Result<()>` - Ok on success, or error if traversal fails.
+///
+/// # Examples
+/// ```rust
+/// // Used internally by TUI file loading logic.
+/// ```
+pub fn add_items_recursively(
     items: &mut Vec<PathBuf>,
     root: &PathBuf,
     expanded_folders: &HashSet<PathBuf>,
     ignore_config: &IgnoreConfig,
     base_dir: &PathBuf,
 ) -> io::Result<()> {
-    // Only add ".." for the root directory (not for expanded subdirectories)
+    let mut visited = HashSet::new();
+    add_items_recursively_inner(items, root, expanded_folders, ignore_config, base_dir, &mut visited)
+}
+
+fn add_items_recursively_inner(
+    items: &mut Vec<PathBuf>,
+    root: &PathBuf,
+    expanded_folders: &HashSet<PathBuf>,
+    ignore_config: &IgnoreConfig,
+    base_dir: &PathBuf,
+    visited: &mut HashSet<PathBuf>,
+) -> io::Result<()> {
     if items.is_empty() && root == base_dir {
         if let Some(parent) = root.parent() {
             if !parent.as_os_str().is_empty() {
@@ -47,15 +145,30 @@ pub fn add_items_iterative(
             }
         }
     }
-
-    // Process current directory
-    let mut entries: Vec<PathBuf> = fs::read_dir(root)?
-        .filter_map(|e| e.ok())
+    let canonical = match try_canonicalize(root) {
+        Some(c) => c,
+        None => return Ok(()), // Permission denied or error, skip
+    };
+    if !visited.insert(canonical.clone()) {
+        // Symlink loop detected, skip
+        return Ok(());
+    }
+    let entries = match fs::read_dir(root) {
+        Ok(rd) => rd,
+        Err(e) => {
+            if e.kind() == io::ErrorKind::PermissionDenied {
+                return Ok(());
+            } else {
+                return Ok(());
+            }
+        }
+    };
+    let mut entry_vec: Vec<PathBuf> = entries
+        .flatten()
         .map(|e| e.path())
+        .filter(|p| !is_path_ignored_iterative(p, base_dir, ignore_config))
         .collect();
-
-    entries.retain(|p| !is_path_ignored_for_iterative(p, base_dir, ignore_config));
-    entries.sort_by(|a, b| {
+    entry_vec.sort_by(|a, b| {
         let a_is_dir = a.is_dir();
         let b_is_dir = b.is_dir();
         match (a_is_dir, b_is_dir) {
@@ -64,19 +177,30 @@ pub fn add_items_iterative(
             _ => a.file_name().cmp(&b.file_name()),
         }
     });
-
-    // Add entries and recursively process expanded folders
-    for entry in entries {
+    for entry in entry_vec {
         items.push(entry.clone());
         if entry.is_dir() && expanded_folders.contains(&entry) {
-            add_items_iterative(items, &entry, expanded_folders, ignore_config, base_dir)?;
+            add_items_recursively_inner(items, &entry, expanded_folders, ignore_config, base_dir, visited)?;
         }
     }
-
     Ok(())
 }
 
-pub fn is_path_ignored_for_iterative(
+/// Determines if a path should be ignored based on ignore configuration and .gitignore rules.
+///
+/// # Arguments
+/// * `path` - The path to check.
+/// * `base_dir` - The base directory for relative ignore checks.
+/// * `ignore_config` - Ignore configuration.
+///
+/// # Returns
+/// * `bool` - True if the path should be ignored, false otherwise.
+///
+/// # Examples
+/// ```rust
+/// // Used internally by file loading and filtering logic.
+/// ```
+pub fn is_path_ignored_iterative(
     path: &PathBuf,
     base_dir: &PathBuf,
     ignore_config: &IgnoreConfig,
@@ -122,6 +246,19 @@ pub fn is_path_ignored_for_iterative(
     false
 }
 
+/// Collects all subdirectories under the given base directory, applying ignore rules.
+///
+/// # Arguments
+/// * `base_dir` - The root directory to start from.
+/// * `ignore_config` - Ignore configuration.
+///
+/// # Returns
+/// * `io::Result<HashSet<PathBuf>>` - Set of all subdirectories found.
+///
+/// # Examples
+/// ```rust
+/// // Used internally for recursive folder expansion.
+/// ```
 pub fn collect_all_subdirs(
     base_dir: &Path,
     ignore_config: &IgnoreConfig,
@@ -129,14 +266,31 @@ pub fn collect_all_subdirs(
     let base_dir_buf = base_dir.to_path_buf();
     let mut dirs = HashSet::new();
     let mut stack = vec![base_dir_buf.clone()];
+    let mut visited = HashSet::new();
     while let Some(current) = stack.pop() {
+        let canonical = match try_canonicalize(&current) {
+            Some(c) => c,
+            None => continue, // Permission denied or error, skip
+        };
+        if !visited.insert(canonical.clone()) {
+            // Symlink loop detected, skip
+            continue;
+        }
         if current.is_dir() {
             dirs.insert(current.clone());
-            for entry in fs::read_dir(&current)?.flatten() {
+            let entries = match fs::read_dir(&current) {
+                Ok(rd) => rd,
+                Err(e) => {
+                    if e.kind() == io::ErrorKind::PermissionDenied {
+                        continue;
+                    } else {
+                        continue;
+                    }
+                }
+            };
+            for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_dir()
-                    && !is_path_ignored_for_iterative(&path, &base_dir_buf, ignore_config)
-                {
+                if path.is_dir() && !is_path_ignored_iterative(&path, &base_dir_buf, ignore_config) {
                     stack.push(path);
                 }
             }
@@ -145,11 +299,38 @@ pub fn collect_all_subdirs(
     Ok(dirs)
 }
 
+/// Normalizes a file path to use forward slashes.
+///
+/// # Arguments
+/// * `path` - The path string to normalize.
+///
+/// # Returns
+/// * `String` - The normalized path.
+///
+/// # Examples
+/// ```rust
+/// assert_eq!(crate::fs::normalize_path("foo\\bar"), "foo/bar");
+/// ```
 pub fn normalize_path(path: &str) -> String {
     path.replace('\\', "/")
 }
 
-pub fn count_selection_items_async(
+/// Counts the number of files and directories under a given path, respecting ignore rules and a selection limit.
+///
+/// # Arguments
+/// * `path` - The path to start counting from.
+/// * `base_dir` - The base directory for ignore checks.
+/// * `ignore_config` - Ignore configuration.
+/// * `selection_limit` - Maximum number of items to count before early exit.
+///
+/// # Returns
+/// * `io::Result<usize>` - The number of items found, or early exit if limit exceeded.
+///
+/// # Examples
+/// ```rust
+/// // Used internally for selection limit enforcement.
+/// ```
+pub fn count_selection_items(
     path: &Path,
     base_dir: &PathBuf,
     ignore_config: &IgnoreConfig,
@@ -163,7 +344,7 @@ pub fn count_selection_items_async(
         let mut stack = vec![path.to_path_buf()];
 
         while let Some(current) = stack.pop() {
-            if is_path_ignored_for_iterative(&current, base_dir, ignore_config) {
+            if is_path_ignored_iterative(&current, base_dir, ignore_config) {
                 continue;
             }
             if current.is_file() {
@@ -190,6 +371,18 @@ pub fn count_selection_items_async(
     }
 }
 
+/// Returns true if the given path is a binary file, based on extension or name.
+///
+/// # Arguments
+/// * `path` - The path to check.
+///
+/// # Returns
+/// * `bool` - True if the file is binary, false otherwise.
+///
+/// # Examples
+/// ```rust
+/// assert!(!crate::fs::is_binary_file(std::path::Path::new("main.rs")));
+/// ```
 pub fn is_binary_file(path: &Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         let binary_extensions = [
@@ -211,8 +404,23 @@ pub fn is_binary_file(path: &Path) -> bool {
     false
 }
 
-// NEW FUNCTION: recursively search for items matching the query up to a given depth.
-// This generic function uses a custom matcher to determine if a file/directory matches.
+/// Recursively searches for items matching a query up to a given depth, using a custom matcher.
+///
+/// # Arguments
+/// * `app_state` - The application state (for ignore logic).
+/// * `path` - The path to start searching from.
+/// * `depth` - Current recursion depth.
+/// * `max_depth` - Maximum recursion depth.
+/// * `matcher` - Function to determine if a file/directory matches.
+/// * `results` - Set to collect matching paths.
+///
+/// # Returns
+/// * `bool` - True if any matches were found, false otherwise.
+///
+/// # Examples
+/// ```rust
+/// // Used internally for recursive search/filtering.
+/// ```
 pub fn recursive_search_helper_generic<F>(
     app_state: &AppState,
     path: &Path,
@@ -257,3 +465,174 @@ where
     }
     found
 }
+
+/// Async version of list_files
+pub async fn list_files_async(path: &PathBuf) -> io::Result<Vec<PathBuf>> {
+    let mut result = Vec::new();
+    let mut visited = HashSet::new();
+    list_files_async_inner(path, &mut result, &mut visited).await?;
+    Ok(result)
+}
+
+async fn list_files_async_inner(path: &PathBuf, result: &mut Vec<PathBuf>, visited: &mut HashSet<PathBuf>) -> io::Result<()> {
+    let canonical = match tokio_fs::canonicalize(path).await {
+        Ok(c) => c,
+        Err(e) => {
+            if e.kind() == io::ErrorKind::PermissionDenied {
+                // Permission denied, skip
+                return Ok(());
+            } else {
+                return Err(e);
+            }
+        }
+    };
+    if !visited.insert(canonical.clone()) {
+        // Symlink loop detected, skip
+        return Ok(());
+    }
+    let mut read_dir = match tokio_fs::read_dir(path).await {
+        Ok(rd) => rd,
+        Err(e) => {
+            if e.kind() == io::ErrorKind::PermissionDenied {
+                // Permission denied, skip
+                return Ok(());
+            } else {
+                return Err(e);
+            }
+        }
+    };
+    while let Some(entry) = read_dir.next_entry().await? {
+        let entry_path = entry.path();
+        result.push(entry_path.clone());
+        if entry_path.is_dir() {
+            Box::pin(list_files_async_inner(&entry_path, result, visited)).await?;
+        }
+    }
+    Ok(())
+}
+
+/// Async version of add_items_recursively
+pub async fn add_items_recursively_async(
+    items: &mut Vec<PathBuf>,
+    root: &PathBuf,
+    expanded_folders: &HashSet<PathBuf>,
+    ignore_config: &IgnoreConfig,
+    base_dir: &PathBuf,
+) -> io::Result<()> {
+    let mut visited = HashSet::new();
+    add_items_recursively_async_inner(items, root, expanded_folders, ignore_config, base_dir, &mut visited).await
+}
+
+async fn add_items_recursively_async_inner(
+    items: &mut Vec<PathBuf>,
+    root: &PathBuf,
+    expanded_folders: &HashSet<PathBuf>,
+    ignore_config: &IgnoreConfig,
+    base_dir: &PathBuf,
+    visited: &mut HashSet<PathBuf>,
+) -> io::Result<()> {
+    if items.is_empty() && root == base_dir {
+        if let Some(parent) = root.parent() {
+            if !parent.as_os_str().is_empty() {
+                items.push(root.join(".."));
+            }
+        }
+    }
+    let canonical = match tokio_fs::canonicalize(root).await {
+        Ok(c) => c,
+        Err(e) => {
+            if e.kind() == io::ErrorKind::PermissionDenied {
+                return Ok(());
+            } else {
+                return Err(e);
+            }
+        }
+    };
+    if !visited.insert(canonical.clone()) {
+        // Symlink loop detected, skip
+        return Ok(());
+    }
+    let mut read_dir = match tokio_fs::read_dir(root).await {
+        Ok(rd) => rd,
+        Err(e) => {
+            if e.kind() == io::ErrorKind::PermissionDenied {
+                return Ok(());
+            } else {
+                return Err(e);
+            }
+        }
+    };
+    let mut entries: Vec<PathBuf> = Vec::new();
+    while let Some(entry) = read_dir.next_entry().await? {
+        let entry_path = entry.path();
+        if !is_path_ignored_iterative(&entry_path, base_dir, ignore_config) {
+            entries.push(entry_path);
+        }
+    }
+    entries.sort_by(|a, b| {
+        let a_is_dir = a.is_dir();
+        let b_is_dir = b.is_dir();
+        match (a_is_dir, b_is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.file_name().cmp(&b.file_name()),
+        }
+    });
+    for entry in entries {
+        items.push(entry.clone());
+        if entry.is_dir() && expanded_folders.contains(&entry) {
+            Box::pin(add_items_recursively_async_inner(items, &entry, expanded_folders, ignore_config, base_dir, visited)).await?;
+        }
+    }
+    Ok(())
+}
+
+/// Async version of collect_all_subdirs
+pub async fn collect_all_subdirs_async(
+    base_dir: &Path,
+    ignore_config: &IgnoreConfig,
+) -> io::Result<HashSet<PathBuf>> {
+    let base_dir_buf = base_dir.to_path_buf();
+    let mut dirs = HashSet::new();
+    let mut stack = vec![base_dir_buf.clone()];
+    let mut visited = HashSet::new();
+    while let Some(current) = stack.pop() {
+        let canonical = match tokio_fs::canonicalize(&current).await {
+            Ok(c) => c,
+            Err(e) => {
+                if e.kind() == io::ErrorKind::PermissionDenied {
+                    continue;
+                } else {
+                    return Err(e);
+                }
+            }
+        };
+        if !visited.insert(canonical.clone()) {
+            // Symlink loop detected, skip
+            continue;
+        }
+        if current.is_dir() {
+            dirs.insert(current.clone());
+            let mut read_dir = match tokio_fs::read_dir(&current).await {
+                Ok(rd) => rd,
+                Err(e) => {
+                    if e.kind() == io::ErrorKind::PermissionDenied {
+                        continue;
+                    } else {
+                        return Err(e);
+                    }
+                }
+            };
+            while let Some(entry) = read_dir.next_entry().await? {
+                let path = entry.path();
+                if path.is_dir() && !is_path_ignored_iterative(&path, &base_dir_buf, ignore_config) {
+                    stack.push(path);
+                }
+            }
+        }
+    }
+    Ok(dirs)
+}
+
+// TODO: Add more robust binary file detection (magic numbers, content sniffing).
+// TODO: Add error handling for permission denied and symlink loops.

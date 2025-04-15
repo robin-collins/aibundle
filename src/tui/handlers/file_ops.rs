@@ -1,18 +1,37 @@
+//!
+//! # File Operations Handler
+//!
+//! This module defines the `FileOpsHandler` for managing file and folder operations in the TUI.
+//! It handles loading, searching, selection, toggling options, and folder expansion/collapse.
+//!
+//! ## Usage
+//! Use `FileOpsHandler` to manage file system interactions and UI state updates in the TUI.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::tui::handlers::FileOpsHandler;
+//! FileOpsHandler::load_items(&mut app_state).unwrap();
+//! FileOpsHandler::toggle_folder_expansion(&mut app_state, &selection_state).unwrap();
+//! ```
+
+// src/tui/handlers/file_ops.rs
 use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::config::{config_file_path, save_config};
-use crate::fs::is_path_ignored_for_iterative;
+use crate::fs::{add_items_recursively, is_path_ignored_iterative};
 use crate::models::{CopyStats, OutputFormat};
 use crate::output::format_selected_items;
 use crate::tui::state::AppState;
 use crate::tui::state::{SearchState, SelectionState};
 
+/// Handler for file and folder operations in the TUI.
 pub struct FileOpsHandler;
 
 impl FileOpsHandler {
+    /// Loads items (files/folders) into the application state, including parent navigation.
     pub fn load_items(app_state: &mut AppState) -> io::Result<()> {
         app_state.items.clear();
 
@@ -29,8 +48,8 @@ impl FileOpsHandler {
             }
         }
 
-        // Use the add_items_iterative function from fs module to populate app_state.items
-        crate::fs::add_items_iterative(
+        // Use the add_items_recursively function from fs module to populate app_state.items
+        add_items_recursively(
             &mut app_state.items,
             &app_state.current_dir,
             &app_state.expanded_folders,
@@ -54,6 +73,7 @@ impl FileOpsHandler {
         Ok(())
     }
 
+    /// Loads only the current directory (non-recursive) into the application state.
     pub fn load_items_nonrecursive(app_state: &mut AppState) -> io::Result<()> {
         app_state.items.clear();
         app_state.filtered_items.clear();
@@ -70,7 +90,7 @@ impl FileOpsHandler {
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .filter(|p| {
-                !is_path_ignored_for_iterative(p, &app_state.current_dir, &app_state.ignore_config)
+                !is_path_ignored_iterative(p, &app_state.current_dir, &app_state.ignore_config)
             })
             .collect::<Vec<_>>();
 
@@ -91,6 +111,7 @@ impl FileOpsHandler {
         Ok(())
     }
 
+    /// Updates the search results in the application state based on the search query.
     pub fn update_search(
         app_state: &mut AppState,
         search_state: &mut SearchState,
@@ -124,7 +145,7 @@ impl FileOpsHandler {
         // Recursively search each immediate child of the current directory
         if let Ok(entries) = fs::read_dir(&app_state.current_dir) {
             for entry in entries.filter_map(|e| e.ok()).map(|e| e.path()) {
-                if !is_path_ignored_for_iterative(
+                if !is_path_ignored_iterative(
                     &entry,
                     &app_state.current_dir,
                     &app_state.ignore_config,
@@ -178,6 +199,7 @@ impl FileOpsHandler {
         Ok(())
     }
 
+    /// Formats the selected items for output and updates last_copy_stats.
     pub fn format_selected_items(app_state: &mut AppState) -> io::Result<String> {
         let result = format_selected_items(
             &app_state.selected_items,
@@ -196,6 +218,7 @@ impl FileOpsHandler {
         Ok(result.0)
     }
 
+    /// Handles Enter key: navigates into directories or up to parent.
     pub fn handle_enter(
         app_state: &mut AppState,
         selection_state: &mut SelectionState,
@@ -228,27 +251,32 @@ impl FileOpsHandler {
         Ok(())
     }
 
+    /// Toggles the use of default ignores and reloads items.
     pub fn toggle_default_ignores(app_state: &mut AppState) -> io::Result<()> {
         app_state.ignore_config.use_default_ignores = !app_state.ignore_config.use_default_ignores;
         Self::load_items(app_state)
     }
 
+    /// Toggles the use of .gitignore and reloads items.
     pub fn toggle_gitignore(app_state: &mut AppState) -> io::Result<()> {
         app_state.ignore_config.use_gitignore = !app_state.ignore_config.use_gitignore;
         Self::load_items(app_state)
     }
 
+    /// Toggles the inclusion of binary files and reloads items.
     pub fn toggle_binary_files(app_state: &mut AppState) -> io::Result<()> {
         app_state.ignore_config.include_binary_files =
             !app_state.ignore_config.include_binary_files;
         Self::load_items(app_state)
     }
 
+    /// Toggles the output format (XML, Markdown, JSON, LLM).
     pub fn toggle_output_format(app_state: &mut AppState) -> io::Result<()> {
         app_state.output_format = app_state.output_format.toggle();
         Ok(())
     }
 
+    /// Toggles line numbers for output (except in JSON mode).
     pub fn toggle_line_numbers(app_state: &mut AppState) -> io::Result<()> {
         // Don't toggle line numbers if we're in JSON mode
         if app_state.output_format != OutputFormat::Json {
@@ -257,6 +285,7 @@ impl FileOpsHandler {
         Ok(())
     }
 
+    /// Saves the current configuration to disk, warning if file exists.
     pub fn save_config(app_state: &mut AppState) -> io::Result<()> {
         let config_path = config_file_path()?;
         if config_path.exists() {
@@ -278,6 +307,7 @@ impl FileOpsHandler {
         Ok(())
     }
 
+    /// Checks for pending selection count results and updates selection state.
     pub fn check_pending_selection(
         app_state: &mut AppState,
         _selection_state: &mut SelectionState,
@@ -312,11 +342,13 @@ impl FileOpsHandler {
         Ok(())
     }
 
+    /// Shows the help modal in the application.
     pub fn show_help(app_state: &mut AppState) -> io::Result<()> {
         app_state.modal = Some(crate::tui::components::Modal::help());
         Ok(())
     }
 
+    /// Toggles expansion/collapse of a folder in the file list.
     pub fn toggle_folder_expansion(
         app_state: &mut AppState,
         selection_state: &SelectionState,
@@ -392,6 +424,7 @@ impl FileOpsHandler {
         Ok(())
     }
 
+    /// Toggles recursive expansion/collapse of a folder and its descendants.
     pub fn toggle_folder_expansion_recursive(
         app_state: &mut AppState,
         selection_state: &mut SelectionState,
@@ -420,3 +453,7 @@ impl FileOpsHandler {
         Ok(())
     }
 }
+
+// TODO: Add support for file previews on selection.
+// TODO: Add support for batch operations (move, delete, rename).
+// TODO: Add undo/redo for file operations.

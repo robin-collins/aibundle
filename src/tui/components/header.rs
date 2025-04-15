@@ -1,3 +1,20 @@
+// src/tui/components/header.rs
+//!
+//! # Header View Component
+//!
+//! This module defines the `HeaderView` component for rendering the header bar in the TUI.
+//! It displays the application version, current directory, and search input when active.
+//!
+//! ## Usage
+//! Use `HeaderView` in the main TUI view to render the top header and search bar.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::tui::components::HeaderView;
+//! let header = HeaderView::new();
+//! header.render(f, area, app_state, search_state);
+//! ```
+
 use ratatui::{
     layout::Rect,
     style::Stylize,
@@ -8,13 +25,22 @@ use ratatui::{
 use crate::models::constants::VERSION;
 use crate::tui::state::{AppState, SearchState};
 
+/// Header view component for rendering the top bar and search input in the TUI.
 pub struct HeaderView {}
 
 impl HeaderView {
+    /// Creates a new `HeaderView` component.
     pub fn new() -> Self {
         Self {}
     }
 
+    /// Renders the header bar and search input (if active).
+    ///
+    /// # Arguments
+    /// * `f` - The TUI frame to render into.
+    /// * `area` - The area to render the header in.
+    /// * `app_state` - The current application state.
+    /// * `search_state` - The current search state.
     pub fn render(
         &self,
         f: &mut Frame,
@@ -22,6 +48,7 @@ impl HeaderView {
         app_state: &AppState,
         search_state: &SearchState,
     ) {
+        // Compose the header title with version and current directory
         let title = format!(
             " AIBundle v{} - {} ",
             VERSION,
@@ -46,6 +73,7 @@ impl HeaderView {
                     ..inner_area // Inherit x and width from inner_area
                 };
 
+                // Blinking cursor logic: toggles every 500ms
                 let cursor = if (std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -59,6 +87,7 @@ impl HeaderView {
                     " "
                 };
 
+                // Compose the search input text with blinking cursor
                 let search_text = format!(
                     "Search: {}{} (Press / to finish, ESC to cancel)",
                     search_state.search_query, cursor
@@ -70,3 +99,6 @@ impl HeaderView {
         }
     }
 }
+
+// TODO: Add support for displaying additional status info in the header.
+// TODO: Add breadcrumbs or path shortening for long directories.

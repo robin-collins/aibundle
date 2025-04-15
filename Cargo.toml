@@ -24,6 +24,8 @@ itertools = "0.14.0"
 regex = "1.9"
 clipboard = "0.5"
 rustdoc-stripper = "0.1.19"
+tokio = { version = "1.37", features = ["fs", "rt-multi-thread", "macros"] }
+tokio-stream = "0.1"
 
 [features]
 default = []

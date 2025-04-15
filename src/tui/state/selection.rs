@@ -1,3 +1,20 @@
+// src/tui/state/selection.rs
+//!
+//! # Selection State Module
+//!
+//! This module defines the selection state and logic for managing file/folder selection in the TUI.
+//! It provides utilities for toggling selection, multi-select, and folder selection logic.
+//!
+//! ## Usage
+//! Use `SelectionState` to manage selection state and implement selection-related UI actions.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::tui::state::selection::SelectionState;
+//! let mut sel = SelectionState::new();
+//! sel.move_selection(1, items.len());
+//! ```
+
 use std::collections::HashSet;
 use std::fs;
 use std::io;
@@ -8,6 +25,7 @@ use std::thread;
 use crate::fs as crate_fs;
 use crate::tui::state::AppState;
 
+/// Represents the selection state for the file list, including UI and local selection.
 pub struct SelectionState {
     pub list_state: ratatui::widgets::ListState,
     // Tracking selected paths in a HashSet for efficient lookups
@@ -15,6 +33,7 @@ pub struct SelectionState {
 }
 
 impl Default for SelectionState {
+    /// Returns a default-initialized `SelectionState` with the first item selected.
     fn default() -> Self {
         let mut list_state = ratatui::widgets::ListState::default();
         list_state.select(Some(0));
@@ -26,10 +45,12 @@ impl Default for SelectionState {
 }
 
 impl SelectionState {
+    /// Creates a new, default `SelectionState`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Moves the selection up or down by the given delta, clamped to the item count.
     pub fn move_selection(&mut self, delta: i32, item_count: usize) {
         if item_count == 0 {
             return;
@@ -39,6 +60,7 @@ impl SelectionState {
         self.list_state.select(Some(new_selected));
     }
 
+    /// Toggles selection of the currently highlighted item, handling folders recursively.
     pub fn toggle_selection(&mut self, app_state: &mut AppState) -> io::Result<()> {
         if let Some(selected_index) = self.list_state.selected() {
             if selected_index >= app_state.filtered_items.len() {
@@ -70,10 +92,10 @@ impl SelectionState {
                 let path_clone = path.clone();
                 let selection_limit = app_state.selection_limit;
 
-                // Use IgnoreConfig to check if path should be ignored before counting
+                // Use IgnoreConfig (from app_config.rs) to check if path should be ignored before counting
                 if !app_state.is_path_ignored(&path) {
                     thread::spawn(move || {
-                        let result = crate_fs::count_selection_items_async(
+                        let result = crate_fs::count_selection_items(
                             &path_clone,
                             &base_path,
                             &ignore_config,
@@ -92,6 +114,7 @@ impl SelectionState {
         Ok(())
     }
 
+    /// Recursively selects or deselects a folder and its contents.
     pub fn update_folder_selection(
         app_state: &mut AppState,
         path: &Path,
@@ -125,6 +148,7 @@ impl SelectionState {
         Ok(())
     }
 
+    /// Toggles selection of all items in the filtered list, handling folders recursively and selection limits.
     pub fn toggle_select_all(&mut self, app_state: &mut AppState) -> io::Result<()> {
         // Check if all items are already selected
         let all_selected = app_state
@@ -174,7 +198,7 @@ impl SelectionState {
 
                 // Spawn a background thread to count items
                 thread::spawn(move || {
-                    let result = crate_fs::count_selection_items_async(
+                    let result = crate_fs::count_selection_items(
                         &counting_path_for_closure,
                         &base_dir,
                         &ignore_config,
@@ -192,3 +216,7 @@ impl SelectionState {
         Ok(())
     }
 }
+
+// TODO: Add support for range selection (shift+click or shift+arrow).
+// TODO: Add visual feedback for partially selected folders.
+// TODO: Add undo/redo for selection changes.

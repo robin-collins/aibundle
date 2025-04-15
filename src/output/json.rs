@@ -1,3 +1,20 @@
+// src/output/json.rs
+//!
+//! # JSON Output Module
+//!
+//! This module provides functions for formatting selected files and directories as JSON output.
+//! It is used to generate JSON-formatted code/documentation bundles for export or clipboard.
+//!
+//! ## Usage
+//! Use `format_json_output` to convert a set of selected files and folders into a JSON string.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::output::json::format_json_output;
+//! let (json, stats) = format_json_output(&selected, &current_dir, &ignore_config).unwrap();
+//! assert!(json.starts_with("["));
+//! ```
+
 use std::collections::HashSet;
 use std::fs;
 use std::io;
@@ -7,6 +24,22 @@ use crate::fs::normalize_path;
 use crate::models::CopyStats;
 use crate::output::format::{is_binary_file, process_directory};
 
+/// Formats the selected files and directories as JSON output.
+///
+/// Each file is represented as a JSON object with its path and content. Directories are represented as nested objects.
+///
+/// # Arguments
+/// * `selected_items` - Set of selected file and directory paths.
+/// * `current_dir` - The base directory for relative path calculation.
+/// * `ignore_config` - Ignore configuration for filtering files.
+///
+/// # Returns
+/// * `io::Result<(String, CopyStats)>` - The JSON output and copy statistics.
+///
+/// # Examples
+/// ```rust
+/// // Used internally by clipboard and file export logic.
+/// ```
 pub fn format_json_output(
     selected_items: &HashSet<PathBuf>,
     current_dir: &PathBuf,
@@ -55,7 +88,7 @@ pub fn format_json_output(
                 } else if let Ok(content) = fs::read_to_string(path) {
                     let escaped_content = content
                         .replace('\\', "\\\\")
-                        .replace('\"', "\\\"")
+                        .replace('"', "\\\"")
                         .replace('\n', "\\n")
                         .replace('\r', "\\r");
                     output.push_str(&format!(
@@ -93,3 +126,6 @@ pub fn format_json_output(
 
     Ok((output, stats))
 }
+
+// TODO: Add option to pretty-print JSON output for readability.
+// TODO: Add support for additional metadata fields if needed.

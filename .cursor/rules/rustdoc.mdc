@@ -129,9 +129,5 @@ Use `//!` to describe the purpose, scope, and usage of a module or crate:
 - `rust-analyzer`: IDE support for inline doc rendering.
 - [`rustdoc-stripper`](mdc:https:/github.com/gtk-rs/rustdoc-stripper): Tool for cleaning up and extracting doc comments.
 
----
 
-## Summary
-
-Well-documented code improves maintainability, usability, and collaboration. Following this advanced standard ensures your Rust APIs are predictable, testable, and easy to integrate with tools and users alike.
 

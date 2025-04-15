@@ -1,3 +1,21 @@
+// src/tui/views/message_view.rs
+//!
+//! # Message View
+//!
+//! This module defines the `MessageView` component for rendering temporary messages in the TUI.
+//! It displays info, success, warning, or error messages in a centered popup.
+//!
+//! ## Usage
+//! Use `MessageView` to show temporary feedback or alerts to the user.
+//!
+//! ## Examples
+//! ```rust
+//! use crate::tui::views::MessageView;
+//! let mut message_view = MessageView::new();
+//! message_view.set_message_duration(std::time::Duration::from_secs(5));
+//! message_view.render(f, area, app_state);
+//! ```
+
 use crate::tui::state::{AppState, MessageType};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -8,18 +26,21 @@ use ratatui::{
 };
 use std::time::{Duration, Instant};
 
+/// Message view component for rendering temporary messages in a centered popup.
 pub struct MessageView {
     // Duration to show messages for
     message_duration: Duration,
 }
 
 impl MessageView {
+    /// Creates a new `MessageView` with a default message duration.
     pub fn new() -> Self {
         Self {
             message_duration: Duration::from_secs(3),
         }
     }
 
+    /// Renders the message popup if a message is present and not expired.
     pub fn render(&self, f: &mut Frame, area: Rect, app_state: &AppState) {
         // Only render if there's a message to show
         if let Some(message) = &app_state.message {
@@ -75,12 +96,13 @@ impl MessageView {
         }
     }
 
+    /// Sets the duration for which messages are displayed.
     pub fn set_message_duration(&mut self, duration: Duration) {
         self.message_duration = duration;
     }
 }
 
-// Helper function to create a centered rectangle for the message
+/// Helper function to create a centered rectangle for the message
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -100,3 +122,5 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         ])
         .split(popup_layout[1])[1]
 }
+
+// TODO: Add support for message queueing or stacking.
