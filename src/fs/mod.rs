@@ -80,12 +80,7 @@ fn list_files_inner(path: &PathBuf, result: &mut Vec<PathBuf>, visited: &mut Has
     let entries = match fs::read_dir(path) {
         Ok(rd) => rd,
         Err(e) => {
-            if e.kind() == io::ErrorKind::PermissionDenied {
-                // Permission denied, skip
-                return;
-            } else {
-                return;
-            }
+            return;
         }
     };
     for entry in entries.flatten() {
@@ -162,11 +157,7 @@ fn add_items_recursively_inner(
     let entries = match fs::read_dir(root) {
         Ok(rd) => rd,
         Err(e) => {
-            if e.kind() == io::ErrorKind::PermissionDenied {
-                return Ok(());
-            } else {
-                return Ok(());
-            }
+            return Ok(());
         }
     };
     let mut entry_vec: Vec<PathBuf> = entries
@@ -286,7 +277,6 @@ pub fn collect_all_subdirs(
             None => continue, // Permission denied or error, skip
         };
         if !visited.insert(canonical.clone()) {
-            // Symlink loop detected, skip
             continue;
         }
         if current.is_dir() {
@@ -642,7 +632,6 @@ pub async fn collect_all_subdirs_async(
             }
         };
         if !visited.insert(canonical.clone()) {
-            // Symlink loop detected, skip
             continue;
         }
         if current.is_dir() {

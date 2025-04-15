@@ -26,6 +26,7 @@ use crate::models::{CopyStats, OutputFormat};
 use crate::output::format_selected_items;
 use crate::tui::state::AppState;
 use crate::tui::state::{SearchState, SelectionState};
+use crate::utils::log_event;
 
 /// Handler for file and folder operations in the TUI.
 pub struct FileOpsHandler;
@@ -33,6 +34,7 @@ pub struct FileOpsHandler;
 impl FileOpsHandler {
     /// Loads items (files/folders) into the application state, including parent navigation.
     pub fn load_items(app_state: &mut AppState) -> io::Result<()> {
+        log_event(&format!("load_items: current_dir={}", app_state.current_dir.display()));
         app_state.items.clear();
 
         // Add ".." entry if not at the root
@@ -75,6 +77,7 @@ impl FileOpsHandler {
 
     /// Loads only the current directory (non-recursive) into the application state.
     pub fn load_items_nonrecursive(app_state: &mut AppState) -> io::Result<()> {
+        log_event(&format!("load_items_nonrecursive: current_dir={}", app_state.current_dir.display()));
         app_state.items.clear();
         app_state.filtered_items.clear();
 
@@ -229,12 +232,15 @@ impl FileOpsHandler {
             }
 
             let path = &app_state.filtered_items[selected];
+            log_event(&format!("handle_enter: selected={} current_dir={}", path.display(), app_state.current_dir.display()));
             if path.is_dir() {
                 if path.ends_with("..") {
                     if let Some(parent) = app_state.current_dir.parent() {
+                        log_event(&format!("handle_enter: going up to parent {}", parent.display()));
                         app_state.current_dir = parent.to_path_buf();
                     }
                 } else {
+                    log_event(&format!("handle_enter: entering dir {}", path.display()));
                     app_state.current_dir = path.clone();
                 }
 

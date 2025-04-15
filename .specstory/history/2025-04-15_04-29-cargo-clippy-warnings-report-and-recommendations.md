@@ -115,6 +115,30 @@ Here is a report on the current cargo clippy warnings, ordered by importance and
 
 ---
 
+_**User**_
+
+start with item 1. Make detailed notes in a secondary file to the source code file, for example, if its the `src/fs/mod.rs` file, then create `src/fs/mod.rs.notes` and put detailed and thorough notes in the file regarding the work we are doing. The notes should be thorough enough that the work could be 'undone' using the notes if wanting to. In the codebase file that you are updating, ensure to add detailed and useful inline code comments re: whats been done, and where in the '.notes' file the details are located.
+
+---
+
+_**Assistant**_
+
+Read file: src/fs/mod.rs
+
+---
+
+Read file: src/fs/mod.rs
+
+---
+
+Read file: src/fs/mod.rs
+
+---
+
+
+
+---
+
 
 
 ---

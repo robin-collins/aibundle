@@ -18,6 +18,13 @@
 //! ```
 
 use ratatui::layout::Rect;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::sync::OnceLock;
+use chrono::Local;
+use std::env;
+
+static LOG_FILE: OnceLock<File> = OnceLock::new();
 
 /// Returns a rectangle centered within the given area, with the specified width and height.
 ///
@@ -81,6 +88,41 @@ pub fn human_readable_size(size: usize) -> String {
     } else {
         format!("{:.2} {}", size, UNITS[unit_index])
     }
+}
+
+/// Initializes the log file for this run, using hostname, OS, and datetime.
+/// Called automatically on first log_event call.
+fn init_log_file() -> File {
+    let hostname = get_hostname();
+    let os = get_os();
+    let datetime = Local::now().format("%Y%m%d%H%M%S");
+    let filename = format!("{}-{}-{}.log", hostname, os, datetime);
+    File::create(filename).expect("Failed to create log file")
+}
+
+/// Appends a timestamped message to the log file for this run.
+///
+/// # Example
+/// ```rust
+/// crate::utils::log_event("Navigated to /src");
+/// ```
+pub fn log_event(msg: &str) {
+    let file = LOG_FILE.get_or_init(init_log_file);
+    let now = Local::now().format("%Y-%m-%dT%H:%M:%S");
+    let line = format!("[{}] {}\n", now, msg);
+    let _ = file.write_all(line.as_bytes());
+    let _ = file.flush();
+}
+
+fn get_hostname() -> String {
+    hostname::get()
+        .ok()
+        .and_then(|h| h.into_string().ok())
+        .unwrap_or_else(|| "unknownhost".to_string())
+}
+
+fn get_os() -> String {
+    env::consts::OS.to_string()
 }
 
 // TODO: Add more utility functions for string formatting, path manipulation, or error handling as needed.
