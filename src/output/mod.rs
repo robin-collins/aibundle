@@ -37,7 +37,6 @@ use crate::models::{CopyStats, IgnoreConfig, OutputFormat};
 use std::collections::HashSet;
 use std::io;
 use std::path::PathBuf;
-use crate::models::constants::get_language_name;
 
 /// Formats the selected items in the specified output format (XML, Markdown, JSON, LLM).
 /// Returns the formatted output and copy statistics.

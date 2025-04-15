@@ -24,9 +24,9 @@ use itertools::Itertools;
 
 use crate::fs::normalize_path;
 use crate::models::app_config::{FileDependencies, Node};
+use crate::models::constants::get_language_name;
 use crate::models::CopyStats;
 use crate::output::format::is_binary_file;
-use crate::models::constants::get_language_name;
 
 /// Formats selected files and directories as LLM-friendly Markdown output, including dependencies and structure.
 ///

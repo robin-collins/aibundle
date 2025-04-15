@@ -291,17 +291,26 @@ impl FileOpsHandler {
         if config_path.exists() {
             // Prompt for overwrite (not interactive in TUI, so just warn)
             app_state.set_message(
-                format!("Configuration file already exists: {}", config_path.display()),
+                format!(
+                    "Configuration file already exists: {}",
+                    config_path.display()
+                ),
                 crate::tui::state::MessageType::Warning,
             );
             // In a real TUI, you might want to prompt the user for confirmation
             // For now, just return an error
-            return Err(io::Error::new(io::ErrorKind::AlreadyExists, "Config file exists"));
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "Config file exists",
+            ));
         }
         save_config(&app_state.config, config_path.to_str().unwrap_or(""))?;
         // Success message
         app_state.set_message(
-            format!("Configuration saved successfully to {}", config_path.display()),
+            format!(
+                "Configuration saved successfully to {}",
+                config_path.display()
+            ),
             crate::tui::state::MessageType::Success,
         );
         Ok(())
@@ -413,7 +422,7 @@ impl FileOpsHandler {
                 expanded_path != path
                     && expanded_path
                         .to_str()
-                        .map_or(true, |ep_str| !ep_str.starts_with(path_str))
+                        .is_none_or(|ep_str| !ep_str.starts_with(path_str))
             });
         } else {
             // Fallback if path is not valid UTF-8 (less likely but good to handle)

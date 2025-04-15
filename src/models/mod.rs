@@ -29,10 +29,10 @@ pub mod enums;
 pub use app_config::AppConfig;
 /// Copy statistics struct. See [`app_config::CopyStats`] for details.
 pub use app_config::CopyStats;
-/// Default selection limit constant. See [`constants::DEFAULT_SELECTION_LIMIT`] for details.
-pub use constants::DEFAULT_SELECTION_LIMIT;
 /// Ignore configuration struct. See [`app_config::IgnoreConfig`] for details.
 pub use app_config::IgnoreConfig;
+/// Default selection limit constant. See [`constants::DEFAULT_SELECTION_LIMIT`] for details.
+pub use constants::DEFAULT_SELECTION_LIMIT;
 /// Output format enum. See [`enums::OutputFormat`] for details.
 pub use enums::OutputFormat;
 

@@ -63,39 +63,37 @@ impl HeaderView {
         f.render_widget(block, area);
 
         // If searching, render the search input inside the calculated inner_area
-        if app_state.is_searching {
-            if inner_area.height > 0 {
-                // Check if inner_area has any height
-                // Use only the last line of the inner_area for search input
-                let search_line_area = Rect {
-                    y: inner_area.y + inner_area.height - 1,
-                    height: 1,
-                    ..inner_area // Inherit x and width from inner_area
-                };
+        if app_state.is_searching && inner_area.height > 0 {
+            // Check if inner_area has any height
+            // Use only the last line of the inner_area for search input
+            let search_line_area = Rect {
+                y: inner_area.y + inner_area.height - 1,
+                height: 1,
+                ..inner_area // Inherit x and width from inner_area
+            };
 
-                // Blinking cursor logic: toggles every 500ms
-                let cursor = if (std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis()
-                    / 500)
-                    % 2
-                    == 0
-                {
-                    "█"
-                } else {
-                    " "
-                };
+            // Blinking cursor logic: toggles every 500ms
+            let cursor = if (std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+                / 500)
+                % 2
+                == 0
+            {
+                "█"
+            } else {
+                " "
+            };
 
-                // Compose the search input text with blinking cursor
-                let search_text = format!(
-                    "Search: {}{} (Press / to finish, ESC to cancel)",
-                    search_state.search_query, cursor
-                );
-                let search_widget = Paragraph::new(search_text).fg(ratatui::style::Color::Yellow);
-                // Render in the calculated search line area
-                f.render_widget(search_widget, search_line_area);
-            }
+            // Compose the search input text with blinking cursor
+            let search_text = format!(
+                "Search: {}{} (Press / to finish, ESC to cancel)",
+                search_state.search_query, cursor
+            );
+            let search_widget = Paragraph::new(search_text).fg(ratatui::style::Color::Yellow);
+            // Render in the calculated search line area
+            f.render_widget(search_widget, search_line_area);
         }
     }
 }

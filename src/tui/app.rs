@@ -25,8 +25,8 @@ use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::models::{AppConfig, OutputFormat};
-use crate::tui::handlers::{ClipboardHandler, FileOpsHandler, KeyboardHandler};
+use crate::models::AppConfig;
+use crate::tui::handlers::{FileOpsHandler, KeyboardHandler};
 use crate::tui::state::{AppState, SearchState, SelectionState};
 use crate::tui::views::MainView;
 
@@ -44,7 +44,6 @@ pub struct App {
 
     /// Views
     main_view: MainView,
-
     // TODO: Remove any remaining legacy compatibility fields after full migration
 }
 

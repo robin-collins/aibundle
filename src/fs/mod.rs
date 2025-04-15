@@ -23,7 +23,6 @@ use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
 use tokio::fs as tokio_fs;
 use tokio_stream::StreamExt;
 
@@ -127,7 +126,14 @@ pub fn add_items_recursively(
     base_dir: &PathBuf,
 ) -> io::Result<()> {
     let mut visited = HashSet::new();
-    add_items_recursively_inner(items, root, expanded_folders, ignore_config, base_dir, &mut visited)
+    add_items_recursively_inner(
+        items,
+        root,
+        expanded_folders,
+        ignore_config,
+        base_dir,
+        &mut visited,
+    )
 }
 
 fn add_items_recursively_inner(
@@ -180,7 +186,14 @@ fn add_items_recursively_inner(
     for entry in entry_vec {
         items.push(entry.clone());
         if entry.is_dir() && expanded_folders.contains(&entry) {
-            add_items_recursively_inner(items, &entry, expanded_folders, ignore_config, base_dir, visited)?;
+            add_items_recursively_inner(
+                items,
+                &entry,
+                expanded_folders,
+                ignore_config,
+                base_dir,
+                visited,
+            )?;
         }
     }
     Ok(())
@@ -290,7 +303,8 @@ pub fn collect_all_subdirs(
             };
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_dir() && !is_path_ignored_iterative(&path, &base_dir_buf, ignore_config) {
+                if path.is_dir() && !is_path_ignored_iterative(&path, &base_dir_buf, ignore_config)
+                {
                     stack.push(path);
                 }
             }
@@ -474,7 +488,11 @@ pub async fn list_files_async(path: &PathBuf) -> io::Result<Vec<PathBuf>> {
     Ok(result)
 }
 
-async fn list_files_async_inner(path: &PathBuf, result: &mut Vec<PathBuf>, visited: &mut HashSet<PathBuf>) -> io::Result<()> {
+async fn list_files_async_inner(
+    path: &PathBuf,
+    result: &mut Vec<PathBuf>,
+    visited: &mut HashSet<PathBuf>,
+) -> io::Result<()> {
     let canonical = match tokio_fs::canonicalize(path).await {
         Ok(c) => c,
         Err(e) => {
@@ -520,7 +538,15 @@ pub async fn add_items_recursively_async(
     base_dir: &PathBuf,
 ) -> io::Result<()> {
     let mut visited = HashSet::new();
-    add_items_recursively_async_inner(items, root, expanded_folders, ignore_config, base_dir, &mut visited).await
+    add_items_recursively_async_inner(
+        items,
+        root,
+        expanded_folders,
+        ignore_config,
+        base_dir,
+        &mut visited,
+    )
+    .await
 }
 
 async fn add_items_recursively_async_inner(
@@ -581,7 +607,15 @@ async fn add_items_recursively_async_inner(
     for entry in entries {
         items.push(entry.clone());
         if entry.is_dir() && expanded_folders.contains(&entry) {
-            Box::pin(add_items_recursively_async_inner(items, &entry, expanded_folders, ignore_config, base_dir, visited)).await?;
+            Box::pin(add_items_recursively_async_inner(
+                items,
+                &entry,
+                expanded_folders,
+                ignore_config,
+                base_dir,
+                visited,
+            ))
+            .await?;
         }
     }
     Ok(())
@@ -625,7 +659,8 @@ pub async fn collect_all_subdirs_async(
             };
             while let Some(entry) = read_dir.next_entry().await? {
                 let path = entry.path();
-                if path.is_dir() && !is_path_ignored_iterative(&path, &base_dir_buf, ignore_config) {
+                if path.is_dir() && !is_path_ignored_iterative(&path, &base_dir_buf, ignore_config)
+                {
                     stack.push(path);
                 }
             }

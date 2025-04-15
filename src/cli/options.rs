@@ -22,7 +22,7 @@ use crate::ModeConfig;
 use clap::Parser;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::models::constants::VERSION;
 
@@ -293,7 +293,8 @@ pub fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
         app.state.search_query = pattern.to_string();
         let mut search_state = crate::tui::state::SearchState::new();
         search_state.search_query = pattern.to_string();
-        let _ = crate::tui::handlers::FileOpsHandler::update_search(&mut app.state, &mut search_state);
+        let _ =
+            crate::tui::handlers::FileOpsHandler::update_search(&mut app.state, &mut search_state);
         // In CLI mode, only select files that match the pattern (exclude directories)
         // For LLM format, we need to keep directories to build a proper structure
         if app.state.output_format != OutputFormat::Llm {
@@ -302,7 +303,8 @@ pub fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
     }
 
     // Select all filtered items
-    app.state.selected_items
+    app.state
+        .selected_items
         .extend(app.state.filtered_items.iter().cloned());
 
     // For LLM format, we need the whole directory structure
@@ -322,7 +324,8 @@ pub fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
     }
 
     // Generate output
-    let (output, _stats) = crate::tui::handlers::ClipboardHandler::format_selected_items(&mut app.state)?;
+    let (output, _stats) =
+        crate::tui::handlers::ClipboardHandler::format_selected_items(&mut app.state)?;
 
     // Handle output
     if let Some(file_path) = options.output_file {

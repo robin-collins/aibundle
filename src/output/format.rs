@@ -23,7 +23,6 @@ use std::path::{Path, PathBuf};
 
 use crate::fs::normalize_path;
 use crate::models::{CopyStats, IgnoreConfig, OutputFormat};
-use crate::models::constants::get_language_name;
 
 /// Returns true if the given path is a binary file, based on extension or name.
 ///
