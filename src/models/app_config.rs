@@ -162,12 +162,10 @@ pub struct CopyStats {
 /// * `name` - Name of the file or directory.
 /// * `is_dir` - Whether this node is a directory.
 /// * `children` - Child nodes (if directory).
-/// * `parent` - Parent node (if any).
 pub struct Node {
     pub name: String,
     pub is_dir: bool,
     pub children: Option<std::collections::HashMap<String, Node>>,
-    pub parent: Option<Box<Node>>,
 }
 
 /// Tracks dependencies for files.

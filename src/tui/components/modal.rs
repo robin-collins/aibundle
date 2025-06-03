@@ -30,6 +30,7 @@ pub struct Modal {
     /// The message or content to display in the modal.
     pub message: String,
     /// Timestamp when the modal was created (for timeouts or animations).
+    #[allow(dead_code)]
     pub timestamp: Instant,
     /// Width of the modal in characters.
     pub width: u16,
@@ -72,50 +73,55 @@ impl Modal {
 
     /// Creates a help modal with keyboard shortcuts and navigation info.
     pub fn help() -> Self {
-        let help_text = "Keyboard Shortcuts
-═════════════════
+        let help_text = "📋 Keyboard Shortcuts
+═══════════════════════
 
-Navigation
-──────────
-↑/↓        - Move selection
-PgUp/PgDn  - Move by 10 items
-Enter      - Open directory
-Tab        - Expand/collapse folder
+🧭 Navigation
+─────────────
+  ↑/↓        │ Move selection up/down
+  PgUp/PgDn  │ Move by 10 items
+  Enter      │ Open directory
+  Backspace  │ Go to parent directory
+  Tab        │ Expand/collapse folder
+  Home/End   │ Jump to first/last item
 
-Selection
+🎯 Selection
+────────────
+  Space      │ Select/deselect item
+  a          │ Select/deselect all items
+
+⚡ Actions
 ─────────
-Space      - Select/deselect item
-*          - Select/deselect all
+  c          │ Copy to clipboard
+  f          │ Toggle format (XML/MD/JSON/LLM)
+  n          │ Toggle line numbers
+  /          │ Search (ESC to cancel)
 
-Actions
-───────
-c          - Copy to clipboard
-f          - Toggle format (XML/MD/JSON/LLM)
-n          - Toggle line numbers
-/          - Search (ESC to cancel)
+🔍 Filters
+──────────
+  d          │ Toggle default ignores
+  g          │ Toggle .gitignore rules
+  b          │ Toggle binary files
+  r          │ Toggle recursive mode
 
-Filters
-───────
-i          - Toggle default ignores
-g          - Toggle .gitignore
-b          - Toggle binary files
+🛠️  Other
+────────
+  h / ?      │ Show/hide this help
+  S          │ Save current config
+  q          │ Quit (copies if items selected)
+  Ctrl+C     │ Quit immediately
 
-Other
-─────
-h          - Show this help
-q          - Quit (copies if items selected)
-
-Help Navigation
-──────────────
-PgUp/PgDn  - Scroll help pages
-Any key    - Close help"
+💡 Help Navigation
+─────────────────
+  PgUp/PgDn  │ Scroll help pages
+  Esc / q    │ Close help"
             .to_string();
 
-        Self::new(help_text, 60, 30)
+        Self::new(help_text, 68, 32)
     }
 
-    /// Returns the visible content for the current page, given the available height.
-    /// Returns a tuple of (content, has_more_pages).
+    /// Returns visible content for the modal with pagination support.
+    #[allow(dead_code)]
     pub fn get_visible_content(&self, available_height: u16) -> (String, bool) {
         let content_height = (available_height - 4) as usize;
         let lines: Vec<&str> = self.message.lines().collect();

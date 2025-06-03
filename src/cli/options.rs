@@ -122,6 +122,7 @@ pub struct CliModeOptions {
 
 impl CliOptions {
     /// Converts CLI options to an `AppConfig` for use in the application.
+    #[allow(dead_code)]
     pub fn to_app_config(&self) -> AppConfig {
         AppConfig {
             default_format: Some(self.format.clone()),
@@ -134,6 +135,7 @@ impl CliOptions {
     }
 
     /// Converts CLI options to a `ModeConfig` for config serialization.
+    #[allow(dead_code)]
     pub fn to_mode_config(&self) -> ModeConfig {
         ModeConfig {
             files: self.files.clone(),
@@ -149,6 +151,7 @@ impl CliOptions {
     }
 
     /// Returns the effective source directory, preferring the positional argument if present.
+    #[allow(dead_code)]
     pub fn effective_source_dir(&self) -> String {
         self.source_dir_pos
             .clone()
@@ -156,6 +159,7 @@ impl CliOptions {
     }
 
     /// Converts CLI options to `CliModeOptions` for running CLI mode.
+    #[allow(dead_code)]
     pub fn to_cli_mode_options(&self) -> CliModeOptions {
         CliModeOptions {
             files_pattern: self.files.clone(),
@@ -184,6 +188,7 @@ impl CliOptions {
 /// use crate::cli::options::to_output_format;
 /// assert_eq!(to_output_format("json"), crate::models::OutputFormat::Json);
 /// ```
+#[allow(dead_code)]
 pub fn to_output_format(format: &str) -> OutputFormat {
     match format.to_lowercase().as_str() {
         "markdown" => OutputFormat::Markdown,
@@ -205,6 +210,7 @@ pub fn to_output_format(format: &str) -> OutputFormat {
 /// ```rust
 /// // Used internally by CLI entrypoint.
 /// ```
+#[allow(dead_code)]
 pub fn get_merged_config(cli_opts: &CliOptions) -> io::Result<FullConfig> {
     let mut config = crate::config::load_config()?;
     if cli_opts.save_config {
@@ -225,6 +231,7 @@ pub fn get_merged_config(cli_opts: &CliOptions) -> io::Result<FullConfig> {
 /// ```rust
 /// // Used internally by CLI entrypoint.
 /// ```
+#[allow(dead_code)]
 pub fn to_ignore_config(cli_opts: &CliOptions) -> IgnoreConfig {
     let use_default_ignores = cli_opts.ignore.contains(&"default".to_string());
     IgnoreConfig {
@@ -325,7 +332,7 @@ pub fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
 
     // Generate output
     let (output, _stats) =
-        crate::tui::handlers::ClipboardHandler::format_selected_items(&mut app.state)?;
+        crate::tui::handlers::ClipboardHandler::format_selected_items(&app.state)?;
 
     // Handle output
     if let Some(file_path) = options.output_file {

@@ -32,7 +32,8 @@ mod app;
 pub use app::App;
 
 // Internal types for TUI system communication
-/// Internal result type for TUI system communication.
+/// Type alias for application results with boxed errors.
+#[allow(dead_code)]
 pub(crate) type AppResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 // TODO: Add additional TUI utilities or global types here as needed.

@@ -24,7 +24,6 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use tokio::fs as tokio_fs;
-use tokio_stream::StreamExt;
 
 /// Prompts the user to confirm overwriting a file if it exists.
 ///
@@ -61,6 +60,7 @@ pub fn confirm_overwrite(file_path: &str) -> io::Result<bool> {
 /// let files = crate::fs::list_files(&std::path::PathBuf::from("./src"));
 /// assert!(!files.is_empty());
 /// ```
+#[allow(dead_code)]
 pub fn list_files(path: &PathBuf) -> Vec<PathBuf> {
     let mut result = Vec::new();
     let mut visited = HashSet::new();
@@ -68,6 +68,7 @@ pub fn list_files(path: &PathBuf) -> Vec<PathBuf> {
     result
 }
 
+#[allow(dead_code)]
 fn list_files_inner(path: &PathBuf, result: &mut Vec<PathBuf>, visited: &mut HashSet<PathBuf>) {
     let canonical = match try_canonicalize(path) {
         Some(c) => c,
@@ -79,7 +80,7 @@ fn list_files_inner(path: &PathBuf, result: &mut Vec<PathBuf>, visited: &mut Has
     }
     let entries = match fs::read_dir(path) {
         Ok(rd) => rd,
-        Err(e) => {
+        Err(_e) => {
             return;
         }
     };
@@ -156,7 +157,7 @@ fn add_items_recursively_inner(
     }
     let entries = match fs::read_dir(root) {
         Ok(rd) => rd,
-        Err(e) => {
+        Err(_e) => {
             return Ok(());
         }
     };
@@ -283,12 +284,8 @@ pub fn collect_all_subdirs(
             dirs.insert(current.clone());
             let entries = match fs::read_dir(&current) {
                 Ok(rd) => rd,
-                Err(e) => {
-                    if e.kind() == io::ErrorKind::PermissionDenied {
-                        continue;
-                    } else {
-                        continue;
-                    }
+                Err(_e) => {
+                    continue;
                 }
             };
             for entry in entries.flatten() {
@@ -387,6 +384,7 @@ pub fn count_selection_items(
 /// ```rust
 /// assert!(!crate::fs::is_binary_file(std::path::Path::new("main.rs")));
 /// ```
+#[allow(dead_code)]
 pub fn is_binary_file(path: &Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         let binary_extensions = [
@@ -471,6 +469,7 @@ where
 }
 
 /// Async version of list_files
+#[allow(dead_code)]
 pub async fn list_files_async(path: &PathBuf) -> io::Result<Vec<PathBuf>> {
     let mut result = Vec::new();
     let mut visited = HashSet::new();
@@ -478,6 +477,7 @@ pub async fn list_files_async(path: &PathBuf) -> io::Result<Vec<PathBuf>> {
     Ok(result)
 }
 
+#[allow(dead_code)]
 async fn list_files_async_inner(
     path: &PathBuf,
     result: &mut Vec<PathBuf>,
@@ -520,6 +520,7 @@ async fn list_files_async_inner(
 }
 
 /// Async version of add_items_recursively
+#[allow(dead_code)]
 pub async fn add_items_recursively_async(
     items: &mut Vec<PathBuf>,
     root: &PathBuf,
@@ -539,6 +540,7 @@ pub async fn add_items_recursively_async(
     .await
 }
 
+#[allow(dead_code)]
 async fn add_items_recursively_async_inner(
     items: &mut Vec<PathBuf>,
     root: &PathBuf,
@@ -612,6 +614,7 @@ async fn add_items_recursively_async_inner(
 }
 
 /// Async version of collect_all_subdirs
+#[allow(dead_code)]
 pub async fn collect_all_subdirs_async(
     base_dir: &Path,
     ignore_config: &IgnoreConfig,

@@ -160,7 +160,6 @@ fn main() -> io::Result<()> {
                 app.state.ignore_config.use_gitignore = git;
             }
             if let Some(ignore) = tui_conf.ignore {
-                app.state.config.default_ignore = Some(ignore.clone());
                 app.state.ignore_config.extra_ignore_patterns = ignore;
             }
             if let Some(ln) = tui_conf.line_numbers {

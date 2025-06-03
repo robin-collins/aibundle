@@ -26,15 +26,16 @@ use ratatui::widgets::ListState;
 use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
 use std::time::Instant;
 
 /// Message type for user feedback and modal dialogs.
 #[derive(Clone, Debug)]
 pub enum MessageType {
+    #[allow(dead_code)]
     Info,
     Success,
     Warning,
+    #[allow(dead_code)]
     Error,
 }
 
@@ -87,44 +88,69 @@ impl AppMessage {
 /// * `message` - Current message to display.
 /// * `file_tree` - File tree structure for LLM output.
 pub struct AppState {
-    // File system state
+    /// Current directory path.
     pub current_dir: PathBuf,
+
+    /// All items in the current directory (both files and folders).
     pub items: Vec<PathBuf>,
-    pub list_state: ListState,
+
+    /// Filtered items based on search query and ignore rules.
+    pub filtered_items: Vec<PathBuf>,
+
+    /// Selected items for copy/export operations.
     pub selected_items: HashSet<PathBuf>,
+
+    /// Folders that are expanded (for tree view).
     pub expanded_folders: HashSet<PathBuf>,
 
-    // Configuration
-    pub config: AppConfig,
-    pub ignore_config: IgnoreConfig,
-    pub output_format: OutputFormat,
-    pub show_line_numbers: bool,
-    pub selection_limit: usize,
-    pub recursive: bool,
+    /// List state for the file list widget.
+    #[allow(dead_code)]
+    pub list_state: ListState,
 
-    // UI state
-    pub quit: bool,
-    pub is_counting: bool,
-
-    // Modal state
-    pub modal: Option<Modal>,
-    pub show_help: bool,
-    pub show_message: bool,
-
-    // Selection state
-    pub counting_path: Option<PathBuf>,
-    pub pending_count: Option<mpsc::Receiver<io::Result<usize>>>,
-
-    // Operation results
-    pub last_copy_stats: Option<CopyStats>,
-
-    // Search state
+    /// Search query for filtering items.
     pub search_query: String,
-    pub filtered_items: Vec<PathBuf>,
+
+    /// Whether the app is in search mode.
     pub is_searching: bool,
 
-    // New fields
+    /// Current output format (XML, Markdown, JSON, LLM).
+    pub output_format: OutputFormat,
+
+    /// Whether to show line numbers in output.
+    pub show_line_numbers: bool,
+
+    /// Whether to enable recursive directory traversal.
+    pub recursive: bool,
+
+    /// Ignore configuration for file filtering.
+    pub ignore_config: IgnoreConfig,
+
+    /// Selection limit for preventing performance issues.
+    pub selection_limit: usize,
+
+    /// Whether the app should quit.
+    pub quit: bool,
+
+    /// Current message to display to the user.
     pub message: Option<AppMessage>,
+
+    /// Optional modal dialog.
+    pub modal: Option<Modal>,
+
+    /// Statistics from the last copy operation.
+    pub last_copy_stats: Option<CopyStats>,
+
+    /// Whether a counting operation is in progress.
+    pub is_counting: bool,
+
+    /// Path being counted (for progress display).
+    pub counting_path: Option<PathBuf>,
+
+    /// Result of the pending count operation.
+    pub pending_count: Option<std::sync::mpsc::Receiver<io::Result<usize>>>,
+
+    /// File tree structure for LLM output.
+    #[allow(dead_code)]
     pub file_tree: Option<Node>,
 }
 
@@ -159,43 +185,43 @@ impl AppState {
         let slf = Self {
             current_dir: initial_dir,
             items: Vec::new(),
-            list_state: ListState::default(),
+            filtered_items: Vec::new(),
             selected_items: HashSet::new(),
             expanded_folders: HashSet::new(),
-            modal: None,
-            show_help: false,
-            show_message: false,
-            config,
-            ignore_config,
+            list_state: ListState::default(),
+            search_query: String::new(),
+            is_searching: false,
             output_format,
             show_line_numbers,
-            selection_limit,
             recursive,
+            ignore_config,
+            selection_limit,
             quit: false,
+            message: None,
+            modal: None,
+            last_copy_stats: None,
             is_counting: false,
             counting_path: None,
             pending_count: None,
-            last_copy_stats: None,
-            search_query: String::new(),
-            filtered_items: Vec::new(),
-            is_searching: false,
-            message: None,
             file_tree: None,
         };
         Ok(slf)
     }
 
     /// Returns the number of selected items.
+    #[allow(dead_code)]
     pub fn selected_count(&self) -> usize {
         self.selected_items.len()
     }
 
     /// Returns the number of items in the current directory.
+    #[allow(dead_code)]
     pub fn item_count(&self) -> usize {
         self.items.len()
     }
 
     /// Returns true if the given file is selected.
+    #[allow(dead_code)]
     pub fn is_file_selected(&self, path: &PathBuf) -> bool {
         self.selected_items.contains(path)
     }
@@ -245,6 +271,7 @@ impl AppState {
     }
 
     /// Updates the filtered items list based on the current search query.
+    #[allow(dead_code)]
     pub fn update_search(&mut self) {
         if self.is_searching && !self.search_query.is_empty() {
             let filtered_indices =
@@ -274,6 +301,7 @@ impl AppState {
     }
 
     /// Loads items from the current directory, applying ignore and expansion rules.
+    #[allow(dead_code)]
     pub fn load_items(&mut self) -> io::Result<()> {
         let mut loaded_items = Vec::new();
         add_items_recursively(
@@ -298,6 +326,7 @@ impl AppState {
     }
 
     /// Copies the selected items to the clipboard, showing a modal with stats.
+    #[allow(dead_code)]
     pub fn copy_selected_to_clipboard(&mut self) -> io::Result<()> {
         let (formatted_string, stats) = format_selected_items(
             &self.selected_items,
@@ -336,6 +365,7 @@ impl AppState {
     }
 
     /// Moves the selection up or down by the given delta.
+    #[allow(dead_code)]
     pub fn move_selection(&mut self, delta: i32) {
         let items_len = self.filtered_items.len();
         if items_len == 0 {
@@ -349,6 +379,7 @@ impl AppState {
     }
 
     /// Selects the first item in the list.
+    #[allow(dead_code)]
     pub fn select_first(&mut self) {
         self.list_state.select(if self.filtered_items.is_empty() {
             None
@@ -358,6 +389,7 @@ impl AppState {
     }
 
     /// Selects the last item in the list.
+    #[allow(dead_code)]
     pub fn select_last(&mut self) {
         let len = self.filtered_items.len();
         self.list_state
@@ -365,6 +397,7 @@ impl AppState {
     }
 
     /// Handles a character input for search, updating the search query.
+    #[allow(dead_code)]
     pub fn handle_search_input(&mut self, c: char) {
         if self.is_searching {
             self.search_query.push(c);
@@ -373,6 +406,7 @@ impl AppState {
     }
 
     /// Handles backspace in the search query.
+    #[allow(dead_code)]
     pub fn handle_search_backspace(&mut self) {
         if self.is_searching {
             self.search_query.pop();
@@ -381,6 +415,7 @@ impl AppState {
     }
 
     /// Toggles search mode on or off, clearing the query if turning off.
+    #[allow(dead_code)]
     pub fn toggle_search(&mut self) {
         self.is_searching = !self.is_searching;
         if !self.is_searching {
@@ -390,6 +425,7 @@ impl AppState {
     }
 
     /// Clears the current search query.
+    #[allow(dead_code)]
     pub fn clear_search(&mut self) {
         if !self.search_query.is_empty() {
             self.search_query.clear();
@@ -400,6 +436,7 @@ impl AppState {
     }
 
     /// Toggles selection of the currently highlighted item.
+    #[allow(dead_code)]
     pub fn toggle_selection(&mut self) {
         if let Some(selected_display_index) = self.list_state.selected() {
             // Get the path directly from filtered_items using the display index
@@ -427,6 +464,7 @@ impl AppState {
     }
 
     /// Toggles selection of all currently visible items, respecting the selection limit.
+    #[allow(dead_code)]
     pub fn toggle_select_all(&mut self) {
         let display_items_paths: Vec<PathBuf> = self
             .get_display_items()
@@ -475,13 +513,12 @@ impl AppState {
     /// Sets a typed message and shows the message view.
     pub fn set_message(&mut self, content: String, message_type: MessageType) {
         self.message = Some(AppMessage::new(content, message_type));
-        self.show_message = true;
     }
 
     /// Clears the current message and hides the message view.
+    #[allow(dead_code)]
     pub fn clear_message(&mut self) {
         self.message = None;
-        self.show_message = false;
     }
 
     // TODO: Implement `update_folder_selection` based on monolithic version

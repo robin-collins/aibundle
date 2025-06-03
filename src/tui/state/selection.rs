@@ -29,6 +29,7 @@ use crate::tui::state::AppState;
 pub struct SelectionState {
     pub list_state: ratatui::widgets::ListState,
     // Tracking selected paths in a HashSet for efficient lookups
+    #[allow(dead_code)]
     pub local_selected: HashSet<PathBuf>,
 }
 

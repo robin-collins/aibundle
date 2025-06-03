@@ -50,6 +50,7 @@ use std::path::PathBuf;
 ///
 /// # Returns
 /// * `io::Result<(String, CopyStats)>` - The formatted output and copy statistics.
+#[allow(dead_code)]
 pub fn format_selected_items(
     selected_items: &HashSet<PathBuf>,
     base_dir: &PathBuf,

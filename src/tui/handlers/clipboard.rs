@@ -16,9 +16,9 @@
 
 use std::collections::HashSet;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use crate::models::{app_config::Node, CopyStats, OutputFormat};
+use crate::models::{CopyStats, OutputFormat};
 use crate::tui::state::AppState;
 
 /// Handler for clipboard operations (copying selected items, formatting, stats).
@@ -26,6 +26,7 @@ pub struct ClipboardHandler;
 
 impl ClipboardHandler {
     /// Creates a new `ClipboardHandler` instance.
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self
     }
@@ -59,6 +60,7 @@ impl ClipboardHandler {
     }
 
     /// Counts the number of selected files and folders.
+    #[allow(dead_code)]
     fn count_selected_items(app_state: &AppState) -> (usize, usize) {
         let mut files = 0;
         let mut folders = 0;
@@ -156,47 +158,17 @@ impl ClipboardHandler {
                 total_stats.folders += json_stats.folders;
             }
             OutputFormat::Llm => {
-                // For LLM format, we need to build a tree structure
-                let mut root_node = Node {
-                    name: base_path.display().to_string(),
-                    is_dir: true,
-                    children: Some(std::collections::HashMap::new()),
-                    parent: None,
-                };
+                // Use the comprehensive LLM format function
+                let (llm_output, llm_stats) = crate::output::format_llm_output(
+                    &app_state.selected_items,
+                    &app_state.current_dir,
+                    &app_state.ignore_config,
+                )?;
+                output.push_str(&llm_output);
 
-                // Build the tree structure
-                for (path, _) in &file_contents {
-                    Self::add_to_tree(path, &mut root_node, base_path);
-                }
-
-                // Analyze dependencies if we're doing LLM format
-                let dependencies = crate::output::analyze_dependencies(&file_contents, base_path);
-
-                // Format the output
-                crate::output::format_llm_output_internal(
-                    &mut output,
-                    &file_contents,
-                    base_path,
-                    &root_node,
-                    &dependencies,
-                );
-
-                // For LLM format, directly calculate stats from file_contents
-                total_stats.files = file_contents.len();
-
-                // Count unique folders (using HashSet to avoid duplicates)
-                let mut folders = HashSet::new();
-                for (path, _) in &file_contents {
-                    let path_obj = Path::new(path);
-                    let mut parent = path_obj.parent();
-                    while let Some(dir) = parent {
-                        if !dir.as_os_str().is_empty() {
-                            folders.insert(dir.to_path_buf());
-                        }
-                        parent = dir.parent();
-                    }
-                }
-                total_stats.folders = folders.len();
+                // Update total stats with the format-specific stats
+                total_stats.files = llm_stats.files;
+                total_stats.folders = llm_stats.folders;
             }
         }
 
@@ -280,54 +252,7 @@ impl ClipboardHandler {
         Ok(())
     }
 
-    /// Adds a file or directory path to the tree structure for LLM output.
-    fn add_to_tree(path_str: &str, root: &mut Node, _base_dir: &Path) {
-        let path = Path::new(path_str);
-        let mut current = root;
 
-        // Use HashSet to track processed components
-        let mut processed_components = HashSet::new();
-
-        for component in path.components() {
-            let name = component.as_os_str().to_string_lossy().to_string();
-            if name.is_empty() {
-                continue;
-            }
-
-            // Skip if we've seen this component before (prevents duplicates in complex paths)
-            if processed_components.contains(&name) {
-                continue;
-            }
-
-            processed_components.insert(name.clone());
-
-            let is_dir = component != path.components().last().unwrap();
-
-            if current.children.is_none() {
-                current.children = Some(std::collections::HashMap::new());
-            }
-
-            let children = current.children.as_mut().unwrap();
-
-            if !children.contains_key(&name) {
-                children.insert(
-                    name.clone(),
-                    Node {
-                        name: name.clone(),
-                        is_dir,
-                        children: if is_dir {
-                            Some(std::collections::HashMap::new())
-                        } else {
-                            None
-                        },
-                        parent: None,
-                    },
-                );
-            }
-
-            current = children.get_mut(&name).unwrap();
-        }
-    }
 }
 
 // TODO: Add support for progress reporting during large copy operations.

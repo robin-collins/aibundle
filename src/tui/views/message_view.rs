@@ -96,7 +96,8 @@ impl MessageView {
         }
     }
 
-    /// Sets the duration for which messages are displayed.
+    /// Sets the duration for which messages should be displayed.
+    #[allow(dead_code)]
     pub fn set_message_duration(&mut self, duration: Duration) {
         self.message_duration = duration;
     }

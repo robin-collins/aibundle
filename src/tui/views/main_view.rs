@@ -77,16 +77,17 @@ impl MainView {
             .render(f, chunks[2], app_state, selection_state);
 
         // Render help view or message view if active
-        if app_state.show_help {
-            self.help_view.render(f, area, app_state);
-        } else if app_state.show_message {
-            self.message_view.render(f, area, app_state);
-        }
-
-        // Render modal if active
         if let Some(modal) = &app_state.modal {
-            let modal_area = centered_rect(modal.width, modal.height, area);
-            modal.render(f, modal_area);
+            // Check if this is a help modal by looking at the message content
+            if modal.message.contains("Keyboard Shortcuts") {
+                self.help_view.render(f, area, app_state);
+            } else {
+                // Render modal if active
+                let modal_area = centered_rect(modal.width, modal.height, area);
+                modal.render(f, modal_area);
+            }
+        } else if app_state.message.is_some() {
+            self.message_view.render(f, area, app_state);
         }
     }
 }

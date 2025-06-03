@@ -24,7 +24,9 @@ use std::path::{Path, PathBuf};
 #[derive(Default)]
 pub struct SearchState {
     pub search_query: String,
+    #[allow(dead_code)]
     pub is_searching: bool,
+    #[allow(dead_code)]
     pub selected_items: HashSet<PathBuf>,
 }
 
@@ -35,17 +37,20 @@ impl SearchState {
     }
 
     /// Toggles search mode on or off.
+    #[allow(dead_code)]
     pub fn toggle_search(&mut self) {
         self.is_searching = !self.is_searching;
     }
 
     /// Clears the search query and disables search mode.
+    #[allow(dead_code)]
     pub fn clear_search(&mut self) {
         self.is_searching = false;
         self.search_query.clear();
     }
 
     /// Handles a character input for search, updating the query.
+    #[allow(dead_code)]
     pub fn handle_search_input(&mut self, c: char) {
         if !self.is_searching {
             return;
@@ -63,6 +68,7 @@ impl SearchState {
     }
 
     /// Handles backspace in the search query.
+    #[allow(dead_code)]
     pub fn handle_backspace(&mut self) {
         if self.is_searching {
             self.search_query.pop();
@@ -91,6 +97,7 @@ impl SearchState {
     }
 
     /// Toggles selection of a single path in the search results.
+    #[allow(dead_code)]
     pub fn toggle_selection(&mut self, path: PathBuf) {
         if self.selected_items.contains(&path) {
             self.selected_items.remove(&path);
@@ -100,6 +107,7 @@ impl SearchState {
     }
 
     /// Toggles selection of all visible items in the search results.
+    #[allow(dead_code)]
     pub fn toggle_select_all(&mut self, visible_items: &[PathBuf]) {
         // If all visible items are selected, deselect them all
         // Otherwise, select all visible items
@@ -121,27 +129,31 @@ impl SearchState {
     }
 
     /// Returns true if the given path is selected in the search results.
+    #[allow(dead_code)]
     pub fn is_selected(&self, path: &Path) -> bool {
         self.selected_items.contains(path)
     }
 
     /// Returns the number of selected items in the search results.
+    #[allow(dead_code)]
     pub fn selected_count(&self) -> usize {
         self.selected_items.len()
     }
 
     /// Clears all selections in the search results.
+    #[allow(dead_code)]
     pub fn clear_selections(&mut self) {
         self.selected_items.clear();
     }
 
     /// Returns a reference to the set of selected items.
+    #[allow(dead_code)]
     pub fn get_selected_items(&self) -> &HashSet<PathBuf> {
         &self.selected_items
     }
 }
 
-/// Performs a search over the given items, returning indices of matches.
+/// Performs a search on the given items, returning indices of matches.
 ///
 /// # Arguments
 /// * `items` - The list of items to search.
@@ -155,6 +167,7 @@ impl SearchState {
 /// let indices = crate::tui::state::search::perform_search(&items, "main");
 /// assert!(indices.len() <= items.len());
 /// ```
+#[allow(dead_code)]
 pub fn perform_search(items: &[PathBuf], query: &str) -> Vec<usize> {
     if query.is_empty() {
         // If query is empty, return all indices

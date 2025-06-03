@@ -133,7 +133,7 @@ impl KeyboardHandler {
                 KeyCode::Enter => FileOpsHandler::handle_enter(app_state, selection_state),
                 KeyCode::Char(' ') => SelectionState::toggle_selection(selection_state, app_state),
                 KeyCode::Char('a') => {
-                    SelectionState::toggle_select_all(selection_state, app_state);
+                    let _ = SelectionState::toggle_select_all(selection_state, app_state);
                     Ok(())
                 }
                 KeyCode::Char('c') => ClipboardHandler::copy_selected_to_clipboard(app_state),
@@ -165,7 +165,7 @@ impl KeyboardHandler {
                     FileOpsHandler::toggle_folder_expansion_recursive(app_state, selection_state)
                 }
                 KeyCode::Char('S') => FileOpsHandler::save_config(app_state),
-                KeyCode::F(1) | KeyCode::Char('?') => FileOpsHandler::show_help(app_state),
+                KeyCode::F(1) | KeyCode::Char('?') | KeyCode::Char('h') => FileOpsHandler::show_help(app_state),
                 _ => Ok(()),
             }
         }

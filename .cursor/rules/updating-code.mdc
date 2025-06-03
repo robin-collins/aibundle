@@ -1,6 +1,0 @@
----
-description: 
-globs: 
-alwaysApply: true
----
-When providing updated code, provide the files code IN FULL, UNABRIDGED and wihtout and place holder, abbreviatoins, short cuts or TODO's. We are here to implement features and fix issues, not kick them down the road for another day.

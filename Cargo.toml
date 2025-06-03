@@ -10,7 +10,9 @@ categories = ["command-line-utilities", "development-tools"]
 description = "A CLI & TUI file aggregator and formatter"
 
 [dependencies]
+chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.4", features = ["derive"] }
+hostname = "0.3"
 rayon = { version = "1.8", optional = true }
 crossterm = "0.28.1"
 ratatui = "0.29.0"

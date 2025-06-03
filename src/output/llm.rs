@@ -21,6 +21,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use itertools::Itertools;
+use regex::Regex;
 
 use crate::fs::normalize_path;
 use crate::models::app_config::{FileDependencies, Node};
@@ -33,7 +34,7 @@ use crate::output::format::is_binary_file;
 /// # Arguments
 /// * `selected_items` - Set of selected file and directory paths.
 /// * `current_dir` - The root directory for relative paths.
-/// * `_ignore_config` - Ignore configuration (currently unused).
+/// * `ignore_config` - Ignore configuration.
 ///
 /// # Returns
 /// * `io::Result<(String, CopyStats)>` - The formatted output and copy statistics.
@@ -46,16 +47,14 @@ use crate::output::format::is_binary_file;
 pub fn format_llm_output(
     selected_items: &HashSet<PathBuf>,
     current_dir: &PathBuf,
-    _ignore_config: &crate::models::IgnoreConfig,
+    ignore_config: &crate::models::IgnoreConfig,
 ) -> io::Result<(String, CopyStats)> {
     let mut output = String::new();
-    let mut stats = CopyStats {
-        files: 0,
-        folders: 0,
-    };
 
     // Collect file contents in a format suitable for dependency analysis
     let mut file_contents = Vec::new();
+    let mut file_count = 0;
+    let mut folder_count = 0;
 
     // Create a tree structure for the file system
     let root_name = current_dir
@@ -65,87 +64,42 @@ pub fn format_llm_output(
         .to_string();
 
     let mut root_node = Node {
-        name: root_name,
+        name: root_name.clone(),
         is_dir: true,
         children: Some(HashMap::new()),
-        parent: None,
     };
 
-    // Build the tree structure from selected items
-    let mut node_map: HashMap<PathBuf, *mut Node> = HashMap::new();
-    let root_ptr: *mut Node = &mut root_node;
-    node_map.insert(current_dir.clone(), root_ptr);
-
-    // First add directories
-    let mut sorted_items: Vec<_> = selected_items.iter().collect();
-    sorted_items.sort_by_key(|p| (p.is_dir(), p.to_string_lossy().to_string()));
-
-    for path in sorted_items {
+    // Process selected items to collect files and build tree
+    for path in selected_items {
         if let Ok(rel_path) = path.strip_prefix(current_dir) {
             if rel_path.as_os_str().is_empty() {
                 continue; // Skip root
             }
 
-            // Get the parent path
-            let parent_path = if let Some(parent) = path.parent() {
-                parent.to_path_buf()
-            } else {
-                current_dir.clone()
-            };
+            // Add to tree structure
+            add_path_to_tree(&mut root_node, &rel_path, path.is_dir());
 
-            // Get parent node pointer
-            let parent_ptr = *node_map.get(&parent_path).unwrap_or(&root_ptr);
+            if path.is_file() {
+                file_count += 1;
 
-            // Create and add the node
-            let name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("")
-                .to_string();
-
-            // Only add if not already in the tree
-            if let Some(children) = unsafe { &mut (*parent_ptr).children } {
-                let name_clone = name.clone(); // Clone before using in entry
-                children.entry(name_clone).or_insert_with(|| {
-                    let mut node = Node {
-                        name: name.clone(),
-                        is_dir: path.is_dir(),
-                        children: if path.is_dir() {
-                            Some(HashMap::new())
-                        } else {
-                            None
-                        },
-                        parent: None, // We don't need this for tree rendering
-                    };
-
-                    let node_ptr: *mut Node = &mut node;
-                    node_map.insert(path.clone(), node_ptr);
-                    node
-                });
-            }
-        }
-    }
-
-    // Process selected items
-    for path in selected_items {
-        if path.is_file() {
-            stats.files += 1;
-
-            if !is_binary_file(path) {
-                if let Ok(content) = fs::read_to_string(path) {
-                    if let Ok(rel_path) = path.strip_prefix(current_dir) {
+                // Read file content if not binary and not ignored
+                if !is_binary_file(path) || ignore_config.include_binary_files {
+                    if let Ok(content) = fs::read_to_string(path) {
                         let normalized_path = normalize_path(&rel_path.to_string_lossy());
                         file_contents.push((normalized_path, content));
                     }
                 }
+            } else if path.is_dir() {
+                folder_count += 1;
             }
-        } else if path.is_dir() {
-            stats.folders += 1;
         }
     }
 
-    // Analyze dependencies
-    let dependencies = analyze_dependencies(&file_contents, current_dir);
+    // Also collect all files for comprehensive dependency analysis
+    let all_file_contents = collect_all_files_for_analysis(selected_items, current_dir, ignore_config);
+
+    // Analyze dependencies using all available files for better resolution
+    let dependencies = analyze_dependencies(&all_file_contents, current_dir);
 
     // Generate LLM output
     format_llm_output_internal(
@@ -154,9 +108,98 @@ pub fn format_llm_output(
         current_dir,
         &root_node,
         &dependencies,
+        file_count,
+        folder_count,
     );
 
+    let stats = CopyStats {
+        files: file_count,
+        folders: folder_count,
+    };
+
     Ok((output, stats))
+}
+
+/// Collects all files from selected items for comprehensive dependency analysis
+fn collect_all_files_for_analysis(
+    selected_items: &HashSet<PathBuf>,
+    current_dir: &PathBuf,
+    ignore_config: &crate::models::IgnoreConfig,
+) -> Vec<(String, String)> {
+    let mut all_files = Vec::new();
+
+    for path in selected_items {
+        if path.is_file() {
+            if let Ok(rel_path) = path.strip_prefix(current_dir) {
+                if !is_binary_file(path) || ignore_config.include_binary_files {
+                    if let Ok(content) = fs::read_to_string(path) {
+                        let normalized_path = normalize_path(&rel_path.to_string_lossy());
+                        all_files.push((normalized_path, content));
+                    }
+                }
+            }
+        } else if path.is_dir() {
+            // For directories, collect all files within them
+            collect_files_from_directory(path, current_dir, ignore_config, &mut all_files);
+        }
+    }
+
+    all_files
+}
+
+/// Recursively collect files from a directory for analysis
+fn collect_files_from_directory(
+    dir_path: &PathBuf,
+    current_dir: &PathBuf,
+    ignore_config: &crate::models::IgnoreConfig,
+    all_files: &mut Vec<(String, String)>,
+) {
+    if let Ok(entries) = fs::read_dir(dir_path) {
+        for entry in entries.filter_map(Result::ok) {
+            let entry_path = entry.path();
+
+            if entry_path.is_file() {
+                if let Ok(rel_path) = entry_path.strip_prefix(current_dir) {
+                    if !is_binary_file(&entry_path) || ignore_config.include_binary_files {
+                        if let Ok(content) = fs::read_to_string(&entry_path) {
+                            let normalized_path = normalize_path(&rel_path.to_string_lossy());
+                            all_files.push((normalized_path, content));
+                        }
+                    }
+                }
+            } else if entry_path.is_dir() {
+                collect_files_from_directory(&entry_path, current_dir, ignore_config, all_files);
+            }
+        }
+    }
+}
+
+/// Add a path to the tree structure
+fn add_path_to_tree(root: &mut Node, rel_path: &Path, is_dir: bool) {
+    let mut current_node = root;
+    let components: Vec<_> = rel_path.iter().collect();
+
+    for (i, comp) in components.iter().enumerate() {
+        let name = comp.to_string_lossy().to_string();
+        let children = current_node.children.get_or_insert_with(HashMap::new);
+
+        let is_final = i == components.len() - 1;
+        let node_is_dir = if is_final { is_dir } else { true };
+
+        current_node = children.entry(name.clone()).or_insert_with(|| Node {
+            name: name.clone(),
+            is_dir: node_is_dir,
+            children: if node_is_dir { Some(HashMap::new()) } else { None },
+        });
+
+        // Update the final node to correct type
+        if is_final {
+            current_node.is_dir = is_dir;
+            if !is_dir {
+                current_node.children = None;
+            }
+        }
+    }
 }
 
 /// Analyzes dependencies between files based on language-specific import/include patterns.
@@ -179,24 +222,42 @@ pub fn analyze_dependencies(
     let mut dependencies = HashMap::new();
     let mut imports: HashMap<String, HashSet<String>> = HashMap::new();
 
-    // Define detection patterns for different languages
+    // Define detection patterns for different languages - improved patterns
     let language_patterns: HashMap<&str, Vec<&str>> = [
         // Python
         (
             ".py",
-            vec![r"^from\s+([\w.]+)\s+import", r"^import\s+([\w.]+)"],
+            vec![
+                r"^from\s+([\w.]+)\s+import",
+                r"^import\s+([\w.]+)",
+                r"^\s*from\s+([\w.]+)\s+import",
+                r"^\s*import\s+([\w.]+)",
+            ],
         ),
         // C/C++
         (".c", vec![r#"#include\s+[<"]([^>"]+)[>"]"#]),
         (".h", vec![r#"#include\s+[<"]([^>"]+)[>"]"#]),
         (".cpp", vec![r#"#include\s+[<"]([^>"]+)[>"]"#]),
         (".hpp", vec![r#"#include\s+[<"]([^>"]+)[>"]"#]),
+        (".cc", vec![r#"#include\s+[<"]([^>"]+)[>"]"#]),
+        // Rust
+        (
+            ".rs",
+            vec![
+                r"use\s+([\w:]+)",
+                r"extern\s+crate\s+([\w]+)",
+                r"mod\s+([\w]+)",
+                r"pub\s+use\s+([\w:]+)",
+            ]
+        ),
         // JavaScript/TypeScript
         (
             ".js",
             vec![
                 r#"(?:import|require)\s*\(?['"]([^'"]+)['"]"#,
                 r#"from\s+['"]([^'"]+)['"]"#,
+                r#"import\s+.*?\s+from\s+['"]([^'"]+)['"]"#,
+                r#"const\s+.*?\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)"#,
             ],
         ),
         (
@@ -204,8 +265,20 @@ pub fn analyze_dependencies(
             vec![
                 r#"(?:import|require)\s*\(?['"]([^'"]+)['"]"#,
                 r#"from\s+['"]([^'"]+)['"]"#,
+                r#"import\s+.*?\s+from\s+['"]([^'"]+)['"]"#,
+                r#"const\s+.*?\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)"#,
             ],
         ),
+        (".tsx", vec![
+            r#"(?:import|require)\s*\(?['"]([^'"]+)['"]"#,
+            r#"from\s+['"]([^'"]+)['"]"#,
+            r#"import\s+.*?\s+from\s+['"]([^'"]+)['"]"#,
+        ]),
+        (".jsx", vec![
+            r#"(?:import|require)\s*\(?['"]([^'"]+)['"]"#,
+            r#"from\s+['"]([^'"]+)['"]"#,
+            r#"import\s+.*?\s+from\s+['"]([^'"]+)['"]"#,
+        ]),
         // Java
         (".java", vec![r"import\s+([\w.]+)"]),
         // Go
@@ -222,6 +295,7 @@ pub fn analyze_dependencies(
             vec![
                 r#"require\s+['"]([^'"]+)['"]"#,
                 r#"require_relative\s+['"]([^'"]+)['"]"#,
+                r#"load\s+['"]([^'"]+)['"]"#,
             ],
         ),
         // PHP
@@ -232,8 +306,6 @@ pub fn analyze_dependencies(
                 r"use\s+([\w\\]+)",
             ],
         ),
-        // Rust
-        (".rs", vec![r"use\s+([\w:]+)", r"extern\s+crate\s+([\w]+)"]),
         // Swift
         (".swift", vec![r"import\s+(\w+)"]),
         // Shell scripts
@@ -244,12 +316,38 @@ pub fn analyze_dependencies(
                 r#"\.\s+['"]?([^'"]+)['"]?"#,
             ],
         ),
+        (".bash", vec![
+            r#"source\s+['"]?([^'"]+)['"]?"#,
+            r#"\.\s+['"]?([^'"]+)['"]?"#,
+        ]),
         // Makefile
         ("Makefile", vec![r"include\s+([^\s]+)"]),
+        ("makefile", vec![r"include\s+([^\s]+)"]),
+        // TOML
+        (".toml", vec![]),  // Could add dependency patterns for Cargo.toml etc.
+        // YAML
+        (".yaml", vec![]),
+        (".yml", vec![]),
     ]
     .iter()
     .cloned()
     .collect();
+
+    // Precompile regexes for each language extension
+    let mut language_regexes: HashMap<&str, Vec<Regex>> = HashMap::new();
+    for (ext, patterns) in &language_patterns {
+        let compiled: Vec<Regex> = patterns
+            .iter()
+            .filter_map(|pat| match Regex::new(pat) {
+                Ok(re) => Some(re),
+                Err(err) => {
+                    eprintln!("Invalid regex for {}: {}", ext, err);
+                    None
+                }
+            })
+            .collect();
+        language_regexes.insert(*ext, compiled);
+    }
 
     // First pass: collect all imports
     for (file_path, content) in file_contents {
@@ -266,28 +364,25 @@ pub fn analyze_dependencies(
             .and_then(|n| n.to_str())
             .unwrap_or("");
 
-        // Select appropriate patterns
-        let patterns = if let Some(ext_patterns) = language_patterns.get(ext.as_str()) {
-            ext_patterns
-        } else if let Some(file_patterns) = language_patterns.get(basename) {
-            file_patterns
+        // Select appropriate regexes for this file
+        let regexes = if let Some(ext_regexes) = language_regexes.get(ext.as_str()) {
+            ext_regexes
+        } else if let Some(file_regexes) = language_regexes.get(basename) {
+            file_regexes
         } else {
             continue;
         };
 
-        // Apply all relevant patterns
-        for pattern in patterns {
-            let regex = match regex::Regex::new(pattern) {
-                Ok(re) => re,
-                Err(_) => continue,
-            };
-
-            for cap in regex.captures_iter(content) {
-                if let Some(m) = cap.get(1) {
-                    imports
-                        .get_mut(file_path)
-                        .unwrap()
-                        .insert(m.as_str().to_string());
+        // Apply all relevant regexes - search line by line for better matches
+        for line in content.lines() {
+            for re in regexes {
+                for cap in re.captures_iter(line) {
+                    if let Some(m) = cap.get(1) {
+                        imports
+                            .get_mut(file_path)
+                            .unwrap()
+                            .insert(m.as_str().to_string());
+                    }
                 }
             }
         }
@@ -353,25 +448,39 @@ pub fn analyze_dependencies(
                     .unwrap_or("")
                     .to_string(),
                 imp.replace('.', "/"),
-                format!("{}.py", imp.replace('.', "/")),
-                format!("{}.h", imp),
-                format!("{}.hpp", imp),
-                format!("{}.js", imp),
+                imp.replace("::", "/"),  // For Rust modules
+                format!("{}.py", imp.replace('.', "/")),  // For Python
+                format!("{}.rs", imp.replace("::", "/")), // For Rust
+                format!("{}.h", imp),  // For C
+                format!("{}.hpp", imp),  // For C++
+                format!("{}.js", imp),  // For JS
+                format!("{}.ts", imp),  // For TS
+                format!("{}/mod.rs", imp.replace("::", "/")), // For Rust modules
+                format!("{}/index.js", imp),  // For JS modules
+                format!("{}/index.ts", imp),  // For TS modules
             ];
 
             for var in import_variations {
                 if let Some(matched_path) = file_mapping.get(&var) {
-                    internal_deps.push(matched_path.clone());
-                    matched = true;
-                    break;
+                    if matched_path != &file_path {  // Don't self-reference
+                        internal_deps.push(matched_path.clone());
+                        matched = true;
+                        break;
+                    }
                 }
             }
 
-            // If no match found, keep the import as is
+            // If no match found, keep the import as is (external dependency)
             if !matched {
                 external_deps.push(imp);
             }
         }
+
+        // Remove duplicates
+        internal_deps.sort();
+        internal_deps.dedup();
+        external_deps.sort();
+        external_deps.dedup();
 
         dependencies.insert(
             file_path,
@@ -389,32 +498,29 @@ pub fn analyze_dependencies(
 fn write_file_tree_to_string(node: &Node, prefix: &str, is_last: bool) -> String {
     let mut result = String::new();
 
-    if node.parent.is_some() {
-        // Skip root node
-        let branch = if is_last { "── " } else { "├─ " };
+    // Print node (skip root when prefix is empty)
+    if !prefix.is_empty() {
+        let branch = if is_last { "└── " } else { "├── " };
         result.push_str(&format!("{}{}{}\n", prefix, branch, node.name));
     }
 
-    if node.is_dir && node.children.is_some() {
-        let children = node.children.as_ref().unwrap();
-        let items: Vec<_> = children
-            .iter()
-            .sorted_by(|a, b| {
-                Ord::cmp(
-                    &(!a.1.is_dir, a.0.to_lowercase()),
-                    &(!b.1.is_dir, b.0.to_lowercase()),
-                )
-            })
-            .collect();
+    if node.is_dir {
+        if let Some(children) = node.children.as_ref() {
+            let items: Vec<_> = children
+                .iter()
+                .sorted_by(|a, b| {
+                    Ord::cmp(
+                        &(!a.1.is_dir, a.0.to_lowercase()),
+                        &(!b.1.is_dir, b.0.to_lowercase()),
+                    )
+                })
+                .collect();
 
-        for (i, (_, child)) in items.iter().enumerate() {
-            let is_last_child = i == items.len() - 1;
-            let new_prefix = format!("{}{}", prefix, if is_last { "    " } else { "│   " });
-            result.push_str(&write_file_tree_to_string(
-                child,
-                &new_prefix,
-                is_last_child,
-            ));
+            for (i, (_, child)) in items.iter().enumerate() {
+                let is_last_child = i == items.len() - 1;
+                let new_prefix = format!("{}{}", prefix, if is_last { "    " } else { "│   " });
+                result.push_str(&write_file_tree_to_string(child, &new_prefix, is_last_child));
+            }
         }
     }
 
@@ -422,6 +528,7 @@ fn write_file_tree_to_string(node: &Node, prefix: &str, is_last: bool) -> String
 }
 
 // Helper function to count files in a node tree
+#[allow(dead_code)]
 fn count_files(node: &Node) -> usize {
     if !node.is_dir {
         return 1;
@@ -444,10 +551,12 @@ fn count_files(node: &Node) -> usize {
 /// * `root_path` - The root directory path.
 /// * `root_node` - The root node of the file tree.
 /// * `dependencies` - Map of file dependencies.
+/// * `total_files` - Total number of files selected.
+/// * `total_folders` - Total number of folders selected.
 ///
 /// # Examples
 /// ```rust
-/// crate::output::llm::format_llm_output_internal(&mut output, &file_contents, &root_path, &root_node, &dependencies);
+/// crate::output::llm::format_llm_output_internal(&mut output, &file_contents, &root_path, &root_node, &dependencies, total_files, total_folders);
 /// ```
 pub fn format_llm_output_internal(
     output: &mut String,
@@ -455,14 +564,15 @@ pub fn format_llm_output_internal(
     root_path: &Path,
     root_node: &Node,
     dependencies: &HashMap<String, FileDependencies>,
+    total_files: usize,
+    _total_folders: usize,
 ) {
     // Header and overview
     output.push_str("# PROJECT ANALYSIS FOR AI ASSISTANT\n\n");
 
     // General project information
-    let total_files = count_files(root_node);
     let selected_files = file_contents.len();
-    output.push_str("## GENERAL INFORMATION\n\n");
+    output.push_str("## 📦 GENERAL INFORMATION\n\n");
     output.push_str(&format!("- **Project path**: `{}`\n", root_path.display()));
     output.push_str(&format!("- **Total files**: {}\n", total_files));
     output.push_str(&format!(
@@ -494,7 +604,7 @@ pub fn format_llm_output_internal(
     output.push('\n');
 
     // Project structure
-    output.push_str("## PROJECT STRUCTURE\n\n");
+    output.push_str("## 🗂️ PROJECT STRUCTURE\n\n");
     output.push_str("```\n");
     output.push_str(&format!("{}\n", root_path.display()));
     output.push_str(&write_file_tree_to_string(root_node, "", true));
@@ -508,7 +618,7 @@ pub fn format_llm_output_internal(
         .unwrap_or_default();
 
     if !main_dirs.is_empty() {
-        output.push_str("### Main Components\n\n");
+        output.push_str("### 📂 Main Components\n\n");
         for dir_node in main_dirs {
             let dir_files: Vec<_> = file_contents
                 .iter()
@@ -546,7 +656,7 @@ pub fn format_llm_output_internal(
     }
 
     // File relationship graph
-    output.push_str("## FILE RELATIONSHIPS\n\n");
+    output.push_str("## 🔄 FILE RELATIONSHIPS\n\n");
 
     // Find most referenced files
     let mut referenced_by: HashMap<String, Vec<String>> = HashMap::new();
@@ -580,7 +690,10 @@ pub fn format_llm_output_internal(
 
     // Display dependencies per file
     output.push_str("### Dependencies by File\n\n");
-    for (file, deps) in dependencies {
+    let mut dep_items: Vec<_> = dependencies.iter().collect();
+    dep_items.sort_by(|a, b| a.0.cmp(b.0));
+
+    for (file, deps) in dep_items {
         if !deps.internal_deps.is_empty() || !deps.external_deps.is_empty() {
             output.push_str(&format!("- **`{}`**:\n", file));
 
@@ -620,7 +733,7 @@ pub fn format_llm_output_internal(
     output.push('\n');
 
     // File contents
-    output.push_str("## FILE CONTENTS\n\n");
+    output.push_str("## 📄 FILE CONTENTS\n\n");
     output.push_str("*Note: The content below includes only selected files.*\n\n");
 
     for (path, content) in file_contents {

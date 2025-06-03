@@ -18,13 +18,13 @@
 //! ```
 
 use ratatui::layout::Rect;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::Write;
-use std::sync::OnceLock;
+use std::sync::Mutex;
 use chrono::Local;
 use std::env;
 
-static LOG_FILE: OnceLock<File> = OnceLock::new();
+static LOG_FILE: Mutex<Option<File>> = Mutex::new(None);
 
 /// Returns a rectangle centered within the given area, with the specified width and height.
 ///
@@ -45,6 +45,7 @@ static LOG_FILE: OnceLock<File> = OnceLock::new();
 /// assert_eq!(popup.width, 50);
 /// assert_eq!(popup.height, 20);
 /// ```
+#[allow(dead_code)]
 pub fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
     let popup_width = width.min(r.width);
     let popup_height = height.min(r.height);
@@ -107,11 +108,16 @@ fn init_log_file() -> File {
 /// crate::utils::log_event("Navigated to /src");
 /// ```
 pub fn log_event(msg: &str) {
-    let file = LOG_FILE.get_or_init(init_log_file);
-    let now = Local::now().format("%Y-%m-%dT%H:%M:%S");
-    let line = format!("[{}] {}\n", now, msg);
-    let _ = file.write_all(line.as_bytes());
-    let _ = file.flush();
+    let mut log_file_guard = LOG_FILE.lock().unwrap();
+    if log_file_guard.is_none() {
+        *log_file_guard = Some(init_log_file());
+    }
+    if let Some(ref mut file) = log_file_guard.as_mut() {
+        let now = Local::now().format("%Y-%m-%dT%H:%M:%S");
+        let line = format!("[{}] {}\n", now, msg);
+        let _ = file.write_all(line.as_bytes());
+        let _ = file.flush();
+    }
 }
 
 fn get_hostname() -> String {

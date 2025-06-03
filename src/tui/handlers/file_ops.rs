@@ -202,7 +202,8 @@ impl FileOpsHandler {
         Ok(())
     }
 
-    /// Formats the selected items for output and updates last_copy_stats.
+    /// Formats selected items for display or export.
+    #[allow(dead_code)]
     pub fn format_selected_items(app_state: &mut AppState) -> io::Result<String> {
         let result = format_selected_items(
             &app_state.selected_items,
@@ -310,7 +311,18 @@ impl FileOpsHandler {
                 "Config file exists",
             ));
         }
-        save_config(&app_state.config, config_path.to_str().unwrap_or(""))?;
+
+        // Create config from current app state
+        let config = crate::models::AppConfig {
+            default_format: Some(format!("{:?}", app_state.output_format).to_lowercase()),
+            default_gitignore: Some(app_state.ignore_config.use_gitignore),
+            default_ignore: Some(app_state.ignore_config.extra_ignore_patterns.clone()),
+            default_line_numbers: Some(app_state.show_line_numbers),
+            default_recursive: Some(app_state.recursive),
+            selection_limit: Some(app_state.selection_limit),
+        };
+
+        save_config(&config, config_path.to_str().unwrap_or(""))?;
         // Success message
         app_state.set_message(
             format!(
