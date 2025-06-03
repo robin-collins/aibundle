@@ -96,7 +96,8 @@ pub fn format_llm_output(
     }
 
     // Also collect all files for comprehensive dependency analysis
-    let all_file_contents = collect_all_files_for_analysis(selected_items, current_dir, ignore_config);
+    let all_file_contents =
+        collect_all_files_for_analysis(selected_items, current_dir, ignore_config);
 
     // Analyze dependencies using all available files for better resolution
     let dependencies = analyze_dependencies(&all_file_contents, current_dir);
@@ -189,7 +190,11 @@ fn add_path_to_tree(root: &mut Node, rel_path: &Path, is_dir: bool) {
         current_node = children.entry(name.clone()).or_insert_with(|| Node {
             name: name.clone(),
             is_dir: node_is_dir,
-            children: if node_is_dir { Some(HashMap::new()) } else { None },
+            children: if node_is_dir {
+                Some(HashMap::new())
+            } else {
+                None
+            },
         });
 
         // Update the final node to correct type
@@ -248,7 +253,7 @@ pub fn analyze_dependencies(
                 r"extern\s+crate\s+([\w]+)",
                 r"mod\s+([\w]+)",
                 r"pub\s+use\s+([\w:]+)",
-            ]
+            ],
         ),
         // JavaScript/TypeScript
         (
@@ -269,16 +274,22 @@ pub fn analyze_dependencies(
                 r#"const\s+.*?\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)"#,
             ],
         ),
-        (".tsx", vec![
-            r#"(?:import|require)\s*\(?['"]([^'"]+)['"]"#,
-            r#"from\s+['"]([^'"]+)['"]"#,
-            r#"import\s+.*?\s+from\s+['"]([^'"]+)['"]"#,
-        ]),
-        (".jsx", vec![
-            r#"(?:import|require)\s*\(?['"]([^'"]+)['"]"#,
-            r#"from\s+['"]([^'"]+)['"]"#,
-            r#"import\s+.*?\s+from\s+['"]([^'"]+)['"]"#,
-        ]),
+        (
+            ".tsx",
+            vec![
+                r#"(?:import|require)\s*\(?['"]([^'"]+)['"]"#,
+                r#"from\s+['"]([^'"]+)['"]"#,
+                r#"import\s+.*?\s+from\s+['"]([^'"]+)['"]"#,
+            ],
+        ),
+        (
+            ".jsx",
+            vec![
+                r#"(?:import|require)\s*\(?['"]([^'"]+)['"]"#,
+                r#"from\s+['"]([^'"]+)['"]"#,
+                r#"import\s+.*?\s+from\s+['"]([^'"]+)['"]"#,
+            ],
+        ),
         // Java
         (".java", vec![r"import\s+([\w.]+)"]),
         // Go
@@ -316,15 +327,18 @@ pub fn analyze_dependencies(
                 r#"\.\s+['"]?([^'"]+)['"]?"#,
             ],
         ),
-        (".bash", vec![
-            r#"source\s+['"]?([^'"]+)['"]?"#,
-            r#"\.\s+['"]?([^'"]+)['"]?"#,
-        ]),
+        (
+            ".bash",
+            vec![
+                r#"source\s+['"]?([^'"]+)['"]?"#,
+                r#"\.\s+['"]?([^'"]+)['"]?"#,
+            ],
+        ),
         // Makefile
         ("Makefile", vec![r"include\s+([^\s]+)"]),
         ("makefile", vec![r"include\s+([^\s]+)"]),
         // TOML
-        (".toml", vec![]),  // Could add dependency patterns for Cargo.toml etc.
+        (".toml", vec![]), // Could add dependency patterns for Cargo.toml etc.
         // YAML
         (".yaml", vec![]),
         (".yml", vec![]),
@@ -448,21 +462,22 @@ pub fn analyze_dependencies(
                     .unwrap_or("")
                     .to_string(),
                 imp.replace('.', "/"),
-                imp.replace("::", "/"),  // For Rust modules
+                imp.replace("::", "/"),                   // For Rust modules
                 format!("{}.py", imp.replace('.', "/")),  // For Python
                 format!("{}.rs", imp.replace("::", "/")), // For Rust
-                format!("{}.h", imp),  // For C
-                format!("{}.hpp", imp),  // For C++
-                format!("{}.js", imp),  // For JS
-                format!("{}.ts", imp),  // For TS
+                format!("{}.h", imp),                     // For C
+                format!("{}.hpp", imp),                   // For C++
+                format!("{}.js", imp),                    // For JS
+                format!("{}.ts", imp),                    // For TS
                 format!("{}/mod.rs", imp.replace("::", "/")), // For Rust modules
-                format!("{}/index.js", imp),  // For JS modules
-                format!("{}/index.ts", imp),  // For TS modules
+                format!("{}/index.js", imp),              // For JS modules
+                format!("{}/index.ts", imp),              // For TS modules
             ];
 
             for var in import_variations {
                 if let Some(matched_path) = file_mapping.get(&var) {
-                    if matched_path != &file_path {  // Don't self-reference
+                    if matched_path != &file_path {
+                        // Don't self-reference
                         internal_deps.push(matched_path.clone());
                         matched = true;
                         break;
@@ -519,7 +534,11 @@ fn write_file_tree_to_string(node: &Node, prefix: &str, is_last: bool) -> String
             for (i, (_, child)) in items.iter().enumerate() {
                 let is_last_child = i == items.len() - 1;
                 let new_prefix = format!("{}{}", prefix, if is_last { "    " } else { "│   " });
-                result.push_str(&write_file_tree_to_string(child, &new_prefix, is_last_child));
+                result.push_str(&write_file_tree_to_string(
+                    child,
+                    &new_prefix,
+                    is_last_child,
+                ));
             }
         }
     }

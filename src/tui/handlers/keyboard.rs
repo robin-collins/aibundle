@@ -165,7 +165,9 @@ impl KeyboardHandler {
                     FileOpsHandler::toggle_folder_expansion_recursive(app_state, selection_state)
                 }
                 KeyCode::Char('S') => FileOpsHandler::save_config(app_state),
-                KeyCode::F(1) | KeyCode::Char('?') | KeyCode::Char('h') => FileOpsHandler::show_help(app_state),
+                KeyCode::F(1) | KeyCode::Char('?') | KeyCode::Char('h') => {
+                    FileOpsHandler::show_help(app_state)
+                }
                 _ => Ok(()),
             }
         }

@@ -251,8 +251,6 @@ impl ClipboardHandler {
 
         Ok(())
     }
-
-
 }
 
 // TODO: Add support for progress reporting during large copy operations.

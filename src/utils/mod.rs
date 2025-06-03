@@ -17,12 +17,12 @@
 //! assert_eq!(human_readable_size(2048), "2.00 KB");
 //! ```
 
+use chrono::Local;
 use ratatui::layout::Rect;
+use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::sync::Mutex;
-use chrono::Local;
-use std::env;
 
 static LOG_FILE: Mutex<Option<File>> = Mutex::new(None);
 
