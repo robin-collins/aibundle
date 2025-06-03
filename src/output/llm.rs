@@ -77,7 +77,7 @@ pub fn format_llm_output(
             }
 
             // Add to tree structure
-            add_path_to_tree(&mut root_node, &rel_path, path.is_dir());
+            add_path_to_tree(&mut root_node, rel_path, path.is_dir());
 
             if path.is_file() {
                 file_count += 1;
