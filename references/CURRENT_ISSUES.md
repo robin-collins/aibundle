@@ -1,0 +1,5 @@
+- also when its listing files, the folders are now at the bottom of the file list, instead of the folders FIRST.
+- gitignore is not selected by default, but it should be.
+- when gitignore is selected, it still shows the files that are in the gitignore file. It should hide them.
+- pressing the 's' key causes the app to error and exit `Error: Custom { kind: AlreadyExists, error: "Config file exists" }`
+- the same happens for shift+s

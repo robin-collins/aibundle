@@ -6,7 +6,7 @@
 # Global variables
 SESSION_NAME=""
 TEST_NAME=""
-CAPTURE_DIR="$(pwd)/tests/captured-panes"
+CAPTURE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/captured-panes"
 APP_BINARY="../../target/release/aibundle"
 TEST_TIMEOUT=30
 
@@ -14,7 +14,7 @@ TEST_TIMEOUT=30
 # Set consistent window dimensions for reliable testing
 # Width: number of columns (characters horizontally)
 # Height: number of rows (lines vertically)
-TMUX_WIDTH=180
+TMUX_WIDTH=173
 TMUX_HEIGHT=40
 
 # Colors for output
@@ -38,7 +38,18 @@ setup_test_session() {
         exit 1
     fi
     # Create tmux session in tests/files directory
-    cd "files" || exit 1
+    cd "$(dirname "${BASH_SOURCE[0]}")/../files" || {
+        echo -e "${RED}ERROR: Failed to navigate to tests/files directory${NC}"
+        echo "Current directory: $(pwd)"
+        echo "Attempting to resolve tests/files directory..."
+        if [ -d "tests/files" ]; then
+            cd "tests/files" || exit 1
+            echo "Successfully navigated to tests/files from: $(pwd)"
+        else
+            echo -e "${RED}ERROR: tests/files directory not found${NC}"
+            exit 1
+        fi
+    }
 
     # Check if application binary exists (now we're in tests/files)
     if [ ! -f "$APP_BINARY" ]; then

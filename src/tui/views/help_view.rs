@@ -26,6 +26,12 @@ use ratatui::{
 /// Help view component for rendering the help popup/modal in the TUI.
 pub struct HelpView;
 
+impl Default for HelpView {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HelpView {
     /// Creates a new `HelpView` component.
     pub fn new() -> Self {
@@ -40,9 +46,11 @@ impl HelpView {
         // Create a block with a border for the help view
         let help_block = Block::default()
             .title(" 📋 AIBundle Help ")
-            .title_style(Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD))
+            .title_style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Cyan));
 
@@ -64,7 +72,10 @@ impl HelpView {
                         .add_modifier(Modifier::BOLD),
                 ),
             ]),
-            Line::from(Span::styled("─────────────", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled(
+                "─────────────",
+                Style::default().fg(Color::DarkGray),
+            )),
             Line::from(vec![
                 Span::styled("  ↑/↓        ", Style::default().fg(Color::Yellow)),
                 Span::styled("│ ", Style::default().fg(Color::DarkGray)),
@@ -105,7 +116,10 @@ impl HelpView {
                         .add_modifier(Modifier::BOLD),
                 ),
             ]),
-            Line::from(Span::styled("────────────", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled(
+                "────────────",
+                Style::default().fg(Color::DarkGray),
+            )),
             Line::from(vec![
                 Span::styled("  Space      ", Style::default().fg(Color::Yellow)),
                 Span::styled("│ ", Style::default().fg(Color::DarkGray)),
@@ -114,7 +128,10 @@ impl HelpView {
             Line::from(vec![
                 Span::styled("  a          ", Style::default().fg(Color::Yellow)),
                 Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-                Span::styled("Select/deselect all items", Style::default().fg(Color::White)),
+                Span::styled(
+                    "Select/deselect all items",
+                    Style::default().fg(Color::White),
+                ),
             ]),
             Line::from(""),
             Line::from(vec![
@@ -126,7 +143,10 @@ impl HelpView {
                         .add_modifier(Modifier::BOLD),
                 ),
             ]),
-            Line::from(Span::styled("─────────", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled(
+                "─────────",
+                Style::default().fg(Color::DarkGray),
+            )),
             Line::from(vec![
                 Span::styled("  c          ", Style::default().fg(Color::Yellow)),
                 Span::styled("│ ", Style::default().fg(Color::DarkGray)),
@@ -135,7 +155,10 @@ impl HelpView {
             Line::from(vec![
                 Span::styled("  f          ", Style::default().fg(Color::Yellow)),
                 Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-                Span::styled("Toggle format (XML/MD/JSON/LLM)", Style::default().fg(Color::White)),
+                Span::styled(
+                    "Toggle format (XML/MD/JSON/LLM)",
+                    Style::default().fg(Color::White),
+                ),
             ]),
             Line::from(vec![
                 Span::styled("  n          ", Style::default().fg(Color::Yellow)),
@@ -152,12 +175,13 @@ impl HelpView {
                 Span::styled("🔍 ", Style::default().fg(Color::Red)),
                 Span::styled(
                     "Filters",
-                    Style::default()
-                        .fg(Color::Red)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                 ),
             ]),
-            Line::from(Span::styled("──────────", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled(
+                "──────────",
+                Style::default().fg(Color::DarkGray),
+            )),
             Line::from(vec![
                 Span::styled("  d          ", Style::default().fg(Color::Yellow)),
                 Span::styled("│ ", Style::default().fg(Color::DarkGray)),
@@ -188,7 +212,10 @@ impl HelpView {
                         .add_modifier(Modifier::BOLD),
                 ),
             ]),
-            Line::from(Span::styled("────────", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled(
+                "────────",
+                Style::default().fg(Color::DarkGray),
+            )),
             Line::from(vec![
                 Span::styled("  h / ?      ", Style::default().fg(Color::Yellow)),
                 Span::styled("│ ", Style::default().fg(Color::DarkGray)),
@@ -202,7 +229,10 @@ impl HelpView {
             Line::from(vec![
                 Span::styled("  q          ", Style::default().fg(Color::Yellow)),
                 Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-                Span::styled("Quit (copies if items selected)", Style::default().fg(Color::White)),
+                Span::styled(
+                    "Quit (copies if items selected)",
+                    Style::default().fg(Color::White),
+                ),
             ]),
             Line::from(vec![
                 Span::styled("  Ctrl+C     ", Style::default().fg(Color::Yellow)),
@@ -219,7 +249,10 @@ impl HelpView {
                         .add_modifier(Modifier::BOLD),
                 ),
             ]),
-            Line::from(Span::styled("─────────────────", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled(
+                "─────────────────",
+                Style::default().fg(Color::DarkGray),
+            )),
             Line::from(vec![
                 Span::styled("  PgUp/PgDn  ", Style::default().fg(Color::Yellow)),
                 Span::styled("│ ", Style::default().fg(Color::DarkGray)),

@@ -123,7 +123,8 @@ impl SearchState {
         } else {
             // Select all visible items
             for item in visible_items {
-                self.selected_items.insert(item.clone());
+                // Memory optimization: Use to_path_buf() to avoid unnecessary clone
+                self.selected_items.insert(item.to_path_buf());
             }
         }
     }

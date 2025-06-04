@@ -135,5 +135,3 @@ impl OutputFormat {
     }
 }
 
-// TODO: Add more output formats as new features are implemented.
-// TODO: Consider supporting user-defined/custom output formats in the future.

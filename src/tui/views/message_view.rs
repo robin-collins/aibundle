@@ -32,6 +32,12 @@ pub struct MessageView {
     message_duration: Duration,
 }
 
+impl Default for MessageView {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MessageView {
     /// Creates a new `MessageView` with a default message duration.
     pub fn new() -> Self {

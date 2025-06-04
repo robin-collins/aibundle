@@ -1,0 +1,40 @@
+../../target/release/aibundle
+
+aibundle-modular/tests/files on  v0.8-optimisation [✘!?] via 🐍 v3.12.3 on ☁️  (us-east-2) on ☁️
+❯ ../../target/release/aibundle
+
+Copied to clipboard:
+Files copied: 6
+Folders copied: 2
+Total lines: 1
+Total size: 99 B
+
+
+aibundle-modular/tests/files on  v0.8-optimisation [✘!?] via 🐍 v3.12.3 on ☁️  (us-east-2) on ☁️   took 5s
+❯ echo 'test_quit_successful'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

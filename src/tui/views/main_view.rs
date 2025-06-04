@@ -33,6 +33,12 @@ pub struct MainView {
     message_view: MessageView,
 }
 
+impl Default for MainView {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MainView {
     /// Creates a new `MainView` with all subcomponents initialized.
     pub fn new() -> Self {
@@ -113,4 +119,3 @@ fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-// TODO: Add support for additional overlays or popups.

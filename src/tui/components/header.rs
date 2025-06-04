@@ -28,6 +28,12 @@ use crate::tui::state::{AppState, SearchState};
 /// Header view component for rendering the top bar and search input in the TUI.
 pub struct HeaderView {}
 
+impl Default for HeaderView {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HeaderView {
     /// Creates a new `HeaderView` component.
     pub fn new() -> Self {

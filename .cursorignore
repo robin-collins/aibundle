@@ -9,3 +9,5 @@ Cargo.lock
 .specstory/*
 # Ignore SpecStory derived-cursor-rules.mdc backup files
 .specstory/cursor_rules_backups/*
+# SpecStory derived-cursor-rules.mdc backup files
+/ai_rules_backups/*

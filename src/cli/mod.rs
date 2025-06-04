@@ -18,7 +18,7 @@
 //! run_cli_mode(opts.to_cli_mode_options()).unwrap();
 //! ```
 
-mod options;
+pub mod options;
 
 /// Runs the CLI mode workflow. See [`options::run_cli_mode`] for details.
 pub use options::run_cli_mode;

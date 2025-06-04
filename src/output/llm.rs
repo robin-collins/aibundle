@@ -71,26 +71,60 @@ pub fn format_llm_output(
 
     // Process selected items to collect files and build tree
     for path in selected_items {
-        if let Ok(rel_path) = path.strip_prefix(current_dir) {
-            if rel_path.as_os_str().is_empty() {
-                continue; // Skip root
-            }
+        // Handle the case where paths might be relative and current_dir is "."
+        let rel_path = if current_dir == Path::new(".") && path.is_relative() {
+            path.as_path()
+        } else if let Ok(stripped) = path.strip_prefix(current_dir) {
+            stripped
+        } else {
+            path.as_path()
+        };
 
-            // Add to tree structure
-            add_path_to_tree(&mut root_node, &rel_path, path.is_dir());
+        if rel_path.as_os_str().is_empty() {
+            continue; // Skip root
+        }
 
-            if path.is_file() {
-                file_count += 1;
+        // Add to tree structure
+        add_path_to_tree(&mut root_node, rel_path, path.is_dir());
 
-                // Read file content if not binary and not ignored
-                if !is_binary_file(path) || ignore_config.include_binary_files {
-                    if let Ok(content) = fs::read_to_string(path) {
-                        let normalized_path = normalize_path(&rel_path.to_string_lossy());
+        if path.is_file() {
+            file_count += 1;
+
+            // Read file content if not binary and not ignored
+            if !is_binary_file(path) || ignore_config.include_binary_files {
+                if let Ok(content) = fs::read_to_string(path) {
+                                            let normalized_path = normalize_path(&rel_path.to_string_lossy());
                         file_contents.push((normalized_path, content));
+                                    }
+            }
+        } else if path.is_dir() {
+            folder_count += 1;
+
+            // Add all files in directory to file_contents
+            if let Ok(entries) = fs::read_dir(path) {
+                for entry in entries.filter_map(Result::ok) {
+                    let entry_path = entry.path();
+                    if entry_path.is_file() {
+                        // Handle the case where paths might be relative and current_dir is "."
+                        let rel_entry_path = if current_dir == Path::new(".") && entry_path.is_relative() {
+                            entry_path.as_path()
+                        } else if let Ok(stripped) = entry_path.strip_prefix(current_dir) {
+                            stripped
+                        } else {
+                            entry_path.as_path()
+                        };
+
+                        if !is_binary_file(&entry_path)
+                            || ignore_config.include_binary_files
+                        {
+                            if let Ok(content) = fs::read_to_string(&entry_path) {
+                                let normalized_path =
+                                    normalize_path(&rel_entry_path.to_string_lossy());
+                                file_contents.push((normalized_path, content));
+                            }
+                        }
                     }
                 }
-            } else if path.is_dir() {
-                folder_count += 1;
             }
         }
     }
@@ -130,12 +164,19 @@ fn collect_all_files_for_analysis(
 
     for path in selected_items {
         if path.is_file() {
-            if let Ok(rel_path) = path.strip_prefix(current_dir) {
-                if !is_binary_file(path) || ignore_config.include_binary_files {
-                    if let Ok(content) = fs::read_to_string(path) {
-                        let normalized_path = normalize_path(&rel_path.to_string_lossy());
-                        all_files.push((normalized_path, content));
-                    }
+            // Handle the case where paths might be relative and current_dir is "."
+            let rel_path = if current_dir == Path::new(".") && path.is_relative() {
+                path.as_path()
+            } else if let Ok(stripped) = path.strip_prefix(current_dir) {
+                stripped
+            } else {
+                path.as_path()
+            };
+
+            if !is_binary_file(path) || ignore_config.include_binary_files {
+                if let Ok(content) = fs::read_to_string(path) {
+                    let normalized_path = normalize_path(&rel_path.to_string_lossy());
+                    all_files.push((normalized_path, content));
                 }
             }
         } else if path.is_dir() {
@@ -159,12 +200,19 @@ fn collect_files_from_directory(
             let entry_path = entry.path();
 
             if entry_path.is_file() {
-                if let Ok(rel_path) = entry_path.strip_prefix(current_dir) {
-                    if !is_binary_file(&entry_path) || ignore_config.include_binary_files {
-                        if let Ok(content) = fs::read_to_string(&entry_path) {
-                            let normalized_path = normalize_path(&rel_path.to_string_lossy());
-                            all_files.push((normalized_path, content));
-                        }
+                // Handle the case where paths might be relative and current_dir is "."
+                let rel_path = if current_dir == Path::new(".") && entry_path.is_relative() {
+                    entry_path.as_path()
+                } else if let Ok(stripped) = entry_path.strip_prefix(current_dir) {
+                    stripped
+                } else {
+                    entry_path.as_path()
+                };
+
+                if !is_binary_file(&entry_path) || ignore_config.include_binary_files {
+                    if let Ok(content) = fs::read_to_string(&entry_path) {
+                        let normalized_path = normalize_path(&rel_path.to_string_lossy());
+                        all_files.push((normalized_path, content));
                     }
                 }
             } else if entry_path.is_dir() {
@@ -189,7 +237,11 @@ fn add_path_to_tree(root: &mut Node, rel_path: &Path, is_dir: bool) {
         current_node = children.entry(name.clone()).or_insert_with(|| Node {
             name: name.clone(),
             is_dir: node_is_dir,
-            children: if node_is_dir { Some(HashMap::new()) } else { None },
+            children: if node_is_dir {
+                Some(HashMap::new())
+            } else {
+                None
+            },
         });
 
         // Update the final node to correct type
@@ -248,7 +300,7 @@ pub fn analyze_dependencies(
                 r"extern\s+crate\s+([\w]+)",
                 r"mod\s+([\w]+)",
                 r"pub\s+use\s+([\w:]+)",
-            ]
+            ],
         ),
         // JavaScript/TypeScript
         (
@@ -269,16 +321,22 @@ pub fn analyze_dependencies(
                 r#"const\s+.*?\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)"#,
             ],
         ),
-        (".tsx", vec![
-            r#"(?:import|require)\s*\(?['"]([^'"]+)['"]"#,
-            r#"from\s+['"]([^'"]+)['"]"#,
-            r#"import\s+.*?\s+from\s+['"]([^'"]+)['"]"#,
-        ]),
-        (".jsx", vec![
-            r#"(?:import|require)\s*\(?['"]([^'"]+)['"]"#,
-            r#"from\s+['"]([^'"]+)['"]"#,
-            r#"import\s+.*?\s+from\s+['"]([^'"]+)['"]"#,
-        ]),
+        (
+            ".tsx",
+            vec![
+                r#"(?:import|require)\s*\(?['"]([^'"]+)['"]"#,
+                r#"from\s+['"]([^'"]+)['"]"#,
+                r#"import\s+.*?\s+from\s+['"]([^'"]+)['"]"#,
+            ],
+        ),
+        (
+            ".jsx",
+            vec![
+                r#"(?:import|require)\s*\(?['"]([^'"]+)['"]"#,
+                r#"from\s+['"]([^'"]+)['"]"#,
+                r#"import\s+.*?\s+from\s+['"]([^'"]+)['"]"#,
+            ],
+        ),
         // Java
         (".java", vec![r"import\s+([\w.]+)"]),
         // Go
@@ -316,15 +374,18 @@ pub fn analyze_dependencies(
                 r#"\.\s+['"]?([^'"]+)['"]?"#,
             ],
         ),
-        (".bash", vec![
-            r#"source\s+['"]?([^'"]+)['"]?"#,
-            r#"\.\s+['"]?([^'"]+)['"]?"#,
-        ]),
+        (
+            ".bash",
+            vec![
+                r#"source\s+['"]?([^'"]+)['"]?"#,
+                r#"\.\s+['"]?([^'"]+)['"]?"#,
+            ],
+        ),
         // Makefile
         ("Makefile", vec![r"include\s+([^\s]+)"]),
         ("makefile", vec![r"include\s+([^\s]+)"]),
         // TOML
-        (".toml", vec![]),  // Could add dependency patterns for Cargo.toml etc.
+        (".toml", vec![]), // Could add dependency patterns for Cargo.toml etc.
         // YAML
         (".yaml", vec![]),
         (".yml", vec![]),
@@ -340,8 +401,8 @@ pub fn analyze_dependencies(
             .iter()
             .filter_map(|pat| match Regex::new(pat) {
                 Ok(re) => Some(re),
-                Err(err) => {
-                    eprintln!("Invalid regex for {}: {}", ext, err);
+                Err(_err) => {
+                    // eprintln!("Invalid regex for {}: {}", ext, err);
                     None
                 }
             })
@@ -448,21 +509,22 @@ pub fn analyze_dependencies(
                     .unwrap_or("")
                     .to_string(),
                 imp.replace('.', "/"),
-                imp.replace("::", "/"),  // For Rust modules
+                imp.replace("::", "/"),                   // For Rust modules
                 format!("{}.py", imp.replace('.', "/")),  // For Python
                 format!("{}.rs", imp.replace("::", "/")), // For Rust
-                format!("{}.h", imp),  // For C
-                format!("{}.hpp", imp),  // For C++
-                format!("{}.js", imp),  // For JS
-                format!("{}.ts", imp),  // For TS
+                format!("{}.h", imp),                     // For C
+                format!("{}.hpp", imp),                   // For C++
+                format!("{}.js", imp),                    // For JS
+                format!("{}.ts", imp),                    // For TS
                 format!("{}/mod.rs", imp.replace("::", "/")), // For Rust modules
-                format!("{}/index.js", imp),  // For JS modules
-                format!("{}/index.ts", imp),  // For TS modules
+                format!("{}/index.js", imp),              // For JS modules
+                format!("{}/index.ts", imp),              // For TS modules
             ];
 
             for var in import_variations {
                 if let Some(matched_path) = file_mapping.get(&var) {
-                    if matched_path != &file_path {  // Don't self-reference
+                    if matched_path != &file_path {
+                        // Don't self-reference
                         internal_deps.push(matched_path.clone());
                         matched = true;
                         break;
@@ -494,12 +556,13 @@ pub fn analyze_dependencies(
     dependencies
 }
 
-// Helper function to write file tree to string
+// Helper function to write file tree to string with Unicode box drawing characters
 fn write_file_tree_to_string(node: &Node, prefix: &str, is_last: bool) -> String {
     let mut result = String::new();
 
     // Print node (skip root when prefix is empty)
     if !prefix.is_empty() {
+        // Use Unicode box drawing characters for better visual appearance
         let branch = if is_last { "└── " } else { "├── " };
         result.push_str(&format!("{}{}{}\n", prefix, branch, node.name));
     }
@@ -518,8 +581,13 @@ fn write_file_tree_to_string(node: &Node, prefix: &str, is_last: bool) -> String
 
             for (i, (_, child)) in items.iter().enumerate() {
                 let is_last_child = i == items.len() - 1;
+                // Use Unicode vertical bar for the tree structure
                 let new_prefix = format!("{}{}", prefix, if is_last { "    " } else { "│   " });
-                result.push_str(&write_file_tree_to_string(child, &new_prefix, is_last_child));
+                result.push_str(&write_file_tree_to_string(
+                    child,
+                    &new_prefix,
+                    is_last_child,
+                ));
             }
         }
     }
@@ -797,5 +865,4 @@ pub fn format_llm_output_internal(
 }
 
 // TODO: Add support for more language-specific dependency patterns.
-// TODO: Add options for output granularity (e.g., summary only, full content, etc.).
 // TODO: Add error handling for malformed or missing files.

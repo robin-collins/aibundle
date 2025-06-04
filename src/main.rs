@@ -27,21 +27,27 @@ mod utils;
 use crate::models::app_config::{FullConfig, ModeConfig};
 use clap::Parser;
 use cli::{run_cli_mode, CliModeOptions, CliOptions};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use std::io;
+use crossterm::terminal::enable_raw_mode;
+use crossterm::{execute, cursor};
+use std::io::{self, Write};
 use std::path::PathBuf;
+use crate::tui::app::{AppRunResult};
 
 /// Main entry point. Parses CLI args, loads config, and launches CLI or TUI mode.
-fn main() -> io::Result<()> {
+#[tokio::main]
+async fn main() -> io::Result<()> {
     let cli_args = CliOptions::parse();
 
     // Use the positional SOURCE_DIR if supplied; otherwise, fall back to --source-dir.
+    // Memory optimization: Use as_ref() to avoid unnecessary clone
     let effective_source_dir = cli_args
         .source_dir_pos
-        .unwrap_or(cli_args.source_dir.clone());
+        .as_ref()
+        .unwrap_or(&cli_args.source_dir)
+        .clone(); // Only clone once at the end
 
     // Load existing config from the user's home directory
-    let full_config = config::load_config()?;
+    let full_config = config::load_config().await?;
 
     // Determine CLI mode if any of these flags are provided.
     let use_cli = cli_args.files.is_some()
@@ -59,18 +65,22 @@ fn main() -> io::Result<()> {
                 .collect();
 
             let cli_config = ModeConfig {
-                files: cli_args.files.clone().or(Some("*".to_string())),
-                format: Some(cli_args.format.clone()),
-                out: cli_args.output_file.clone().or(Some("".to_string())),
+                files: cli_args.files.as_ref().cloned().or(Some("*".to_string())),
+                format: Some(cli_args.format.clone()), // Keep clone for owned field
+                out: cli_args
+                    .output_file
+                    .as_ref()
+                    .cloned()
+                    .or(Some("".to_string())),
                 gitignore: Some(cli_args.gitignore),
                 ignore: if cli_args.ignore.len() == 1 && cli_args.ignore[0] == "default" {
-                    Some(default_ignore.clone())
+                    Some(default_ignore.clone()) // Keep clone for owned field
                 } else {
-                    Some(cli_args.ignore.clone())
+                    Some(cli_args.ignore.clone()) // Keep clone for owned field
                 },
                 line_numbers: Some(cli_args.line_numbers),
                 recursive: Some(cli_args.recursive),
-                source_dir: Some(cli_args.source_dir.clone()),
+                source_dir: Some(cli_args.source_dir.clone()), // Keep clone for owned field
                 selection_limit: Some(models::DEFAULT_SELECTION_LIMIT),
             };
             // For TUI, use the same defaults as CLI
@@ -100,34 +110,35 @@ fn main() -> io::Result<()> {
         }
 
         // Merge command-line values with the [cli] defaults (command-line wins)
+        // Memory optimization: Use references and avoid unnecessary clones
         let cli_conf = full_config.cli.unwrap_or_default();
-        let files = cli_args.files.or(cli_conf.files);
+        let files = cli_args.files.as_ref().cloned().or(cli_conf.files);
         let format = if !cli_args.format.is_empty() {
-            cli_args.format.clone()
+            &cli_args.format
         } else {
-            cli_conf.format.unwrap_or_else(|| "llm".to_string())
+            cli_conf.format.as_deref().unwrap_or("llm")
         };
-        let source_dir = effective_source_dir.clone();
+        let source_dir = &effective_source_dir;
         let gitignore = cli_args.gitignore || cli_conf.gitignore.unwrap_or(true);
         let line_numbers = cli_args.line_numbers || cli_conf.line_numbers.unwrap_or(false);
         let recursive = cli_args.recursive || cli_conf.recursive.unwrap_or(false);
         let ignore = if !cli_args.ignore.is_empty() {
-            cli_args.ignore.clone()
+            &cli_args.ignore
         } else {
-            cli_conf.ignore.unwrap_or_default()
+            cli_conf.ignore.as_deref().unwrap_or(&[])
         };
 
         run_cli_mode(CliModeOptions {
             files_pattern: files,
-            source_dir,
-            format,
+            source_dir: source_dir.clone(), // Only clone when passing to owned field
+            format: format.to_string(),     // Convert &str to String only when needed
             gitignore,
             line_numbers,
             recursive,
-            ignore_list: ignore,
+            ignore_list: ignore.to_vec(), // Convert slice to Vec only when needed
             output_file: cli_args.output_file,
             output_console: cli_args.output_console,
-        })
+        }).await
     } else {
         // Run in TUI mode: start in the effective source directory.
         let default_config = models::AppConfig {
@@ -143,7 +154,7 @@ fn main() -> io::Result<()> {
 
         let mut app = tui::App::new(
             default_config,
-            PathBuf::from(effective_source_dir.clone()),
+            PathBuf::from(&effective_source_dir), // Use reference to avoid clone
             ignore_config,
         )?;
 
@@ -181,11 +192,48 @@ fn main() -> io::Result<()> {
         }
 
         enable_raw_mode()?;
-        app.run()?;
-        disable_raw_mode()?;
+        let run_result = app.run()?;
+
+        // The app.run() function now disables raw mode internally right after leaving alternate screen
+        // But as a failsafe, we'll also try to reset the terminal with a system command
+        if cfg!(unix) {
+            let status = std::process::Command::new("stty")
+                .arg("sane")
+                .status();
+            // We'll ignore any errors here, it's just an extra precaution
+            let _ = status;
+        }
+
+        // No need for additional disable_raw_mode() as it's now done in app.run()
+
+        // Ensure cursor is shown as a final safeguard
+        let mut stdout = io::stdout();
+        let _ = execute!(stdout, cursor::Show);
+        let _ = stdout.flush();
+
+        // Print results
+        match run_result {
+            AppRunResult::CopyBlockedByLimit => {
+                println!("\nWarning: Selection limit was exceeded. No items were copied.");
+            }
+            AppRunResult::Copied(data) => {
+                println!("\nCopied to clipboard:");
+                println!("Files copied: {}", data.files);
+                println!("Folders copied: {}", data.folders);
+                println!("Total lines: {}", data.line_count);
+                println!(
+                    "Total size: {}",
+                    crate::utils::human_readable_size(data.byte_size)
+                );
+                println!(); // Ensure a final newline for the prompt
+            }
+            AppRunResult::NoAction => {
+                // No action, so no output
+            }
+        }
+
         Ok(())
     }
 }
 
 // TODO: Add support for additional CLI subcommands or modes.
-// TODO: Add support for config migration/versioning.

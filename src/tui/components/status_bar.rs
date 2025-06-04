@@ -26,6 +26,12 @@ use crate::tui::state::AppState;
 /// Status bar component for rendering item counts, selection info, and key hints.
 pub struct StatusBar;
 
+impl Default for StatusBar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StatusBar {
     /// Creates a new `StatusBar` component.
     pub fn new() -> Self {
@@ -46,11 +52,17 @@ impl StatusBar {
         app_state: &AppState,
         _selection_state: &crate::tui::state::SelectionState,
     ) {
+        let selection_status = if app_state.is_counting {
+            format!("({} selected, ...adding more)", app_state.selected_items.len())
+        } else {
+            format!("({} selected)", app_state.selected_items.len())
+        };
+
         let status_text = format!(
             // Show item and selection counts, and status of toggles
-            " {} items ({} selected) - Space: select, Enter: open dir, c: copy, i: ignores [{}], g: gitignore [{}], b: binary [{}], f: format [{}], n: line numbers [{}], /: search, q: quit ",
+            " {} items {} - Space: select, Enter: open dir, c: copy, i: ignores [{}], g: gitignore [{}], b: binary [{}], f: format [{}], n: line numbers [{}], /: search, q: quit ",
             app_state.filtered_items.len(),
-            app_state.selected_items.len(),
+            selection_status,
             // Show which toggles are active with [x] or [ ]
             if app_state.ignore_config.use_default_ignores { "x" } else { " " },
             if app_state.ignore_config.use_gitignore { "x" } else { " " },
@@ -71,5 +83,3 @@ impl StatusBar {
     }
 }
 
-// TODO: Add support for displaying error or warning messages in the status bar.
-// TODO: Add customizable key command hints or help popups.

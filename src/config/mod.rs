@@ -18,9 +18,9 @@
 
 use crate::models::app_config::FullConfig;
 use crate::models::AppConfig;
-use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use tokio::fs; // Added for async file operations
 
 /// Returns the path to the application's configuration file in the user's home directory.
 ///
@@ -55,12 +55,14 @@ pub fn config_file_path() -> io::Result<PathBuf> {
 ///
 /// # Examples
 /// ```rust
-/// let config = crate::config::load_config().unwrap();
+/// # tokio_test::block_on(async {
+/// let config = crate::config::load_config().await.unwrap();
+/// # })
 /// ```
-pub fn load_config() -> io::Result<FullConfig> {
+pub async fn load_config() -> io::Result<FullConfig> {
     let config_path = config_file_path()?;
     if config_path.exists() {
-        let contents = fs::read_to_string(&config_path)?;
+        let contents = fs::read_to_string(&config_path).await?;
         let parsed: FullConfig = toml::from_str(&contents)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML parse error: {e}")))?;
         Ok(parsed)
@@ -89,8 +91,10 @@ pub fn load_config() -> io::Result<FullConfig> {
 /// let path = crate::config::config_file_path().unwrap();
 /// crate::config::save_config(&config, path.to_str().unwrap()).unwrap();
 /// ```
-pub fn save_config(config: &AppConfig, file_path: &str) -> io::Result<()> {
-    if Path::new(file_path).exists() && !crate::fs::confirm_overwrite(file_path)? {
+/// Memory optimization: Accept Path reference instead of &str to avoid string operations
+#[allow(dead_code)]
+pub fn save_config(config: &AppConfig, file_path: &Path) -> io::Result<()> {
+    if file_path.exists() && !crate::fs::confirm_overwrite(file_path.to_str().unwrap_or(""))? {
         println!("Aborted saving configuration.");
         return Ok(());
     }
@@ -98,10 +102,11 @@ pub fn save_config(config: &AppConfig, file_path: &str) -> io::Result<()> {
     let toml_str = toml::to_string_pretty(config)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}")))?;
 
-    fs::write(file_path, toml_str)?;
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(async { fs::write(file_path, toml_str).await })?;
     println!("Configuration saved successfully.");
     Ok(())
 }
 
-// TODO: Add support for migrating old config formats to new versions.
 // TODO: Add validation for config file contents before saving/loading.

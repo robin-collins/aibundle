@@ -24,6 +24,12 @@ use crate::tui::state::AppState;
 /// Handler for clipboard operations (copying selected items, formatting, stats).
 pub struct ClipboardHandler;
 
+impl Default for ClipboardHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClipboardHandler {
     /// Creates a new `ClipboardHandler` instance.
     #[allow(dead_code)]
@@ -31,64 +37,15 @@ impl ClipboardHandler {
         Self
     }
 
-    /// Copies selected items to the clipboard, displaying a modal with stats.
-    pub fn copy_selected_to_clipboard(app_state: &mut AppState) -> io::Result<()> {
-        // Get formatted output and computed stats
-        let (output, stats) = Self::format_selected_items(app_state)?;
-
-        let result = crate::clipboard::copy_to_clipboard(&output);
-
-        // Use the computed stats from format_selected_items
-        let file_count = stats.files;
-        let folder_count = stats.folders;
-        let line_count = output.lines().count();
-        let byte_size = output.len();
-
-        // Set last copy stats for display in the UI
-        app_state.last_copy_stats = Some(stats);
-
-        // Display a modal with the copy stats
-        app_state.modal = Some(crate::tui::components::Modal::copy_stats(
-            file_count,
-            folder_count,
-            line_count,
-            byte_size,
-            &app_state.output_format,
-        ));
-
-        result
-    }
-
-    /// Counts the number of selected files and folders.
-    #[allow(dead_code)]
-    fn count_selected_items(app_state: &AppState) -> (usize, usize) {
-        let mut files = 0;
-        let mut folders = 0;
-
-        for path in &app_state.selected_items {
-            if path.is_dir() {
-                folders += 1;
-            } else {
-                files += 1;
-            }
-        }
-
-        (files, folders)
-    }
-
     /// Formats the selected items for clipboard output and returns stats.
     pub fn format_selected_items(app_state: &AppState) -> io::Result<(String, CopyStats)> {
         let mut output = String::new();
-        let selected_items: Vec<_> = app_state
-            .selected_items
-            .iter()
-            .filter(|p| !app_state.is_path_ignored(p))
-            .cloned()
-            .collect();
+
+        let selected_items: Vec<_> = app_state.selected_items.iter().cloned().collect();
 
         if selected_items.is_empty() {
             return Ok((
-                "No items selected or all items are ignored.".to_string(),
+                "No items selected.".to_string(),
                 CopyStats {
                     files: 0,
                     folders: 0,
@@ -183,10 +140,7 @@ impl ClipboardHandler {
         file_contents: &mut Vec<(String, String)>,
         base_path: &PathBuf,
     ) -> io::Result<()> {
-        // Skip if this directory should be ignored
-        if app_state.is_path_ignored(path) {
-            return Ok(());
-        }
+        // Note: Don't skip explicitly selected directories based on ignore rules
 
         // Use HashSet to track processed paths and avoid duplicates
         let mut processed_paths = HashSet::new();
@@ -211,8 +165,8 @@ impl ClipboardHandler {
                     }
                 }
             }
-            Err(e) => {
-                eprintln!("Error reading directory {}: {}", path.display(), e);
+            Err(_e) => {
+                // eprintln!("Error reading directory {}: {}", path.display(), e);
             }
         }
 
@@ -226,10 +180,7 @@ impl ClipboardHandler {
         file_contents: &mut Vec<(String, String)>,
         base_path: &PathBuf,
     ) -> io::Result<()> {
-        // Skip if this file should be ignored
-        if app_state.is_path_ignored(path) {
-            return Ok(());
-        }
+        // Note: Don't skip explicitly selected files based on ignore rules
 
         // Skip binary files unless explicitly included
         if !app_state.ignore_config.include_binary_files && crate::output::is_binary_file(path) {
@@ -244,16 +195,13 @@ impl ClipboardHandler {
                     file_contents.push((path_str.to_string(), content));
                 }
             }
-            Err(e) => {
-                eprintln!("Error reading file {}: {}", path.display(), e);
+            Err(_e) => {
+                // eprintln!("Error reading file {}: {}", path.display(), e);
             }
         }
 
         Ok(())
     }
-
-
 }
 
 // TODO: Add support for progress reporting during large copy operations.
-// TODO: Add support for filtering or transforming output before copying.

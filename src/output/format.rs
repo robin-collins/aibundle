@@ -279,6 +279,4 @@ pub fn process_directory(
     Ok(CopyStats { files, folders })
 }
 
-// TODO: Add support for additional output formats (YAML, TOML, etc.).
 // TODO: Add error handling for missing or unreadable files.
-// TODO: Add options for output customization (e.g., file headers, summaries).
