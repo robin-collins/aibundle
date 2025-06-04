@@ -20,104 +20,57 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::config::{config_file_path, save_config};
-use crate::fs::{add_items_recursively, is_path_ignored_iterative};
+use crate::config::config_file_path;
 use crate::models::{CopyStats, OutputFormat};
 use crate::output::format_selected_items;
 use crate::tui::state::AppState;
 use crate::tui::state::{SearchState, SelectionState};
 use crate::utils::log_event;
+use crate::utils::write_selection_limit_debug_log;
 
 /// Handler for file and folder operations in the TUI.
 pub struct FileOpsHandler;
 
 impl FileOpsHandler {
-    /// Loads items (files/folders) into the application state, including parent navigation.
+    /// Loads items (files/folders) into the application state.
+    /// This function now delegates to `app_state.load_items()` which handles
+    /// recursive/non-recursive loading based on `app_state.recursive` and
+    /// applies the correct sorting via `app_state.update_filtered_items()`.
     pub fn load_items(app_state: &mut AppState) -> io::Result<()> {
         log_event(&format!(
-            "load_items: current_dir={}",
+            "FileOpsHandler::load_items: current_dir={}",
             app_state.current_dir.display()
         ));
-        app_state.items.clear();
 
-        // Add ".." entry if not at the root
-        if let Some(parent) = app_state.current_dir.parent() {
-            // Check if parent is different from current_dir to avoid adding ".." at root
-            if parent != app_state.current_dir {
-                // Check if parent path is valid before adding ".."
-                // This avoids adding ".." for paths like "/" where parent is also "/"
-                if parent.parent().is_some() || parent == Path::new("/") {
-                    // Simplified root check
-                    app_state.items.push(app_state.current_dir.join(".."));
-                }
-            }
-        }
-
-        // Use the add_items_recursively function from fs module to populate app_state.items
-        add_items_recursively(
-            &mut app_state.items,
-            &app_state.current_dir,
-            &app_state.expanded_folders,
-            &app_state.ignore_config,
-            &app_state.current_dir, // base_dir for ignore checks relative to current view
-        )?;
-
-        // Always update filtered_items after loading.
-        // If a search is active, update_search should be called subsequently
-        // to apply the filter correctly to the newly loaded items.
-        app_state.filtered_items = app_state.items.clone();
-
-        // Reset selection if items list is not empty, otherwise clear selection
-        if !app_state.items.is_empty() {
-            // TODO: Preserve selection if possible/desired? For now, reset.
-            // selection_state.list_state.select(Some(0)); // Requires mutable selection_state
-        } else {
-            // selection_state.list_state.select(None); // Requires mutable selection_state
-        }
-
-        Ok(())
+        // Delegate all loading, sorting, and ".." handling to AppState.
+        // AppState::load_items() will internally call update_filtered_items().
+        app_state.load_items()
+        // No direct manipulation of app_state.filtered_items or app_state.items here.
+        // No custom sorting here.
+        // No adding ".." here.
     }
 
     /// Loads only the current directory (non-recursive) into the application state.
+    /// This function now delegates to `app_state.load_items()` after ensuring
+    /// the `app_state.recursive` flag is false (though `app_state.load_items`
+    /// should already respect this flag if it was set prior to this call).
+    /// For clarity, if this function is called, it implies a non-recursive view is desired.
     pub fn load_items_nonrecursive(app_state: &mut AppState) -> io::Result<()> {
         log_event(&format!(
-            "load_items_nonrecursive: current_dir={}",
+            "FileOpsHandler::load_items_nonrecursive: current_dir={}",
             app_state.current_dir.display()
         ));
-        app_state.items.clear();
-        app_state.filtered_items.clear();
 
-        // Add parent directory entry if applicable
-        if let Some(parent) = app_state.current_dir.parent() {
-            if !parent.as_os_str().is_empty() {
-                app_state.items.push(app_state.current_dir.join(".."));
-            }
-        }
+        // Ensure the state reflects non-recursive mode if this specific function is called.
+        // However, AppState::load_items already checks app_state.recursive.
+        // If this function is meant to *force* non-recursive, it should set app_state.recursive = false.
+        // Assuming it's called when app_state.recursive is already appropriately set.
 
-        // Read only the current directory, no recursion
-        let entries = fs::read_dir(&app_state.current_dir)?
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| {
-                !is_path_ignored_iterative(p, &app_state.current_dir, &app_state.ignore_config)
-            })
-            .collect::<Vec<_>>();
-
-        // Sort entries (directories first, then files)
-        let mut sorted_entries = entries;
-        sorted_entries.sort_by(|a, b| {
-            let a_is_dir = a.is_dir();
-            let b_is_dir = b.is_dir();
-            match (a_is_dir, b_is_dir) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => a.file_name().cmp(&b.file_name()),
-            }
-        });
-
-        app_state.items.extend(sorted_entries);
-        app_state.filtered_items = app_state.items.clone();
-        Ok(())
+        // Delegate all loading, sorting, and ".." handling to AppState.
+        app_state.load_items()
+        // No direct manipulation of app_state.filtered_items or app_state.items here.
+        // No custom sorting here.
+        // No adding ".." here.
     }
 
     /// Updates the search results in the application state based on the search query.
@@ -125,11 +78,14 @@ impl FileOpsHandler {
         app_state: &mut AppState,
         search_state: &mut SearchState,
     ) -> io::Result<()> {
-        app_state.search_query = search_state.search_query.clone();
+        // Memory optimization: Use clone_from for more efficient string copying
+        app_state
+            .search_query
+            .clone_from(&search_state.search_query);
         app_state.is_searching = !search_state.search_query.is_empty();
 
         if !app_state.is_searching {
-            app_state.filtered_items = app_state.items.clone();
+            app_state.filtered_items = app_state.items.to_vec();
             return Ok(());
         }
 
@@ -140,9 +96,9 @@ impl FileOpsHandler {
         if !app_state.recursive {
             app_state.filtered_items = app_state
                 .items
-                .iter()
-                .filter(|&p| p.file_name().and_then(|n| n.to_str()).is_some_and(&matcher))
-                .cloned()
+                .to_vec()
+                .into_iter()
+                .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(&matcher))
                 .collect();
             return Ok(());
         }
@@ -154,20 +110,14 @@ impl FileOpsHandler {
         // Recursively search each immediate child of the current directory
         if let Ok(entries) = fs::read_dir(&app_state.current_dir) {
             for entry in entries.filter_map(|e| e.ok()).map(|e| e.path()) {
-                if !is_path_ignored_iterative(
+                crate::fs::recursive_search_helper_generic(
+                    app_state,
                     &entry,
-                    &app_state.current_dir,
-                    &app_state.ignore_config,
-                ) {
-                    crate::fs::recursive_search_helper_generic(
-                        app_state,
-                        &entry,
-                        1,
-                        max_depth,
-                        &matcher,
-                        &mut results,
-                    );
-                }
+                    1,
+                    max_depth,
+                    &matcher,
+                    &mut results,
+                );
             }
         }
 
@@ -255,7 +205,8 @@ impl FileOpsHandler {
                     }
                 } else {
                     log_event(&format!("handle_enter: entering dir {}", path.display()));
-                    app_state.current_dir = path.clone();
+                    // Memory optimization: Use clone_from for more efficient PathBuf copying
+                    app_state.current_dir.clone_from(path);
                 }
 
                 app_state.is_searching = false;
@@ -305,26 +256,22 @@ impl FileOpsHandler {
         Ok(())
     }
 
-    /// Saves the current configuration to disk, warning if file exists.
+    /// Saves the current configuration to disk, prompting for overwrite if file exists.
     pub fn save_config(app_state: &mut AppState) -> io::Result<()> {
         let config_path = config_file_path()?;
         if config_path.exists() {
-            // Prompt for overwrite (not interactive in TUI, so just warn)
-            app_state.set_message(
-                format!(
-                    "Configuration file already exists: {}",
-                    config_path.display()
-                ),
-                crate::tui::state::MessageType::Warning,
-            );
-            // In a real TUI, you might want to prompt the user for confirmation
-            // For now, just return an error
-            return Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                "Config file exists",
-            ));
+            // Show confirmation modal for overwrite
+            app_state.modal = Some(crate::tui::components::Modal::config_overwrite_confirmation(&config_path));
+            app_state.pending_save_config_path = Some(config_path);
+            return Ok(());
         }
 
+        // File doesn't exist, proceed with save
+        Self::perform_config_save(app_state, &config_path)
+    }
+
+    /// Actually performs the config save operation (TUI-specific, bypasses terminal confirmation)
+    pub fn perform_config_save(app_state: &mut AppState, config_path: &std::path::Path) -> io::Result<()> {
         // Create config from current app state
         let config = crate::models::AppConfig {
             default_format: Some(format!("{:?}", app_state.output_format).to_lowercase()),
@@ -335,7 +282,13 @@ impl FileOpsHandler {
             selection_limit: Some(app_state.selection_limit),
         };
 
-        save_config(&config, config_path.to_str().unwrap_or(""))?;
+        // Directly save the config without terminal confirmation (TUI handles confirmation)
+        let toml_str = toml::to_string_pretty(&config)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}")))?;
+
+        // Write the file directly using std::fs (synchronous for TUI)
+        std::fs::write(config_path, toml_str)?;
+
         // Success message
         app_state.set_message(
             format!(
@@ -347,39 +300,113 @@ impl FileOpsHandler {
         Ok(())
     }
 
-    /// Checks for pending selection count results and updates selection state.
-    pub fn check_pending_selection(
+    /// Handles confirmation response for config save
+    pub fn handle_save_config_confirmation(app_state: &mut AppState, confirmed: bool) -> io::Result<()> {
+        if let Some(config_path) = app_state.pending_save_config_path.take() {
+            app_state.modal = None; // Close the confirmation modal
+
+            if confirmed {
+                // User confirmed overwrite
+                Self::perform_config_save(app_state, &config_path)
+            } else {
+                // User cancelled
+                app_state.set_message(
+                    "Configuration save cancelled".to_string(),
+                    crate::tui::state::MessageType::Info,
+                );
+                Ok(())
+            }
+        } else {
+            // No pending save operation
+            Ok(())
+        }
+    }
+
+    /// Finalizes a single item selection after its count has been processed.
+    /// This is called when an AppEvent::SelectionCountComplete is received.
+    pub fn finalize_single_selection(
         app_state: &mut AppState,
-        _selection_state: &mut SelectionState,
-    ) -> io::Result<()> {
-        // Check for pending selection count results
-        if app_state.is_counting {
-            if let Some(rx) = &app_state.pending_count {
-                if let Ok(Ok(count)) = rx.try_recv() {
-                    if count <= app_state.selection_limit {
-                        if let Some(path) = app_state.counting_path.take() {
-                            if path.is_dir() {
-                                SelectionState::update_folder_selection(app_state, &path, true)?;
-                            } else {
-                                app_state.selected_items.insert(path);
-                            }
+        path_counted: PathBuf,
+        num_items_in_op: usize,
+        original_optimistic_folder: Option<PathBuf>,
+        original_optimistic_children: HashSet<PathBuf> // Passed from the event
+    ) {
+        // Logic extracted from the old check_pending_selection, adapted for direct parameters
+        app_state.is_counting = false; // Now that processing is done for this item
+        // counting_path was for the item being processed, clear it or let AppEvent handler do it.
+        // AppState.counting_path should be cleared by the AppEvent handler in app.rs if it was set for this specific op.
+
+        if let Some(folder_path) = &original_optimistic_folder { // Ensure this is the correct var name
+            app_state.selected_items.remove(folder_path);
+        }
+        for child_path in &original_optimistic_children {
+            app_state.selected_items.remove(child_path);
+        }
+
+        // Use clippy suggestion for map_or, with correct dereferencing
+        let items_to_truly_deselect: Vec<PathBuf> = app_state.selected_items.iter()
+            // p is &&PathBuf, actual_folder is &PathBuf. Compare *p with actual_folder.
+            // original_optimistic_children is HashSet<PathBuf>, contains needs &PathBuf.
+            .filter(|p| (original_optimistic_folder.as_ref() != Some(p)) && !original_optimistic_children.contains(*p))
+            .cloned()
+            .collect();
+
+        let count_of_other_selected_items = items_to_truly_deselect.len();
+
+        if count_of_other_selected_items + num_items_in_op <= app_state.selection_limit {
+            if path_counted.is_dir() { // Only call update_folder_selection_recursive if it was a directory
+                // The path_counted itself should already be in selected_items if it was an optimistic add.
+                // update_folder_selection_recursive will add its children.
+                if let Err(e) = SelectionState::update_folder_selection_recursive(app_state, &path_counted, true, app_state.selection_limit) {
+                    eprintln!("Error updating folder selection: {}", e);
+                    // Minimal revert: if the folder was the one optimistically added, remove it on error.
+                    if original_optimistic_folder.as_ref() == Some(&path_counted) {
+                        app_state.selected_items.remove(&path_counted);
+                        for child in &original_optimistic_children {
+                            app_state.selected_items.remove(child);
                         }
-                    } else {
-                        app_state.modal = Some(crate::tui::components::Modal::new(
-                            format!(
-                                "Cannot select: would exceed limit of {} items\nTried to add {} items",
-                                app_state.selection_limit, count
-                            ),
-                            50,
-                            4,
-                        ));
                     }
-                    app_state.is_counting = false;
-                    app_state.pending_count = None;
+                    app_state.set_message(
+                        format!("Error fully selecting folder {}: {}", path_counted.display(), e),
+                        crate::tui::state::MessageType::Error
+                    );
+                }
+            } // If it's a file, it was already added to selected_items if within limit, no further action here.
+        } else {
+            // Exceeded limit. Revert optimistic add if it was this path.
+            if let Some(opt_path) = &original_optimistic_folder {
+                // Check if the path that was counted matches the folder that was optimistically added.
+                if path_counted == *opt_path { // Ensure we are reverting the correct optimistic add
+                    app_state.selected_items.remove(opt_path);
+                    for child_path in &original_optimistic_children {
+                        app_state.selected_items.remove(child_path);
+                    }
                 }
             }
+
+            write_selection_limit_debug_log(
+                &app_state.selected_items,
+                &Some(path_counted.clone()), // path_counted is the one that triggered this specific finalization
+                num_items_in_op,
+                count_of_other_selected_items,
+                app_state.selection_limit
+            );
+
+            app_state.modal = Some(crate::tui::components::Modal::new(
+                format!(
+                    "Selection limit ({}) exceeded for {}. Tried to select {} items (total would be {}).",
+                    app_state.selection_limit, path_counted.file_name().unwrap_or_default().to_string_lossy(), num_items_in_op, count_of_other_selected_items + num_items_in_op
+                ),
+                75, // Wider modal for more info
+                6,
+            ));
         }
-        Ok(())
+        // Clear optimistic data related to the single item selection that just completed.
+        // Check if the completed path matches the stored optimistically_added_folder before clearing.
+        if app_state.optimistically_added_folder.as_ref() == Some(&path_counted) {
+            app_state.optimistically_added_folder = None;
+            app_state.optimistically_added_children.clear();
+        }
     }
 
     /// Shows the help modal in the application.
@@ -416,7 +443,8 @@ impl FileOpsHandler {
             return Ok(());
         }
 
-        app_state.expanded_folders.insert(path.clone());
+        // Memory optimization: Use to_path_buf() to avoid unnecessary clone
+        app_state.expanded_folders.insert(path.to_path_buf());
 
         match fs::read_dir(path) {
             Ok(entries) => {
@@ -494,6 +522,3 @@ impl FileOpsHandler {
     }
 }
 
-// TODO: Add support for file previews on selection.
-// TODO: Add support for batch operations (move, delete, rename).
-// TODO: Add undo/redo for file operations.

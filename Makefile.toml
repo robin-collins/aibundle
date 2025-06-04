@@ -1,0 +1,6 @@
+[tasks.install]
+command = "cargo"
+args = ["install", "--path", "."]
+
+[tasks.run-tests]
+script = ["tests/scripts/run_all_tests.sh"]

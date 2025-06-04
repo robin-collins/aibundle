@@ -76,4 +76,3 @@ pub fn format_selected_items(
     }
 }
 
-// TODO: Add additional output formats (YAML, TOML, etc.) as needed.

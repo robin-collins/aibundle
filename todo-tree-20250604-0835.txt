@@ -1,0 +1,124 @@
+└─ aibundle-modular
+   └─ src
+      ├─ cli
+      │  ├─ mod.rs
+      │  │  └─ line 30: TODO : Add more CLI utilities as new features are implemented.
+      │  └─ options.rs
+      │     ├─ line 362: TODO : Add support for additional CLI flags (e.g., include-binary, config-path).
+      │     └─ line 363: TODO : Add validation for CLI argument combinations.
+      ├─ clipboard
+      │  └─ mod.rs
+      │     ├─ line 242: TODO : Add support for additional clipboard managers if needed (e.g., OSC52 for SSH/tmux).
+      │     └─ line 243: TODO : Add error messages for common clipboard failures (e.g., missing xclip/wl-copy).
+      ├─ config
+      │  └─ mod.rs
+      │     ├─ line 111: TODO : Add support for migrating old config formats to new versions.
+      │     └─ line 112: TODO : Add validation for config file contents before saving/loading.
+      ├─ fs
+      │  └─ mod.rs
+      │     ├─ line 898: TODO : Add more robust binary file detection (magic numbers, content sniffing).
+      │     └─ line 899: TODO : Add error handling for permission denied and symlink loops.
+      ├─ models
+      │  ├─ app_config.rs
+      │  │  ├─ line 183: TODO : Add validation methods for AppConfig and ModeConfig to ensure config integrity.
+      │  │  ├─ line 184: TODO : Consider supporting user-defined ignore patterns at runtime via IgnoreConfig.
+      │  │  └─ line 185: TODO : Add serialization for Node and FileDependencies if needed for future features.
+      │  ├─ constants.rs
+      │  │  ├─ line 60: TODO
+      │  │  ├─ line 232: TODO : Add more language mappings as new file types are supported.
+      │  │  └─ line 233: TODO : Consider making ICONS and DEFAULT_IGNORED_DIRS configurable at runtime if user customization is needed.
+      │  ├─ enums.rs
+      │  │  ├─ line 138: TODO : Add more output formats as new features are implemented.
+      │  │  └─ line 139: TODO : Consider supporting user-defined/custom output formats in the future.
+      │  └─ mod.rs
+      │     └─ line 39: TODO : Add more re-exports as new core types are introduced.
+      ├─ output
+      │  ├─ format.rs
+      │  │  ├─ line 282: TODO : Add support for additional output formats (YAML, TOML, etc.).
+      │  │  ├─ line 283: TODO : Add error handling for missing or unreadable files.
+      │  │  └─ line 284: TODO : Add options for output customization (e.g., file headers, summaries).
+      │  ├─ json.rs
+      │  │  ├─ line 137: TODO : Add option to pretty-print JSON output for readability.
+      │  │  └─ line 138: TODO : Add support for additional metadata fields if needed.
+      │  ├─ llm.rs
+      │  │  ├─ line 865: TODO : Add support for more language-specific dependency patterns.
+      │  │  ├─ line 866: TODO : Add options for output granularity (e.g., summary only, full content, etc.).
+      │  │  └─ line 867: TODO : Add error handling for malformed or missing files.
+      │  ├─ markdown.rs
+      │  │  ├─ line 119: TODO : Add support for Markdown frontmatter or summary sections if needed.
+      │  │  └─ line 120: TODO : Add option to customize code block language tags based on file extension.
+      │  ├─ mod.rs
+      │  │  ├─ line 73: TODO : The monolithic LLM format included dependency analysis.
+      │  │  └─ line 79: TODO : Add additional output formats (YAML, TOML, etc.) as needed.
+      │  └─ xml.rs
+      │     ├─ line 122: TODO : Add option to pretty-print XML output for readability.
+      │     └─ line 123: TODO : Add support for additional metadata attributes if needed.
+      ├─ tui
+      │  ├─ components
+      │  │  ├─ file_list.rs
+      │  │  │  ├─ line 145: TODO : Add support for custom icons or color themes.
+      │  │  │  └─ line 146: TODO : Add file size or modified date display in the file list.
+      │  │  ├─ header.rs
+      │  │  │  ├─ line 107: TODO : Add support for displaying additional status info in the header.
+      │  │  │  └─ line 108: TODO : Add breadcrumbs or path shortening for long directories.
+      │  │  ├─ mod.rs
+      │  │  │  └─ line 40: TODO : Add new components here as the TUI grows (e.g., footer, sidebar, etc.).
+      │  │  ├─ modal.rs
+      │  │  │  ├─ line 183: TODO : Add support for modal timeouts or auto-dismiss.
+      │  │  │  └─ line 184: TODO : Add support for custom modal titles or styles.
+      │  │  └─ status_bar.rs
+      │  │     ├─ line 80: TODO : Add support for displaying error or warning messages in the status bar.
+      │  │     ├─ line 81: TODO : Add customizable key command hints or help popups.
+      │  │     ├─ line 86: TODO : Add support for displaying error or warning messages in the status bar.
+      │  │     └─ line 87: TODO : Add customizable key command hints or help popups.
+      │  ├─ handlers
+      │  │  ├─ clipboard.rs
+      │  │  │  ├─ line 207: TODO : Add support for progress reporting during large copy operations.
+      │  │  │  └─ line 208: TODO : Add support for filtering or transforming output before copying.
+      │  │  ├─ file_ops.rs
+      │  │  │  ├─ line 509: TODO : Add support for file previews on selection.
+      │  │  │  ├─ line 510: TODO : Add support for batch operations (move, delete, rename).
+      │  │  │  └─ line 511: TODO : Add undo/redo for file operations.
+      │  │  ├─ keyboard.rs
+      │  │  │  ├─ line 200: TODO : Add support for customizable keybindings.
+      │  │  │  └─ line 201: TODO : Add support for multi-key command sequences.
+      │  │  └─ search.rs
+      │  │     ├─ line 87: TODO : Add support for regex or fuzzy search modes.
+      │  │     └─ line 88: TODO : Add search history or suggestions.
+      │  ├─ state
+      │  │  ├─ mod.rs
+      │  │  │  └─ line 39: TODO : Add more state modules as new TUI features are implemented.
+      │  │  ├─ search.rs
+      │  │  │  ├─ line 198: TODO : Add support for regex-based search queries.
+      │  │  │  ├─ line 199: TODO : Add fuzzy matching for improved search experience.
+      │  │  │  └─ line 200: TODO : Add search history or recent queries tracking.
+      │  │  └─ selection.rs
+      │  │     ├─ line 238: TODO : Add support for range selection (shift+click or shift+arrow).
+      │  │     ├─ line 239: TODO : Add visual feedback for partially selected folders.
+      │  │     ├─ line 240: TODO : Add undo/redo for selection changes.
+      │  │     ├─ line 281: TODO : Add support for range selection (shift+click or shift+arrow).
+      │  │     ├─ line 282: TODO : Add visual feedback for partially selected folders.
+      │  │     ├─ line 283: TODO : Add undo/redo for selection changes.
+      │  │     ├─ line 287: TODO : Add support for range selection (shift+click or shift+arrow).
+      │  │     ├─ line 288: TODO : Add visual feedback for partially selected folders.
+      │  │     └─ line 289: TODO : Add undo/redo for selection changes.
+      │  ├─ views
+      │  │  ├─ help_view.rs
+      │  │  │  └─ line 307: TODO : Add support for paginated help or dynamic keybinding display.
+      │  │  ├─ main_view.rs
+      │  │  │  └─ line 122: TODO : Add support for additional overlays or popups.
+      │  │  └─ message_view.rs
+      │  │     └─ line 133: TODO : Add support for message queueing or stacking.
+      │  ├─ app.rs
+      │  │  ├─ line 121: TODO : Remove any remaining legacy compatibility fields after full migration
+      │  │  └─ line 409: TODO : Remove any remaining legacy delegating methods after full migration
+      │  └─ mod.rs
+      │     └─ line 39: TODO : Add additional TUI utilities or global types here as needed.
+      ├─ utils
+      │  └─ mod.rs
+      │     ├─ line 134: TODO : Add more utility functions for string formatting, path manipulation, or error handling as needed.
+      │     ├─ line 140: TODO : Add more utility functions for string formatting, path manipulation, or error handling as needed.
+      │     └─ line 179: TODO : Add more utility functions for string formatting, path manipulation, or error handling as needed.
+      └─ main.rs
+         ├─ line 199: TODO : Add support for additional CLI subcommands or modes.
+         └─ line 200: TODO : Add support for config migration/versioning.

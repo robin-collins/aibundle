@@ -38,6 +38,17 @@ pub struct Modal {
     pub height: u16,
     /// Current page for paginated content.
     pub page: usize,
+    /// Modal type for different behaviors
+    pub modal_type: ModalType,
+}
+
+/// Types of modals with different interaction behaviors
+#[derive(Debug, Clone, PartialEq)]
+pub enum ModalType {
+    /// Standard informational modal (ESC/q to close)
+    Info,
+    /// Confirmation modal (Y/N to respond)
+    Confirmation,
 }
 
 impl Modal {
@@ -49,6 +60,19 @@ impl Modal {
             width,
             height,
             page: 0,
+            modal_type: ModalType::Info,
+        }
+    }
+
+    /// Creates a new confirmation modal with the given message, width, and height.
+    pub fn new_confirmation(message: String, width: u16, height: u16) -> Self {
+        Self {
+            message,
+            timestamp: Instant::now(),
+            width,
+            height,
+            page: 0,
+            modal_type: ModalType::Confirmation,
         }
     }
 
@@ -120,6 +144,15 @@ impl Modal {
         Self::new(help_text, 68, 32)
     }
 
+    /// Creates a confirmation modal for config file overwrite
+    pub fn config_overwrite_confirmation(config_path: &std::path::Path) -> Self {
+        let message = format!(
+            "Configuration file already exists:\n{}\n\nDo you want to overwrite it?\n\n[Y] Yes, overwrite\n[N] No, cancel",
+            config_path.display()
+        );
+        Self::new_confirmation(message, 70, 8)
+    }
+
     /// Returns visible content for the modal with pagination support.
     #[allow(dead_code)]
     pub fn get_visible_content(&self, available_height: u16) -> (String, bool) {
@@ -166,8 +199,13 @@ impl Modal {
 
     /// Renders the modal dialog in the given area.
     pub fn render(&self, f: &mut Frame, area: Rect) {
+        let title = match self.modal_type {
+            ModalType::Confirmation => " Confirmation ",
+            ModalType::Info => " Message ",
+        };
+
         let block = Block::default()
-            .title(" Message ")
+            .title(title)
             .borders(Borders::ALL)
             .style(Style::default().fg(Color::Yellow));
 

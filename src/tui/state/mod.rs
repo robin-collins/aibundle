@@ -29,6 +29,8 @@ mod selection;
 pub use app_state::AppState;
 /// Message type enum for user feedback. See [`app_state::MessageType`] for details.
 pub use app_state::MessageType;
+/// AppMessage struct for user feedback. See [`app_state::AppMessage`] for details.
+/// pub use app_state::AppMessage;
 /// Search state struct. See [`search::SearchState`] for details.
 pub use search::SearchState;
 /// Selection state struct. See [`selection::SelectionState`] for details.

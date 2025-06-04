@@ -21,13 +21,13 @@
 //! let mut app = App::new(config, start_dir, ignore_config).unwrap();
 //! app.run().unwrap();
 //! ```
+pub mod app;
 pub mod components;
 pub mod handlers;
 pub mod state;
 pub mod views;
 
 // App re-export
-mod app;
 /// Main TUI application struct. See [`app::App`] for details.
 pub use app::App;
 

@@ -71,33 +71,66 @@ pub fn format_llm_output(
 
     // Process selected items to collect files and build tree
     for path in selected_items {
-        if let Ok(rel_path) = path.strip_prefix(current_dir) {
-            if rel_path.as_os_str().is_empty() {
-                continue; // Skip root
-            }
+        // Handle the case where paths might be relative and current_dir is "."
+        let rel_path = if current_dir == Path::new(".") && path.is_relative() {
+            path.as_path()
+        } else if let Ok(stripped) = path.strip_prefix(current_dir) {
+            stripped
+        } else {
+            path.as_path()
+        };
 
-            // Add to tree structure
-            add_path_to_tree(&mut root_node, rel_path, path.is_dir());
+        if rel_path.as_os_str().is_empty() {
+            continue; // Skip root
+        }
 
-            if path.is_file() {
-                file_count += 1;
+        // Add to tree structure
+        add_path_to_tree(&mut root_node, rel_path, path.is_dir());
 
-                // Read file content if not binary and not ignored
-                if !is_binary_file(path) || ignore_config.include_binary_files {
-                    if let Ok(content) = fs::read_to_string(path) {
-                        let normalized_path = normalize_path(&rel_path.to_string_lossy());
+        if path.is_file() {
+            file_count += 1;
+
+            // Read file content if not binary and not ignored
+            if !is_binary_file(path) || ignore_config.include_binary_files {
+                if let Ok(content) = fs::read_to_string(path) {
+                                            let normalized_path = normalize_path(&rel_path.to_string_lossy());
                         file_contents.push((normalized_path, content));
+                                    }
+            }
+        } else if path.is_dir() {
+            folder_count += 1;
+
+            // Add all files in directory to file_contents
+            if let Ok(entries) = fs::read_dir(path) {
+                for entry in entries.filter_map(Result::ok) {
+                    let entry_path = entry.path();
+                    if entry_path.is_file() {
+                        // Handle the case where paths might be relative and current_dir is "."
+                        let rel_entry_path = if current_dir == Path::new(".") && entry_path.is_relative() {
+                            entry_path.as_path()
+                        } else if let Ok(stripped) = entry_path.strip_prefix(current_dir) {
+                            stripped
+                        } else {
+                            entry_path.as_path()
+                        };
+
+                        if !is_binary_file(&entry_path)
+                            || ignore_config.include_binary_files
+                        {
+                            if let Ok(content) = fs::read_to_string(&entry_path) {
+                                let normalized_path =
+                                    normalize_path(&rel_entry_path.to_string_lossy());
+                                file_contents.push((normalized_path, content));
+                            }
+                        }
                     }
                 }
-            } else if path.is_dir() {
-                folder_count += 1;
             }
         }
     }
 
     // Also collect all files for comprehensive dependency analysis
-    let all_file_contents =
-        collect_all_files_for_analysis(selected_items, current_dir, ignore_config);
+    let all_file_contents = collect_all_files_for_analysis(selected_items, current_dir, ignore_config);
 
     // Analyze dependencies using all available files for better resolution
     let dependencies = analyze_dependencies(&all_file_contents, current_dir);
@@ -131,12 +164,19 @@ fn collect_all_files_for_analysis(
 
     for path in selected_items {
         if path.is_file() {
-            if let Ok(rel_path) = path.strip_prefix(current_dir) {
-                if !is_binary_file(path) || ignore_config.include_binary_files {
-                    if let Ok(content) = fs::read_to_string(path) {
-                        let normalized_path = normalize_path(&rel_path.to_string_lossy());
-                        all_files.push((normalized_path, content));
-                    }
+            // Handle the case where paths might be relative and current_dir is "."
+            let rel_path = if current_dir == Path::new(".") && path.is_relative() {
+                path.as_path()
+            } else if let Ok(stripped) = path.strip_prefix(current_dir) {
+                stripped
+            } else {
+                path.as_path()
+            };
+
+            if !is_binary_file(path) || ignore_config.include_binary_files {
+                if let Ok(content) = fs::read_to_string(path) {
+                    let normalized_path = normalize_path(&rel_path.to_string_lossy());
+                    all_files.push((normalized_path, content));
                 }
             }
         } else if path.is_dir() {
@@ -160,12 +200,19 @@ fn collect_files_from_directory(
             let entry_path = entry.path();
 
             if entry_path.is_file() {
-                if let Ok(rel_path) = entry_path.strip_prefix(current_dir) {
-                    if !is_binary_file(&entry_path) || ignore_config.include_binary_files {
-                        if let Ok(content) = fs::read_to_string(&entry_path) {
-                            let normalized_path = normalize_path(&rel_path.to_string_lossy());
-                            all_files.push((normalized_path, content));
-                        }
+                // Handle the case where paths might be relative and current_dir is "."
+                let rel_path = if current_dir == Path::new(".") && entry_path.is_relative() {
+                    entry_path.as_path()
+                } else if let Ok(stripped) = entry_path.strip_prefix(current_dir) {
+                    stripped
+                } else {
+                    entry_path.as_path()
+                };
+
+                if !is_binary_file(&entry_path) || ignore_config.include_binary_files {
+                    if let Ok(content) = fs::read_to_string(&entry_path) {
+                        let normalized_path = normalize_path(&rel_path.to_string_lossy());
+                        all_files.push((normalized_path, content));
                     }
                 }
             } else if entry_path.is_dir() {
@@ -354,8 +401,8 @@ pub fn analyze_dependencies(
             .iter()
             .filter_map(|pat| match Regex::new(pat) {
                 Ok(re) => Some(re),
-                Err(err) => {
-                    eprintln!("Invalid regex for {}: {}", ext, err);
+                Err(_err) => {
+                    // eprintln!("Invalid regex for {}: {}", ext, err);
                     None
                 }
             })
@@ -509,12 +556,13 @@ pub fn analyze_dependencies(
     dependencies
 }
 
-// Helper function to write file tree to string
+// Helper function to write file tree to string with Unicode box drawing characters
 fn write_file_tree_to_string(node: &Node, prefix: &str, is_last: bool) -> String {
     let mut result = String::new();
 
     // Print node (skip root when prefix is empty)
     if !prefix.is_empty() {
+        // Use Unicode box drawing characters for better visual appearance
         let branch = if is_last { "└── " } else { "├── " };
         result.push_str(&format!("{}{}{}\n", prefix, branch, node.name));
     }
@@ -533,6 +581,7 @@ fn write_file_tree_to_string(node: &Node, prefix: &str, is_last: bool) -> String
 
             for (i, (_, child)) in items.iter().enumerate() {
                 let is_last_child = i == items.len() - 1;
+                // Use Unicode vertical bar for the tree structure
                 let new_prefix = format!("{}{}", prefix, if is_last { "    " } else { "│   " });
                 result.push_str(&write_file_tree_to_string(
                     child,
@@ -816,5 +865,4 @@ pub fn format_llm_output_internal(
 }
 
 // TODO: Add support for more language-specific dependency patterns.
-// TODO: Add options for output granularity (e.g., summary only, full content, etc.).
 // TODO: Add error handling for malformed or missing files.

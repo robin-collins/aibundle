@@ -26,6 +26,12 @@ use ratatui::{
 /// Help view component for rendering the help popup/modal in the TUI.
 pub struct HelpView;
 
+impl Default for HelpView {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HelpView {
     /// Creates a new `HelpView` component.
     pub fn new() -> Self {

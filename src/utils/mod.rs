@@ -19,12 +19,10 @@
 
 use chrono::Local;
 use ratatui::layout::Rect;
-use std::env;
-use std::fs::File;
-use std::io::Write;
-use std::sync::Mutex;
-
-static LOG_FILE: Mutex<Option<File>> = Mutex::new(None);
+/// use std::env;
+/// use std::fs::File;
+/// use std::sync::Mutex;
+use std::path::PathBuf;
 
 /// Returns a rectangle centered within the given area, with the specified width and height.
 ///
@@ -91,16 +89,6 @@ pub fn human_readable_size(size: usize) -> String {
     }
 }
 
-/// Initializes the log file for this run, using hostname, OS, and datetime.
-/// Called automatically on first log_event call.
-fn init_log_file() -> File {
-    let hostname = get_hostname();
-    let os = get_os();
-    let datetime = Local::now().format("%Y%m%d%H%M%S");
-    let filename = format!("{}-{}-{}.log", hostname, os, datetime);
-    File::create(filename).expect("Failed to create log file")
-}
-
 /// Appends a timestamped message to the log file for this run.
 ///
 /// # Example
@@ -108,6 +96,11 @@ fn init_log_file() -> File {
 /// crate::utils::log_event("Navigated to /src");
 /// ```
 pub fn log_event(msg: &str) {
+    // Logging is disabled by making this function a no-op.
+    // To re-enable, uncomment the original lines below.
+    let _ = msg; // Keep msg parameter to avoid unused variable warning if re-enabled
+
+    /*
     let mut log_file_guard = LOG_FILE.lock().unwrap();
     if log_file_guard.is_none() {
         *log_file_guard = Some(init_log_file());
@@ -118,17 +111,45 @@ pub fn log_event(msg: &str) {
         let _ = file.write_all(line.as_bytes());
         let _ = file.flush();
     }
+    */
 }
 
-fn get_hostname() -> String {
-    hostname::get()
-        .ok()
-        .and_then(|h| h.into_string().ok())
-        .unwrap_or_else(|| "unknownhost".to_string())
-}
+/// Writes a debug log for selection limit errors.
+pub fn write_selection_limit_debug_log(
+    current_selected_items: &std::collections::HashSet<PathBuf>,
+    path_triggering_count: &Option<PathBuf>,
+    num_items_in_triggering_op: usize,
+    num_other_selected_items_before_op: usize,
+    selection_limit: usize,
+) {
+    use std::fs::OpenOptions;
+    use std::io::Write;
 
-fn get_os() -> String {
-    env::consts::OS.to_string()
+    let filename = "selection_limit_debug.txt";
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(filename)
+        .expect("Failed to open debug log file");
+
+    let _ = writeln!(file, "--- Selection Limit Debug Log Entry ({}) ---", Local::now().format("%Y-%m-%d %H:%M:%S"));
+    let _ = writeln!(file, "Selection Limit: {}", selection_limit);
+    let _ = writeln!(file, "Number of items already selected (before this problematic operation): {}", num_other_selected_items_before_op);
+    if let Some(p) = path_triggering_count {
+        let _ = writeln!(file, "Path whose processing tried to add items: {}", p.display());
+    }
+    let _ = writeln!(file, "Number of items this operation tried to add: {}", num_items_in_triggering_op);
+    let _ = writeln!(file, "Total items if added: {}\n", num_other_selected_items_before_op + num_items_in_triggering_op);
+
+    let _ = writeln!(file, "List A: Selected Items AT THE MOMENT OF THE ERROR MODAL:");
+    if current_selected_items.is_empty() {
+        let _ = writeln!(file, "  (none)");
+    } else {
+        for item in current_selected_items {
+            let _ = writeln!(file, "  {}", item.display());
+        }
+    }
+    let _ = writeln!(file, "--- End of Entry ---\n");
 }
 
 // TODO: Add more utility functions for string formatting, path manipulation, or error handling as needed.

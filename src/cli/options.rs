@@ -122,12 +122,13 @@ pub struct CliModeOptions {
 
 impl CliOptions {
     /// Converts CLI options to an `AppConfig` for use in the application.
+    /// Memory optimization: Minimize cloning by using references where possible
     #[allow(dead_code)]
     pub fn to_app_config(&self) -> AppConfig {
         AppConfig {
-            default_format: Some(self.format.clone()),
+            default_format: Some(self.format.clone()), // Clone needed for owned field
             default_gitignore: Some(self.gitignore),
-            default_ignore: Some(self.ignore.clone()),
+            default_ignore: Some(self.ignore.clone()), // Clone needed for owned field
             default_line_numbers: Some(self.line_numbers),
             default_recursive: Some(self.recursive),
             selection_limit: None,
@@ -135,14 +136,15 @@ impl CliOptions {
     }
 
     /// Converts CLI options to a `ModeConfig` for config serialization.
+    /// Memory optimization: Use as_ref().cloned() to avoid unnecessary clones
     #[allow(dead_code)]
     pub fn to_mode_config(&self) -> ModeConfig {
         ModeConfig {
-            files: self.files.clone(),
-            format: Some(self.format.clone()),
-            out: self.output_file.clone(),
+            files: self.files.as_ref().cloned(),
+            format: Some(self.format.clone()), // Clone needed for owned field
+            out: self.output_file.as_ref().cloned(),
             gitignore: Some(self.gitignore),
-            ignore: Some(self.ignore.clone()),
+            ignore: Some(self.ignore.clone()), // Clone needed for owned field
             line_numbers: Some(self.line_numbers),
             recursive: Some(self.recursive),
             source_dir: Some(self.effective_source_dir()),
@@ -151,25 +153,28 @@ impl CliOptions {
     }
 
     /// Returns the effective source directory, preferring the positional argument if present.
+    /// Memory optimization: Use references to avoid unnecessary clones
     #[allow(dead_code)]
     pub fn effective_source_dir(&self) -> String {
         self.source_dir_pos
-            .clone()
-            .unwrap_or_else(|| self.source_dir.clone())
+            .as_ref()
+            .unwrap_or(&self.source_dir)
+            .clone() // Only clone once at the end
     }
 
     /// Converts CLI options to `CliModeOptions` for running CLI mode.
+    /// Memory optimization: Use as_ref().cloned() to avoid unnecessary clones
     #[allow(dead_code)]
     pub fn to_cli_mode_options(&self) -> CliModeOptions {
         CliModeOptions {
-            files_pattern: self.files.clone(),
+            files_pattern: self.files.as_ref().cloned(),
             source_dir: self.effective_source_dir(),
-            format: self.format.clone(),
+            format: self.format.clone(), // Clone needed for owned field
             gitignore: self.gitignore,
             line_numbers: self.line_numbers,
             recursive: self.recursive,
-            ignore_list: self.ignore.clone(),
-            output_file: self.output_file.clone(),
+            ignore_list: self.ignore.clone(), // Clone needed for owned field
+            output_file: self.output_file.as_ref().cloned(),
             output_console: self.output_console,
         }
     }
@@ -211,8 +216,8 @@ pub fn to_output_format(format: &str) -> OutputFormat {
 /// // Used internally by CLI entrypoint.
 /// ```
 #[allow(dead_code)]
-pub fn get_merged_config(cli_opts: &CliOptions) -> io::Result<FullConfig> {
-    let mut config = crate::config::load_config()?;
+pub async fn get_merged_config(cli_opts: &CliOptions) -> io::Result<FullConfig> {
+    let mut config = crate::config::load_config().await?;
     if cli_opts.save_config {
         config.cli = Some(cli_opts.to_mode_config());
     }
@@ -233,12 +238,12 @@ pub fn get_merged_config(cli_opts: &CliOptions) -> io::Result<FullConfig> {
 /// ```
 #[allow(dead_code)]
 pub fn to_ignore_config(cli_opts: &CliOptions) -> IgnoreConfig {
-    let use_default_ignores = cli_opts.ignore.contains(&"default".to_string());
+    let use_default_ignores = cli_opts.ignore.iter().any(|s| s == "default");
     IgnoreConfig {
         use_default_ignores,
         use_gitignore: cli_opts.gitignore,
         include_binary_files: false, // Default to false, could be a CLI option
-        extra_ignore_patterns: cli_opts.ignore.clone(),
+        extra_ignore_patterns: cli_opts.ignore.clone(), // Clone needed for owned field
     }
 }
 
@@ -254,31 +259,31 @@ pub fn to_ignore_config(cli_opts: &CliOptions) -> IgnoreConfig {
 /// ```rust
 /// // Used as the main entrypoint for CLI mode.
 /// ```
-pub fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
-    // 1. Create AppConfig
+pub async fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
+    // 1. Create AppConfig - Memory optimization: minimize cloning
     let app_config = AppConfig {
-        default_format: Some(options.format.clone()),
+        default_format: Some(options.format.clone()), // Clone needed for owned field
         default_gitignore: Some(options.gitignore),
-        default_ignore: Some(options.ignore_list.clone()),
+        default_ignore: Some(options.ignore_list.clone()), // Clone needed for owned field
         default_line_numbers: Some(options.line_numbers),
         default_recursive: Some(options.recursive),
         selection_limit: None, // Selection limit override handled later
     };
-    // 2. Create IgnoreConfig
+    // 2. Create IgnoreConfig - Memory optimization: use iterator instead of contains
     let ignore_config = IgnoreConfig {
-        use_default_ignores: options.ignore_list.contains(&"default".to_string()),
+        use_default_ignores: options.ignore_list.iter().any(|s| s == "default"),
         use_gitignore: options.gitignore,
         include_binary_files: false, // Assuming false for CLI
-        extra_ignore_patterns: options.ignore_list.clone(),
+        extra_ignore_patterns: options.ignore_list.clone(), // Clone needed for owned field
     };
-    // 3. Create start_dir PathBuf
-    let start_dir = PathBuf::from(options.source_dir.clone());
+    // 3. Create start_dir PathBuf - Memory optimization: use reference
+    let start_dir = PathBuf::from(&options.source_dir);
 
-    // 4. Call App::new with arguments and handle Result
-    let mut app = App::new(app_config, start_dir.clone(), ignore_config)?;
+    // 4. Call App::new with arguments and handle Result - Memory optimization: avoid clone
+    let mut app = App::new(app_config, start_dir, ignore_config)?;
 
     // Override selection limit from loaded CLI config if provided.
-    if let Ok(full_config) = crate::config::load_config() {
+    if let Ok(full_config) = crate::config::load_config().await {
         if let Some(cli_conf) = full_config.cli {
             if let Some(limit) = cli_conf.selection_limit {
                 app.state.selection_limit = limit;

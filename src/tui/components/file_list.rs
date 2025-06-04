@@ -29,6 +29,12 @@ use crate::tui::state::{AppState, SelectionState};
 /// File list component for rendering files and folders in the TUI.
 pub struct FileList;
 
+impl Default for FileList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FileList {
     /// Creates a new `FileList` component.
     pub fn new() -> Self {
@@ -63,26 +69,34 @@ impl FileList {
                     .saturating_sub(1);
                 let indent = "  ".repeat(depth);
 
-                let name = if path.ends_with("..") {
-                    "../".to_string()
+                let is_dot_dot = path.ends_with("..");
+
+                let display_name = if is_dot_dot {
+                    let folder_icon = ICONS
+                        .iter()
+                        .find(|(k, _)| *k == "folder")
+                        .map(|(_, v)| *v)
+                        .unwrap_or("📁");
+                    // folder_icon (1 char) + 3 spaces for alignment with "[ ] " part of other entries
+                    format!("{}{}   ../", indent, folder_icon)
                 } else {
-                    path.file_name()
+                    let name = path.file_name()
                         .and_then(|n| n.to_str())
                         .unwrap_or("???")
-                        .to_string()
-                };
+                        .to_string();
 
-                let icon = Self::get_icon(path);
-                let prefix = if app_state.selected_items.contains(path) {
-                    "[X] "
-                } else {
-                    "[ ] "
-                };
+                    let icon = Self::get_icon(path);
+                    let prefix = if app_state.selected_items.contains(path) {
+                        "[X] "
+                    } else {
+                        "[ ] "
+                    };
 
-                let display_name = if path.is_dir() && !path.ends_with("..") {
-                    format!("{}{}{} {}/", indent, prefix, icon, name)
-                } else {
-                    format!("{}{}{} {}", indent, prefix, icon, name)
+                    if path.is_dir() {
+                        format!("{}{}{} {}/", indent, prefix, icon, name)
+                    } else {
+                        format!("{}{}{} {}", indent, prefix, icon, name)
+                    }
                 };
 
                 let is_selected_line = selection_state.list_state.selected() == Some(index);

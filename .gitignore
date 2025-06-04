@@ -8,3 +8,5 @@ Cargo.lock
 *.swo
 references/mono-file-version/
 monolithich/
+*.log
+.specstory/ai_rules_backups/*

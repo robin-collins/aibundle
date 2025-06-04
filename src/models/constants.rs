@@ -32,7 +32,7 @@
 /// ```rust
 /// assert_eq!(crate::models::constants::VERSION, "0.7.0");
 /// ```
-pub const VERSION: &str = "0.7.0";
+pub const VERSION: &str = "0.7.5";
 
 /// The default maximum number of items that can be selected at once.
 ///
@@ -57,8 +57,8 @@ pub const DEFAULT_SELECTION_LIMIT: usize = 400;
 /// assert_eq!(icon, "🦀");
 /// ```
 ///
-/// # TODO
-/// - Consider moving to a HashMap for faster lookup if performance becomes an issue.
+/// # TODO : Consider moving to a HashMap for faster lookup if performance becomes an issue.
+///
 pub const ICONS: &[(&str, &str)] = &[
     // Folders
     ("folder", "📁"),

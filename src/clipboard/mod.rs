@@ -38,9 +38,16 @@ use std::process::{Command, Stdio};
 /// ```
 pub fn copy_to_clipboard(text: &str) -> io::Result<()> {
     if is_wsl() {
-        // For WSL2, write to a temporary file and use PowerShell to read it
+        // For WSL2, write to a temporary file with explicit UTF-8 BOM and use PowerShell to read it
         let temp_file = std::env::temp_dir().join("aibundle_clipboard_temp.txt");
-        fs::write(&temp_file, text)?;
+
+        // Add UTF-8 BOM to ensure correct encoding in Windows
+        let mut content_with_bom = Vec::new();
+        // UTF-8 BOM (EF BB BF)
+        content_with_bom.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
+        content_with_bom.extend_from_slice(text.as_bytes());
+
+        fs::write(&temp_file, content_with_bom)?;
 
         // Convert Linux path to Windows path
         let windows_path = String::from_utf8(
@@ -54,13 +61,22 @@ pub fn copy_to_clipboard(text: &str) -> io::Result<()> {
         .trim()
         .to_string();
 
+        // Enhanced PowerShell command to ensure proper Unicode handling
         let ps_command = format!(
-            "Get-Content -Raw -Path '{}' | Set-Clipboard",
+            "[Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
+            $content = [System.IO.File]::ReadAllText('{}', [System.Text.Encoding]::UTF8); \
+            [System.Windows.Forms.Clipboard]::SetText($content, [System.Windows.Forms.TextDataFormat]::UnicodeText);",
             windows_path.replace("'", "''")
         );
 
         let status = Command::new("powershell.exe")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &ps_command])
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                // Add namespace reference for Windows Forms
+                &format!("Add-Type -AssemblyName System.Windows.Forms; {}", ps_command)
+            ])
             .status()?;
 
         // Clean up temp file
@@ -75,17 +91,31 @@ pub fn copy_to_clipboard(text: &str) -> io::Result<()> {
     } else {
         match OS {
             "windows" => {
-                // For Windows, use the same temp file approach
+                // For Windows, use the same temp file approach with UTF-8 BOM
                 let temp_file = std::env::temp_dir().join("aibundle_clipboard_temp.txt");
-                fs::write(&temp_file, text)?;
 
+                // Add UTF-8 BOM to ensure correct encoding
+                let mut content_with_bom = Vec::new();
+                content_with_bom.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
+                content_with_bom.extend_from_slice(text.as_bytes());
+
+                fs::write(&temp_file, content_with_bom)?;
+
+                // Enhanced PowerShell command to ensure proper Unicode handling
                 let ps_command = format!(
-                    "Get-Content -Raw -Path '{}' | Set-Clipboard",
+                    "[Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
+                    $content = [System.IO.File]::ReadAllText('{}', [System.Text.Encoding]::UTF8); \
+                    [System.Windows.Forms.Clipboard]::SetText($content, [System.Windows.Forms.TextDataFormat]::UnicodeText);",
                     temp_file.to_string_lossy().replace("'", "''")
                 );
 
                 let status = Command::new("powershell.exe")
-                    .args(["-NoProfile", "-NonInteractive", "-Command", &ps_command])
+                    .args([
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-Command",
+                        &format!("Add-Type -AssemblyName System.Windows.Forms; {}", ps_command)
+                    ])
                     .status()?;
 
                 // Clean up temp file

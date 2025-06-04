@@ -1,7 +1,7 @@
 ---
 description:
 globs:
-alwaysApply: false
+alwaysApply: true
 ---
 Ensure that your code follows the SOLID, YAGNI, and KISS principles.
 
