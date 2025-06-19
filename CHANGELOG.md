@@ -7,14 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Fixed Symlink Loop Vulnerability**: Added symlink loop detection in `collect_folder_descendants` function to prevent infinite recursion and potential stack overflow attacks (`src/fs/mod.rs`).
+
+### Fixed
+- **Fixed Race Condition in Selection Operations**: Implemented proper synchronization to prevent race conditions between async selection counting and user input that could cause inconsistent application state (`src/tui/state/selection.rs`, `src/tui/app.rs`).
+- **Fixed Incorrect Regex Pattern**: Corrected malformed regex pattern `"$.^"` to `"^$"` in ignore pattern caching to ensure proper fallback behavior (`src/fs/mod.rs:291`).
+- Derived `Default` trait for `Trie` struct in `src/tui/state/app_state.rs` and `SearchState` struct in `src/tui/state/search.rs` to resolve compiler errors when calling `Self::default()` in their `new()` methods.
+- Corrected test script `test_C2_select_all.sh` to accurately verify deselection state by excluding the status bar from checkbox checks.
+
+### Performance
+- **GitIgnore Caching Implementation**: Implemented caching for compiled gitignore matchers, reducing complexity from O(n×m) to O(1) for repeated path checks in the same directory. This provides significant performance improvements for large codebases with multiple .gitignore files (`src/fs/mod.rs`, `src/tui/state/app_state.rs`).
+
 ### Removed
 - Removed unused function `perform_search` from `src/tui/state/search.rs`.
 - Removed unused function `format_selected_items` from `src/tui/handlers/file_ops.rs`.
 - Removed unused method `set_message_duration` from `src/tui/views/message_view.rs`.
-
-### Fixed
-- Derived `Default` trait for `Trie` struct in `src/tui/state/app_state.rs` and `SearchState` struct in `src/tui/state/search.rs` to resolve compiler errors when calling `Self::default()` in their `new()` methods.
-- Corrected test script `test_C2_select_all.sh` to accurately verify deselection state by excluding the status bar from checkbox checks.
 
 ### Documentation
 - Comprehensive rewrite and standardization of all in-file Rust documentation for the following modules:
@@ -162,3 +170,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-platform clipboard support
 - File filtering and ignore patterns
 - Removed redundant `#[doc(alias = ...)]` attributes from `src/cli/mod.rs`, `src/utils/mod.rs`, and `src/tui/views/mod.rs` to resolve clippy errors about alias matching the item's name.
+### [Fixed]
+- Removed references to non-existent `perform_search` function from documentation in [`src/tui/state/search.rs`](src/tui/state/search.rs)
