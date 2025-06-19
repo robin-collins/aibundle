@@ -35,6 +35,19 @@ use std::path::{Path, PathBuf};
 /// state.search_query = "foo".to_string();
 /// ```
 #[doc(alias = "search-state")]
+///
+/// # Fields
+/// * `search_query` - The current search query string.
+/// * `is_searching` - Whether search mode is active.
+/// * `selected_items` - Set of selected items in the search results.
+///
+/// # Examples
+/// ```rust
+/// use crate::tui::state::search::SearchState;
+/// let mut state = SearchState::new();
+/// state.search_query = "foo".to_string();
+/// ```
+#[doc(alias = "search-state")]
 #[derive(Default)]
 pub struct SearchState {
     pub search_query: String,
