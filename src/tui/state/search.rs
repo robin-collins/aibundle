@@ -6,17 +6,15 @@
 //!
 //! ## Organization
 //! - [`SearchState`]: State struct for search queries and selection.
-//! - [`perform_search`]: Utility for performing search on item lists.
 //!
 //! ## Usage
 //! Use [`SearchState`] to manage search queries and selection state during interactive search.
 //!
 //! # Examples
 //! ```rust
-//! use crate::tui::state::search::{SearchState, perform_search};
+//! use crate::tui::state::search::SearchState;
 //! let mut state = SearchState::new();
 //! state.search_query = "main".to_string();
-//! let indices = perform_search(&items, &state.search_query);
 //! ```
 
 use glob::Pattern;

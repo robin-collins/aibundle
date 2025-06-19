@@ -244,11 +244,15 @@ impl FileOpsHandler {
                             parent.display()
                         ));
                         app_state.current_dir = parent.to_path_buf();
+                        // Clear gitignore cache when changing directories
+                        crate::fs::clear_gitignore_cache();
                     }
                 } else {
                     log_event(&format!("handle_enter: entering dir {}", path.display()));
                     // Memory optimization: Use clone_from for more efficient PathBuf copying
                     app_state.current_dir.clone_from(path);
+                    // Clear gitignore cache when changing directories
+                    crate::fs::clear_gitignore_cache();
                 }
 
                 app_state.is_searching = false;

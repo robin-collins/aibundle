@@ -48,6 +48,12 @@ lazy_static! {
         Arc::new(Mutex::new(HashMap::new()));
 }
 
+// Cache for compiled gitignore matchers to reduce redundant gitignore processing
+lazy_static! {
+    static ref GITIGNORE_CACHE: Arc<Mutex<HashMap<PathBuf, Option<ignore::gitignore::Gitignore>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+}
+
 /// Binary file signatures for magic number detection
 const BINARY_SIGNATURES: &[(&[u8], &str)] = &[
     // ELF executables
@@ -169,6 +175,77 @@ fn try_canonicalize(path: &Path) -> io::Result<PathBuf> {
     std::fs::canonicalize(path)
 }
 
+/// Clears the gitignore cache. Should be called when .gitignore files change
+/// or when switching to a different project directory.
+pub fn clear_gitignore_cache() {
+    if let Ok(mut cache) = GITIGNORE_CACHE.lock() {
+        cache.clear();
+    }
+}
+
+/// Gets or creates a cached gitignore matcher for the given base directory.
+/// Returns None if no gitignore files are found or if compilation fails.
+pub fn get_cached_gitignore_matcher(base_dir: &PathBuf) -> Option<ignore::gitignore::Gitignore> {
+    if let Ok(mut cache) = GITIGNORE_CACHE.lock() {
+        if let Some(cached_matcher) = cache.get(base_dir) {
+            return cached_matcher.clone();
+        }
+
+        // Build gitignore matcher if not in cache
+        let mut builder = GitignoreBuilder::new(base_dir);
+        let mut dir = base_dir.clone();
+        let mut found_gitignore = false;
+
+        // Traverse upwards to find .gitignore files
+        loop {
+            let gitignore_file = dir.join(".gitignore");
+            if gitignore_file.exists() {
+                if builder.add(gitignore_file).is_some() {
+                    found_gitignore = true;
+                }
+            }
+            if let Some(parent) = dir.parent() {
+                dir = parent.to_path_buf();
+            } else {
+                break;
+            }
+        }
+
+        let matcher = if found_gitignore {
+            builder.build().ok()
+        } else {
+            None
+        };
+
+        // Cache the result (even if None)
+        cache.insert(base_dir.clone(), matcher.clone());
+        matcher
+    } else {
+        // Fallback if cache lock fails - build without caching
+        let mut builder = GitignoreBuilder::new(base_dir);
+        let mut dir = base_dir.clone();
+        let mut found_gitignore = false;
+
+        loop {
+            let gitignore_file = dir.join(".gitignore");
+            if gitignore_file.exists() && builder.add(gitignore_file).is_some() {
+                found_gitignore = true;
+            }
+            if let Some(parent) = dir.parent() {
+                dir = parent.to_path_buf();
+            } else {
+                break;
+            }
+        }
+
+        if found_gitignore {
+            builder.build().ok()
+        } else {
+            None
+        }
+    }
+}
+
 /// Determines if a path should be ignored based on ignore configuration and .gitignore rules.
 ///
 /// # Arguments
@@ -211,43 +288,9 @@ pub fn is_path_ignored_iterative(
         }
     }
 
-    // Check .gitignore files
+    // Check .gitignore files using cached matcher
     if ignore_config.use_gitignore {
-        let mut builder = GitignoreBuilder::new(base_dir);
-        let mut current_dir_for_gitignore = path.parent().unwrap_or(path).to_path_buf();
-        let mut gitignore_path_found = false;
-
-        // Traverse upwards from the path itself (or its parent) to find .gitignore files up to base_dir
-        // or the root of the filesystem if base_dir is part of a deeper git repo structure.
-        loop {
-            let gitignore_file = current_dir_for_gitignore.join(".gitignore");
-            if gitignore_file.exists() && builder.add(gitignore_file).is_some() {
-                gitignore_path_found = true;
-            }
-            if current_dir_for_gitignore == *base_dir || current_dir_for_gitignore.parent().is_none() {
-                break;
-            }
-            if !current_dir_for_gitignore.pop() {
-                break;
-            }
-        }
-
-        // If no .gitignore files were explicitly added from the path's hierarchy up to base_dir,
-        // try adding one from the base_dir itself, as AppState does.
-        if !gitignore_path_found {
-            let base_gitignore = base_dir.join(".gitignore");
-            if base_gitignore.exists() {
-                builder.add(base_gitignore);
-            }
-        }
-
-        // Add .gitignore from initial_dir (usually project root) as a fallback or primary source.
-        // This logic mirrors AppState more closely.
-        // Consider if `base_dir` for `collect_folder_descendants` should always be `app_state.current_dir`
-        // or `app_state.initial_dir` if .gitignores are typically at project root.
-        // For now, using `base_dir` as passed.
-
-        if let Ok(gitignore_matcher) = builder.build() {
+        if let Some(gitignore_matcher) = get_cached_gitignore_matcher(base_dir) {
             let is_dir = path.is_dir();
             if let Match::Ignore(_) = gitignore_matcher.matched_path_or_any_parents(path, is_dir) {
                 return true;
@@ -306,23 +349,11 @@ pub fn is_path_ignored_iterative_cached(
         }
     }
 
-    // GitIgnore checking (unchanged as it's already optimized by the ignore crate)
+    // GitIgnore checking using cached matcher for improved performance
     if ignore_config.use_gitignore {
-        let mut builder = GitignoreBuilder::new(base_dir);
-        let mut dir = base_dir.clone();
-        while let Some(parent) = dir.parent() {
-            let gitignore = dir.join(".gitignore");
-            if gitignore.exists() {
-                match builder.add(gitignore) {
-                    None => (),
-                    Some(_) => break,
-                }
-            }
-            dir = parent.to_path_buf();
-        }
-        if let Ok(gitignore) = builder.build() {
+        if let Some(gitignore_matcher) = get_cached_gitignore_matcher(base_dir) {
             let is_dir = path.is_dir();
-            if let Match::Ignore(_) = gitignore.matched_path_or_any_parents(path, is_dir) {
+            if let Match::Ignore(_) = gitignore_matcher.matched_path_or_any_parents(path, is_dir) {
                 return true;
             }
         }
