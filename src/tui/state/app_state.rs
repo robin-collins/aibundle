@@ -22,7 +22,7 @@ use crate::models::{
     app_config::Node, constants, AppConfig, CopyStats, IgnoreConfig, OutputFormat,
 };
 use crate::tui::components::modal::Modal;
-use ignore::{gitignore::GitignoreBuilder, Match};
+use ignore::Match;
 use ratatui::widgets::ListState;
 use std::collections::{BTreeMap, HashSet};
 use std::io;
@@ -382,18 +382,16 @@ impl AppState {
             }
         }
         if self.ignore_config.use_gitignore {
-            let mut builder = GitignoreBuilder::new(&self.current_dir);
-            let mut dir = self.current_dir.clone();
-            while let Some(parent) = dir.parent() {
-                let gitignore = dir.join(".gitignore");
-                if gitignore.exists() && builder.add(gitignore).is_some() {
-                    break;
-                }
-                dir = parent.to_path_buf();
-            }
-            if let Ok(gitignore) = builder.build() {
+            // Use the file's parent directory as context for gitignore matching
+            let context_dir = if path.is_file() {
+                path.parent().unwrap_or(&self.current_dir).to_path_buf()
+            } else {
+                path.to_path_buf()
+            };
+            
+            if let Some(gitignore_matcher) = crate::fs::get_cached_gitignore_matcher_for_context(&context_dir, &self.current_dir) {
                 let is_dir = path.is_dir();
-                if let Match::Ignore(_) = gitignore.matched_path_or_any_parents(path, is_dir) {
+                if let Match::Ignore(_) = gitignore_matcher.matched_path_or_any_parents(path, is_dir) {
                     return true;
                 }
             }

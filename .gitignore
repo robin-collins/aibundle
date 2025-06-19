@@ -10,3 +10,4 @@ references/mono-file-version/
 monolithich/
 *.log
 .specstory/ai_rules_backups/*
+test_results/*

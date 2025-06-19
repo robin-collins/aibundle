@@ -7,14 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Testing
+- **Added Comprehensive GitIgnore Testing Suite**: Implemented unit tests to validate and demonstrate the critical gitignore context handling bug described in `CRITICALBUG.md`. Tests include:
+  - `test_gitignore_context_issue_demonstration`: Documents current incorrect behavior
+  - `test_correct_gitignore_behavior_expectations`: Defines expected correct behavior (currently failing)
+  - `test_gitignore_cache_key_problem`: Demonstrates the cache key design flaw
+  - `test_file_contextual_gitignore_requirements`: Documents requirements for file-contextual gitignore processing
+  - Test infrastructure with nested `.gitignore` files to validate hierarchical ignore pattern handling (`src/fs/mod.rs`)
+
+### Security
+- **Fixed Symlink Loop Vulnerability**: Added symlink loop detection in `collect_folder_descendants` function to prevent infinite recursion and potential stack overflow attacks (`src/fs/mod.rs`).
+
+### Fixed
+- **CRITICAL: Fixed Incorrect GitIgnore Context Handling**: Resolved fundamental design flaw where gitignore rules were applied incorrectly due to improper cache key strategy. The previous implementation used only `base_dir` as cache key, causing all files to share the same gitignore matcher regardless of their location in the directory hierarchy. Files are now properly matched against their file-contextual gitignore rules:
+  - Implemented `get_cached_gitignore_matcher_for_context()` to build matchers specific to each file's directory context
+  - Updated `is_path_ignored_iterative()` and `is_path_ignored_iterative_cached()` to use file's parent directory as context
+  - Updated TUI ignore checking in `src/tui/state/app_state.rs` to use file-contextual matching
+  - Files now properly respect nested `.gitignore` files (e.g., `src/components/Button.tsx` is correctly ignored by `src/components/.gitignore`)
+  - Maintained backward compatibility through deprecated legacy function (`src/fs/mod.rs`)
+- **Fixed Race Condition in Selection Operations**: Implemented proper synchronization to prevent race conditions between async selection counting and user input that could cause inconsistent application state (`src/tui/state/selection.rs`, `src/tui/app.rs`).
+- **Fixed Incorrect Regex Pattern**: Corrected malformed regex pattern `"$.^"` to `"^$"` in ignore pattern caching to ensure proper fallback behavior (`src/fs/mod.rs:291`).
+- Derived `Default` trait for `Trie` struct in `src/tui/state/app_state.rs` and `SearchState` struct in `src/tui/state/search.rs` to resolve compiler errors when calling `Self::default()` in their `new()` methods.
+- Corrected test script `test_C2_select_all.sh` to accurately verify deselection state by excluding the status bar from checkbox checks.
+- **Fixed Duplicate Doc Alias Warning**: Removed duplicate `#[doc(alias = "search-state")]` attribute from `SearchState` struct in `src/tui/state/search.rs`.
+
+### Performance
+- **GitIgnore Caching Implementation**: Implemented caching for compiled gitignore matchers, reducing complexity from O(n×m) to O(1) for repeated path checks in the same directory. This provides significant performance improvements for large codebases with multiple .gitignore files (`src/fs/mod.rs`, `src/tui/state/app_state.rs`).
+
 ### Removed
 - Removed unused function `perform_search` from `src/tui/state/search.rs`.
 - Removed unused function `format_selected_items` from `src/tui/handlers/file_ops.rs`.
 - Removed unused method `set_message_duration` from `src/tui/views/message_view.rs`.
-
-### Fixed
-- Derived `Default` trait for `Trie` struct in `src/tui/state/app_state.rs` and `SearchState` struct in `src/tui/state/search.rs` to resolve compiler errors when calling `Self::default()` in their `new()` methods.
-- Corrected test script `test_C2_select_all.sh` to accurately verify deselection state by excluding the status bar from checkbox checks.
 
 ### Documentation
 - Comprehensive rewrite and standardization of all in-file Rust documentation for the following modules:
@@ -89,6 +112,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Background Operations**: Clipboard operations now run asynchronously to prevent UI blocking
 - **Caching Strategy**: Intelligent caching with TTL support reduces redundant file system operations
 
+### Testing
+- **Added Enhanced Gitignore Context Handling Tests**: Added comprehensive unit tests for file-contextual gitignore functionality:
+  - `test_get_cached_gitignore_matcher_for_context`: Direct testing of the new file-contextual gitignore function
+  - `test_gitignore_cache_per_directory`: Testing cache behavior for different directory contexts
+  - `test_gitignore_inheritance_validation`: Comprehensive validation of gitignore rule inheritance hierarchy
+- **Added Symlink Loop Detection Tests**: Implemented comprehensive symlink handling tests:
+  - `test_symlink_loop_detection_comprehensive`: Direct testing of symlink loop prevention
+  - `test_symlink_performance_stress`: Performance testing with many symlinks
+  - `test_broken_symlink_handling`: Testing graceful handling of broken symlinks
+- **Added Race Condition Prevention Tests**: Implemented unit tests for TUI race condition fixes (`src/tui/app.rs`):
+  - `test_app_event_variants`: Testing completeness of AppEvent enum
+  - `test_app_creation_with_event_channel`: Testing App creation with event channels
+  - `test_event_channel_non_blocking`: Testing non-blocking event handling
+  - `test_selection_operation_cancellation_pattern`: Testing race condition prevention patterns
+- **Added Additional Edge Case Tests**: Added tests for regex pattern fixes and gitignore cache management:
+  - `test_regex_pattern_fix`: Testing corrected regex patterns
+  - `test_gitignore_cache_management`: Testing gitignore cache clearing behavior
+
 ## [0.8.0] - 2025-06-03
 
 ### Performance
@@ -162,3 +203,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-platform clipboard support
 - File filtering and ignore patterns
 - Removed redundant `#[doc(alias = ...)]` attributes from `src/cli/mod.rs`, `src/utils/mod.rs`, and `src/tui/views/mod.rs` to resolve clippy errors about alias matching the item's name.
+### [Fixed]
+- Removed references to non-existent `perform_search` function from documentation in [`src/tui/state/search.rs`](src/tui/state/search.rs)
