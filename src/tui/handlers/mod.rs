@@ -2,19 +2,18 @@
 //!
 //! # TUI Handlers Module
 //!
-//! This is the root module for all TUI event and state handlers, including clipboard, file operations, keyboard, and search.
-//! It re-exports the main handler types for use throughout the TUI system.
+//! Root module for all TUI event and state handlers, including clipboard, file operations, keyboard, and search. Provides ergonomic re-exports for handler types used throughout the TUI system.
 //!
 //! ## Submodules
-//! - `clipboard`: Clipboard/copy handler.
-//! - `file_ops`: File and folder operations handler.
-//! - `keyboard`: Keyboard input handler.
-//! - `search`: Search input and filtering handler.
+//! - [`clipboard`]: Clipboard/copy handler.
+//! - [`file_ops`]: File and folder operations handler.
+//! - [`keyboard`]: Keyboard input handler.
+//! - [`search`]: Search input and filtering handler.
 //!
 //! ## Re-exports
 //! The most commonly used handler types are re-exported for ergonomic access.
 //!
-//! ## Examples
+//! # Examples
 //! ```rust
 //! use crate::tui::handlers::{ClipboardHandler, FileOpsHandler, KeyboardHandler, SearchHandler};
 //! let keyboard = KeyboardHandler::new();

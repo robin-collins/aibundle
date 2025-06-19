@@ -2,18 +2,33 @@
 //!
 //! # Main View
 //!
-//! This module defines the `MainView` component for rendering the main TUI layout.
-//! It manages the header, file list, status bar, help, message, and modal overlays.
+//! Provides the [`MainView`] component for rendering the main TUI layout, including header, file list, status bar, and overlays.
+//!
+//! ## Purpose
+//!
+//! - Render the primary TUI interface and manage all major UI components.
+//! - Handle overlays such as help and message modals.
+//!
+//! ## Organization
+//!
+//! - [`MainView`]: Main struct for layout and rendering.
+//! - `centered_rect`: Utility for modal positioning.
 //!
 //! ## Usage
-//! Use `MainView` to render the primary TUI interface, including all major UI components.
 //!
-//! ## Examples
 //! ```rust
 //! use crate::tui::views::MainView;
 //! let main_view = MainView::new();
 //! main_view.render(f, area, app_state, selection_state, search_state);
 //! ```
+//!
+//! # Doc Aliases
+//! - "main view"
+//! - "layout"
+//! - "tui root"
+#![doc(alias = "main view")]
+#![doc(alias = "layout")]
+#![doc(alias = "tui root")]
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -25,6 +40,21 @@ use crate::tui::state::{AppState, SearchState, SelectionState};
 use crate::tui::views::{HelpView, MessageView};
 
 /// Main view component for rendering the primary TUI layout and overlays.
+///
+/// # Fields
+///
+/// * `header_view` - Renders the header section.
+/// * `file_list` - Renders the file list section.
+/// * `status_bar` - Renders the status bar.
+/// * `help_view` - Renders the help overlay.
+/// * `message_view` - Renders the message overlay.
+///
+/// # Examples
+///
+/// ```rust
+/// use crate::tui::views::MainView;
+/// let main_view = MainView::new();
+/// ```
 pub struct MainView {
     header_view: HeaderView,
     file_list: FileList,
@@ -40,7 +70,18 @@ impl Default for MainView {
 }
 
 impl MainView {
-    /// Creates a new `MainView` with all subcomponents initialized.
+    /// Creates a new [`MainView`] with all subcomponents initialized.
+    ///
+    /// # Returns
+    ///
+    /// * [`MainView`] - A new main view instance.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crate::tui::views::MainView;
+    /// let main_view = MainView::new();
+    /// ```
     pub fn new() -> Self {
         Self {
             header_view: HeaderView::new(),
@@ -52,6 +93,25 @@ impl MainView {
     }
 
     /// Renders the main TUI layout, including header, file list, status bar, overlays, and modals.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - The TUI frame to render into.
+    /// * `area` - The area within which to render the main view.
+    /// * `app_state` - The current application state.
+    /// * `selection_state` - The current selection state (mutable).
+    /// * `search_state` - The current search state.
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// // Typically called within the TUI render loop
+    /// main_view.render(f, area, &app_state, &mut selection_state, &search_state);
+    /// ```
     pub fn render(
         &self,
         f: &mut Frame,
@@ -98,7 +158,25 @@ impl MainView {
     }
 }
 
-/// Helper function to create a centered rectangle for modal overlays
+/// Helper function to create a centered rectangle for modal overlays.
+///
+/// # Arguments
+///
+/// * `width` - The width of the modal in cells.
+/// * `height` - The height of the modal in cells.
+/// * `r` - The parent area rectangle.
+///
+/// # Returns
+///
+/// * `Rect` - The centered rectangle.
+///
+/// # Examples
+///
+/// ```rust
+/// let area = ratatui::layout::Rect::new(0, 0, 100, 40);
+/// let modal = crate::tui::views::main_view::centered_rect(60, 20, area);
+/// assert!(modal.width <= area.width && modal.height <= area.height);
+/// ```
 fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)

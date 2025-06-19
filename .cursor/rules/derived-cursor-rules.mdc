@@ -1,7 +1,6 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: AI rules derived by SpecStory from the project AI interaction history
+globs: *
 ---
 
 ## PROJECT OVERVIEW
@@ -169,6 +168,4 @@ alwaysApply: false
 - Unused `HashMap` import in `src/output/format.rs` and `PathBuf` import in `src/tui/components/file_list.rs` should be removed. (Added 2025-03-28)
 - Redundant field names in `src/main.rs` should be simplified. (Added 2025-03-28)
 - Missing field `selection_limit` in `src/main.rs` should be added to the `AppConfig` struct initialization. (Added 2025-03-28)
-- When using Tokio, the
-
-## WORKFLOW & RELEASE
+- Apply comprehensive Rust documentation best practices. (Added 2

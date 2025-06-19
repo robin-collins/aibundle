@@ -2,23 +2,25 @@
 //!
 //! # Output Module Root
 //!
-//! This module is the entry point for all output formatting logic, including XML, Markdown, JSON, and LLM formats.
-//! It re-exports the main formatting functions and types for use throughout the application.
+//! Entry point for all output formatting logic, including XML, Markdown, JSON, and LLM formats.
 //!
-//! ## Submodules
-//! - `format`: Core formatting utilities and helpers.
-//! - `json`: JSON output formatting.
-//! - `llm`: LLM (language model) output formatting.
-//! - `markdown`: Markdown output formatting.
-//! - `xml`: XML output formatting.
+//! ## Purpose
+//! - Aggregate and re-export output formatting functions and types for use throughout the application.
+//! - Provide a single interface for formatting selected items in various output formats.
 //!
-//! ## Re-exports
-//! The most commonly used formatting functions and types are re-exported for ergonomic access.
+//! ## Organization
+//! - [`format`]: Core formatting utilities and helpers.
+//! - [`json`]: JSON output formatting.
+//! - [`llm`]: LLM (language model) output formatting.
+//! - [`markdown`]: Markdown output formatting.
+//! - [`xml`]: XML output formatting.
 //!
-//! ## Examples
+//! ## Example
 //! ```rust
 //! use crate::output::format_selected_items;
-//! let (output, stats) = format_selected_items(&selected_items, &base_dir, &output_format, true, &ignore_config).unwrap();
+//! use std::collections::HashSet;
+//! use std::path::PathBuf;
+//! let (output, stats) = format_selected_items(&HashSet::new(), &PathBuf::from("."), &crate::models::OutputFormat::Xml, true, &crate::models::IgnoreConfig::default()).unwrap();
 //! println!("{}", output);
 //! ```
 pub mod format;
@@ -50,6 +52,19 @@ use std::path::PathBuf;
 ///
 /// # Returns
 /// * `io::Result<(String, CopyStats)>` - The formatted output and copy statistics.
+///
+/// # Errors
+///
+/// Returns an error if a file or directory cannot be read.
+///
+/// # Examples
+/// ```rust
+/// use crate::output::format_selected_items;
+/// use std::collections::HashSet;
+/// use std::path::PathBuf;
+/// let (output, stats) = format_selected_items(&HashSet::new(), &PathBuf::from("."), &crate::models::OutputFormat::Xml, true, &crate::models::IgnoreConfig::default()).unwrap();
+/// assert!(output.len() >= 0);
+/// ```
 #[allow(dead_code)]
 pub fn format_selected_items(
     selected_items: &HashSet<PathBuf>,

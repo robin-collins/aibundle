@@ -2,16 +2,21 @@
 //!
 //! # JSON Output Module
 //!
-//! This module provides functions for formatting selected files and directories as JSON output.
-//! It is used to generate JSON-formatted code/documentation bundles for export or clipboard.
+//! Provides functions for formatting selected files and directories as JSON output for code/documentation bundles.
 //!
-//! ## Usage
-//! Use `format_json_output` to convert a set of selected files and folders into a JSON string.
+//! ## Purpose
+//! - Generate JSON-formatted output for export or clipboard.
+//! - Used by output and clipboard logic.
 //!
-//! ## Examples
+//! ## Organization
+//! - [`format_json_output`]: Formats selected items as JSON.
+//!
+//! ## Example
 //! ```rust
 //! use crate::output::json::format_json_output;
-//! let (json, stats) = format_json_output(&selected, &current_dir, &ignore_config).unwrap();
+//! use std::collections::HashSet;
+//! use std::path::PathBuf;
+//! let (json, stats) = format_json_output(&HashSet::new(), &PathBuf::from("."), &crate::models::IgnoreConfig::default()).unwrap();
 //! assert!(json.starts_with("["));
 //! ```
 
@@ -29,16 +34,26 @@ use crate::output::format::{is_binary_file, process_directory};
 /// Each file is represented as a JSON object with its path and content. Directories are represented as nested objects.
 ///
 /// # Arguments
+///
 /// * `selected_items` - Set of selected file and directory paths.
 /// * `current_dir` - The base directory for relative path calculation.
 /// * `ignore_config` - Ignore configuration for filtering files.
 ///
 /// # Returns
+///
 /// * `io::Result<(String, CopyStats)>` - The JSON output and copy statistics.
+///
+/// # Errors
+///
+/// Returns an error if a file or directory cannot be read.
 ///
 /// # Examples
 /// ```rust
-/// // Used internally by clipboard and file export logic.
+/// use crate::output::json::format_json_output;
+/// use std::collections::HashSet;
+/// use std::path::PathBuf;
+/// let (json, stats) = format_json_output(&HashSet::new(), &PathBuf::from("."), &crate::models::IgnoreConfig::default()).unwrap();
+/// assert!(json.starts_with("["));
 /// ```
 pub fn format_json_output(
     selected_items: &HashSet<PathBuf>,

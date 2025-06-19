@@ -2,19 +2,34 @@
 //!
 //! # Message View
 //!
-//! This module defines the `MessageView` component for rendering temporary messages in the TUI.
-//! It displays info, success, warning, or error messages in a centered popup.
+//! Provides the [`MessageView`] component for rendering temporary messages in the TUI.
+//!
+//! ## Purpose
+//!
+//! - Display info, success, warning, or error messages in a centered popup overlay.
+//! - Provide user feedback and alerts in a non-intrusive manner.
+//!
+//! ## Organization
+//!
+//! - [`MessageView`]: Main struct for message rendering.
+//! - `centered_rect`: Utility for modal positioning.
 //!
 //! ## Usage
-//! Use `MessageView` to show temporary feedback or alerts to the user.
 //!
-//! ## Examples
 //! ```rust
 //! use crate::tui::views::MessageView;
 //! let mut message_view = MessageView::new();
 //! message_view.set_message_duration(std::time::Duration::from_secs(5));
 //! message_view.render(f, area, app_state);
 //! ```
+//!
+//! # Doc Aliases
+//! - "message"
+//! - "popup"
+//! - "alert"
+#![doc(alias = "message")]
+#![doc(alias = "popup")]
+#![doc(alias = "alert")]
 
 use crate::tui::state::{AppState, MessageType};
 use ratatui::{
@@ -27,8 +42,20 @@ use ratatui::{
 use std::time::{Duration, Instant};
 
 /// Message view component for rendering temporary messages in a centered popup.
+///
+/// # Fields
+///
+/// * `message_duration` - Duration to show messages for.
+///
+/// # Examples
+///
+/// ```rust
+/// use crate::tui::views::MessageView;
+/// let mut message_view = MessageView::new();
+/// message_view.set_message_duration(std::time::Duration::from_secs(5));
+/// ```
 pub struct MessageView {
-    // Duration to show messages for
+    /// Duration to show messages for.
     message_duration: Duration,
 }
 
@@ -39,7 +66,18 @@ impl Default for MessageView {
 }
 
 impl MessageView {
-    /// Creates a new `MessageView` with a default message duration.
+    /// Creates a new [`MessageView`] with a default message duration.
+    ///
+    /// # Returns
+    ///
+    /// * [`MessageView`] - A new message view instance.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crate::tui::views::MessageView;
+    /// let message_view = MessageView::new();
+    /// ```
     pub fn new() -> Self {
         Self {
             message_duration: Duration::from_secs(3),
@@ -47,6 +85,23 @@ impl MessageView {
     }
 
     /// Renders the message popup if a message is present and not expired.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - The TUI frame to render into.
+    /// * `area` - The area within which to render the message popup.
+    /// * `app_state` - The current application state.
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// // Typically called within the TUI render loop
+    /// message_view.render(f, area, &app_state);
+    /// ```
     pub fn render(&self, f: &mut Frame, area: Rect, app_state: &AppState) {
         // Only render if there's a message to show
         if let Some(message) = &app_state.message {
@@ -101,15 +156,27 @@ impl MessageView {
             f.render_widget(message_paragraph, message_area);
         }
     }
-
-    /// Sets the duration for which messages should be displayed.
-    #[allow(dead_code)]
-    pub fn set_message_duration(&mut self, duration: Duration) {
-        self.message_duration = duration;
-    }
 }
 
-/// Helper function to create a centered rectangle for the message
+/// Helper function to create a centered rectangle for the message popup.
+///
+/// # Arguments
+///
+/// * `percent_x` - Width as a percentage of the parent area (0-100).
+/// * `percent_y` - Height as a percentage of the parent area (0-100).
+/// * `r` - The parent area rectangle.
+///
+/// # Returns
+///
+/// * `Rect` - The centered rectangle.
+///
+/// # Examples
+///
+/// ```rust
+/// let area = ratatui::layout::Rect::new(0, 0, 100, 40);
+/// let popup = crate::tui::views::message_view::centered_rect(60, 15, area);
+/// assert!(popup.width <= area.width && popup.height <= area.height);
+/// ```
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)

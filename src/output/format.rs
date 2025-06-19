@@ -2,17 +2,25 @@
 //!
 //! # Output Format Utilities
 //!
-//! This module provides utilities for formatting files and directories as XML, Markdown, or JSON for output and clipboard operations.
-//! It includes helpers for binary detection, line numbering, and recursive directory processing.
+//! Utilities for formatting files and directories as XML, Markdown, or JSON for output and clipboard operations.
 //!
-//! ## Usage
-//! Use these functions to format selected files for output, clipboard, or export in various formats.
+//! ## Purpose
 //!
-//! ## Examples
+//! - Provide helpers for binary detection, line numbering, and recursive directory processing.
+//! - Used by output modules to render file/directory selections in various formats.
+//!
+//! ## Organization
+//! - [`is_binary_file`]: Detects binary files by extension or name.
+//! - [`format_file_content`]: Formats file content with optional line numbers.
+//! - [`process_directory`]: Recursively processes directories for output.
+//!
+//! ## Example
 //! ```rust
 //! use crate::output::format::{process_directory, format_file_content};
+//! use std::collections::HashSet;
+//! use std::path::PathBuf;
 //! let mut output = String::new();
-//! let stats = process_directory(&path, &mut output, &base_path, &selected_items, &output_format, show_line_numbers, &ignore_config).unwrap();
+//! let stats = process_directory(&PathBuf::from("src"), &mut output, &PathBuf::from("."), &HashSet::new(), &crate::models::OutputFormat::Xml, true, &crate::models::IgnoreConfig::default()).unwrap();
 //! println!("{}", output);
 //! ```
 
@@ -27,14 +35,17 @@ use crate::models::{CopyStats, IgnoreConfig, OutputFormat};
 /// Returns true if the given path is a binary file, based on extension or name.
 ///
 /// # Arguments
+///
 /// * `path` - The path to check.
 ///
 /// # Returns
+///
 /// * `bool` - True if the file is binary, false otherwise.
 ///
 /// # Examples
 /// ```rust
-/// assert!(!crate::output::format::is_binary_file(std::path::Path::new("main.rs")));
+/// use std::path::Path;
+/// assert!(!crate::output::format::is_binary_file(Path::new("main.rs")));
 /// ```
 pub fn is_binary_file(path: &Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -60,15 +71,18 @@ pub fn is_binary_file(path: &Path) -> bool {
 /// Formats file content with optional line numbers.
 ///
 /// # Arguments
+///
 /// * `content` - The file content as a string.
 /// * `show_line_numbers` - Whether to include line numbers.
 ///
 /// # Returns
+///
 /// * `String` - The formatted content.
 ///
 /// # Examples
 /// ```rust
 /// let formatted = crate::output::format::format_file_content("line1\nline2", true);
+/// assert!(formatted.contains("1 | line1"));
 /// ```
 pub fn format_file_content(content: &str, show_line_numbers: bool) -> String {
     let mut output = String::new();
@@ -90,6 +104,7 @@ pub fn format_file_content(content: &str, show_line_numbers: bool) -> String {
 /// Recursively processes a directory and adds its contents to the output in the specified format.
 ///
 /// # Arguments
+///
 /// * `path` - The directory to process.
 /// * `output` - Mutable string to write output to.
 /// * `base_path` - The base directory for relative paths.
@@ -99,12 +114,24 @@ pub fn format_file_content(content: &str, show_line_numbers: bool) -> String {
 /// * `ignore_config` - Ignore configuration.
 ///
 /// # Returns
+///
 /// * `io::Result<CopyStats>` - The number of files and folders processed.
+///
+/// # Panics
+///
+/// This function will panic if the file system is in an inconsistent state (e.g., permissions change during traversal).
+///
+/// # Errors
+///
+/// Returns an error if a directory entry cannot be read.
 ///
 /// # Examples
 /// ```rust
+/// use std::collections::HashSet;
+/// use std::path::PathBuf;
 /// let mut output = String::new();
-/// let stats = crate::output::format::process_directory(&path, &mut output, &base_path, &selected_items, &output_format, true, &ignore_config).unwrap();
+/// let stats = crate::output::format::process_directory(&PathBuf::from("src"), &mut output, &PathBuf::from("."), &HashSet::new(), &crate::models::OutputFormat::Xml, true, &crate::models::IgnoreConfig::default()).unwrap();
+/// assert!(stats.files >= 0);
 /// ```
 pub fn process_directory(
     path: &PathBuf,

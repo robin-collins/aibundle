@@ -2,13 +2,16 @@
 //!
 //! # Search State Module
 //!
-//! This module defines the search state and logic for filtering and selecting items in the TUI.
-//! It provides utilities for search query management, selection toggling, and matcher creation.
+//! Defines the search state and logic for filtering and selecting items in the TUI. Provides utilities for search query management, selection toggling, and matcher creation. Enables interactive search and selection workflows.
+//!
+//! ## Organization
+//! - [`SearchState`]: State struct for search queries and selection.
+//! - [`perform_search`]: Utility for performing search on item lists.
 //!
 //! ## Usage
-//! Use `SearchState` to manage search queries and selection state during interactive search.
+//! Use [`SearchState`] to manage search queries and selection state during interactive search.
 //!
-//! ## Examples
+//! # Examples
 //! ```rust
 //! use crate::tui::state::search::{SearchState, perform_search};
 //! let mut state = SearchState::new();
@@ -21,6 +24,19 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// Represents the state of the search UI, including query and selection.
+///
+/// # Fields
+/// * `search_query` - The current search query string.
+/// * `is_searching` - Whether search mode is active.
+/// * `selected_items` - Set of selected items in the search results.
+///
+/// # Examples
+/// ```rust
+/// use crate::tui::state::search::SearchState;
+/// let mut state = SearchState::new();
+/// state.search_query = "foo".to_string();
+/// ```
+#[doc(alias = "search-state")]
 #[derive(Default)]
 pub struct SearchState {
     pub search_query: String,
@@ -152,47 +168,6 @@ impl SearchState {
     pub fn get_selected_items(&self) -> &HashSet<PathBuf> {
         &self.selected_items
     }
-}
-
-/// Performs a search on the given items, returning indices of matches.
-///
-/// # Arguments
-/// * `items` - The list of items to search.
-/// * `query` - The search query string.
-///
-/// # Returns
-/// * `Vec<usize>` - Indices of items matching the query.
-///
-/// # Examples
-/// ```rust
-/// let indices = crate::tui::state::search::perform_search(&items, "main");
-/// assert!(indices.len() <= items.len());
-/// ```
-#[allow(dead_code)]
-pub fn perform_search(items: &[PathBuf], query: &str) -> Vec<usize> {
-    if query.is_empty() {
-        // If query is empty, return all indices
-        return (0..items.len()).collect();
-    }
-
-    let lower_query = query.to_lowercase();
-    let mut filtered_indices = Vec::new();
-
-    for (index, item_path_buf) in items.iter().enumerate() {
-        // Explicitly borrow as Path to use its methods and satisfy the linter
-        let item_path: &Path = item_path_buf.as_path();
-
-        // Check filename containment (matching monolithic logic)
-        if let Some(filename) = item_path.file_name() {
-            if let Some(filename_str) = filename.to_str() {
-                if filename_str.to_lowercase().contains(&lower_query) {
-                    filtered_indices.push(index);
-                }
-            }
-        }
-    }
-
-    filtered_indices
 }
 
 // TODO: Add support for regex-based search queries.

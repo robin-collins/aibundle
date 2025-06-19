@@ -2,13 +2,16 @@
 //!
 //! # Keyboard Handler
 //!
-//! This module defines the `KeyboardHandler` for managing keyboard input and keybindings in the TUI.
-//! It handles navigation, selection, search, clipboard, and command execution.
+//! Handles keyboard input and keybindings for the TUI, including navigation, selection, search, clipboard, and command execution. This module centralizes all keyboard event processing for the TUI application.
+//!
+//! ## Organization
+//! - `KeyboardHandler`: Main handler struct for keyboard input.
+//! - Key event dispatch logic for all TUI actions.
 //!
 //! ## Usage
-//! Use `KeyboardHandler` to process key events and update application state accordingly.
+//! Use [`KeyboardHandler`] to process key events and update application state accordingly.
 //!
-//! ## Examples
+//! # Examples
 //! ```rust
 //! use crate::tui::handlers::KeyboardHandler;
 //! KeyboardHandler::handle_key(key_event, &mut app_state, &mut selection_state, &mut search_state).unwrap();
@@ -21,6 +24,16 @@ use crate::tui::handlers::{FileOpsHandler, SearchHandler};
 use crate::tui::state::{AppState, SearchState, SelectionState};
 
 /// Handler for keyboard input and keybindings in the TUI.
+///
+/// # Purpose
+/// Provides methods to process keyboard events, dispatching actions to file, search, and clipboard handlers as appropriate.
+///
+/// # Examples
+/// ```rust
+/// use crate::tui::handlers::KeyboardHandler;
+/// KeyboardHandler::handle_key(key_event, &mut app_state, &mut selection_state, &mut search_state).unwrap();
+/// ```
+#[doc(alias = "keyboard")]
 pub struct KeyboardHandler;
 
 impl Default for KeyboardHandler {
@@ -31,11 +44,42 @@ impl Default for KeyboardHandler {
 
 impl KeyboardHandler {
     /// Creates a new `KeyboardHandler` instance.
+    ///
+    /// # Returns
+    /// * `KeyboardHandler` - A new handler instance.
+    ///
+    /// # Examples
+    /// ```rust
+    /// let handler = crate::tui::handlers::KeyboardHandler::new();
+    /// ```
+    #[doc(alias = "keyboard-new")]
     pub fn new() -> Self {
         Self
     }
 
     /// Handles a key event, updating application state and triggering actions.
+    ///
+    /// # Arguments
+    /// * `key_event` - The key event to process.
+    /// * `app_state` - Mutable reference to [`AppState`].
+    /// * `selection_state` - Mutable reference to [`SelectionState`].
+    /// * `search_state` - Mutable reference to [`SearchState`].
+    ///
+    /// # Returns
+    /// * `Ok(())` on success.
+    /// * `Err(io::Error)` if an action fails.
+    ///
+    /// # Errors
+    /// Returns an error if any dispatched handler returns an error.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crossterm::event::KeyEvent;
+    /// use crate::tui::handlers::KeyboardHandler;
+    /// let key_event = KeyEvent::from(crossterm::event::KeyCode::Char('j'));
+    /// KeyboardHandler::handle_key(key_event, &mut app_state, &mut selection_state, &mut search_state).unwrap();
+    /// ```
+    #[doc(alias = "keyboard-handle")]
     pub fn handle_key(
         key_event: KeyEvent,
         app_state: &mut AppState,

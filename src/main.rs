@@ -1,7 +1,20 @@
 //!
-//! # AIBundle Main Entry Point
+//! # AIBundle Application
 //!
-//! This is the main entry point for the AIBundle application. It parses CLI arguments, loads configuration, and launches either the CLI or TUI mode.
+//! AIBundle is a modular code analysis and selection tool for Rust projects, supporting both CLI and TUI modes.
+//!
+//! ## Purpose
+//! This crate provides a unified interface for analyzing, selecting, and exporting code bundles from large codebases. It is designed for developers, researchers, and automation tools requiring precise code extraction, dependency analysis, and project structure visualization.
+//!
+//! ## Organization
+//! - **cli**: Command-line interface logic and argument parsing
+//! - **clipboard**: Clipboard integration for copying results
+//! - **config**: Configuration loading and management
+//! - **fs**: Filesystem traversal and filtering
+//! - **models**: Core data structures and configuration types
+//! - **output**: Output formatting and serialization
+//! - **tui**: Terminal user interface components
+//! - **utils**: Utility functions and helpers
 //!
 //! ## Usage
 //! Run the binary with CLI arguments for batch operations, or without arguments for the interactive TUI.
@@ -33,7 +46,32 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use crate::tui::app::{AppRunResult};
 
-/// Main entry point. Parses CLI args, loads config, and launches CLI or TUI mode.
+/// Main entry point for the AIBundle application.
+///
+/// Parses CLI arguments, loads configuration, and launches either the CLI or TUI mode.
+///
+/// # Arguments
+///
+/// * None (arguments are parsed from the command line)
+///
+/// # Returns
+///
+/// * `io::Result<()>` - Returns `Ok(())` on success, or an error if initialization or execution fails.
+///
+/// # Panics
+///
+/// * This function does not explicitly panic, but may propagate panics from dependencies.
+///
+/// # Errors
+///
+/// * Returns an `io::Error` if configuration loading, file operations, or terminal setup fails.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Run from the command line:
+/// // $ aibundle --files "src/**/*.rs" --format json --output-file out.json
+/// ```
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let cli_args = CliOptions::parse();

@@ -2,19 +2,20 @@
 //!
 //! # TUI Components Module
 //!
-//! This is the root module for all TUI UI components, including file list, header, modal dialogs, and status bar.
-//! It re-exports the main component types for use throughout the TUI system.
+//! Provides the root module for all TUI UI components, including file list, header, modal dialogs, and status bar.
+//!
+//! ## Purpose
+//!
+//! - Organize and re-export all reusable UI components for the TUI system.
+//! - Serve as the entry point for component imports in the TUI.
 //!
 //! ## Submodules
-//! - `file_list`: File/folder list component.
-//! - `header`: Header bar component.
-//! - `modal`: Modal dialog component.
-//! - `status_bar`: Status bar component.
+//! - [`file_list`]: File/folder list component.
+//! - [`header`]: Header bar component.
+//! - [`modal`]: Modal dialog component.
+//! - [`status_bar`]: Status bar component.
 //!
-//! ## Re-exports
-//! The most commonly used component types are re-exported for ergonomic access.
-//!
-//! ## Examples
+//! ## Example
 //! ```rust
 //! use crate::tui::components::{FileList, HeaderView, Modal, StatusBar};
 //! let file_list = FileList::new();
@@ -22,6 +23,13 @@
 //! let modal = Modal::new("Message".to_string(), 40, 10);
 //! let status_bar = StatusBar::new();
 //! ```
+//!
+//! # Doc Aliases
+//! - "tui-components"
+//! - "ui-widgets"
+//!
+#![doc(alias = "tui-components")]
+#![doc(alias = "ui-widgets")]
 
 pub mod file_list;
 pub mod header;

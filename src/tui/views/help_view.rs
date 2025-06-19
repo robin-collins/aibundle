@@ -2,18 +2,33 @@
 //!
 //! # Help View
 //!
-//! This module defines the `HelpView` component for rendering the help popup in the TUI.
-//! It displays keyboard shortcuts, navigation, and usage instructions.
+//! Provides the [`HelpView`] component for rendering the help popup/modal in the TUI.
+//!
+//! ## Purpose
+//!
+//! - Display keyboard shortcuts, navigation, and usage instructions in a modal overlay.
+//! - Enhance user experience by providing accessible, context-aware help.
+//!
+//! ## Organization
+//!
+//! - [`HelpView`]: Main struct for rendering help content.
+//! - `centered_rect`: Utility for modal positioning.
 //!
 //! ## Usage
-//! Use `HelpView` to show a modal with help and keybindings in the TUI.
 //!
-//! ## Examples
 //! ```rust
 //! use crate::tui::views::HelpView;
 //! let help_view = HelpView::new();
 //! help_view.render(f, area, app_state);
 //! ```
+//!
+//! # Doc Aliases
+//! - "help"
+//! - "modal"
+//! - "keyboard shortcuts"
+#![doc(alias = "help")]
+#![doc(alias = "modal")]
+#![doc(alias = "keyboard shortcuts")]
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Margin, Rect},
@@ -24,6 +39,17 @@ use ratatui::{
 };
 
 /// Help view component for rendering the help popup/modal in the TUI.
+///
+/// Displays a modal overlay with keyboard shortcuts, navigation, and usage instructions.
+///
+/// # Examples
+///
+/// ```rust
+/// use crate::tui::views::HelpView;
+/// let help_view = HelpView::new();
+/// help_view.render(f, area, app_state);
+/// ```
+#[derive(Debug, Clone, Copy)]
 pub struct HelpView;
 
 impl Default for HelpView {
@@ -33,12 +59,40 @@ impl Default for HelpView {
 }
 
 impl HelpView {
-    /// Creates a new `HelpView` component.
+    /// Creates a new [`HelpView`] component.
+    ///
+    /// # Returns
+    ///
+    /// * [`HelpView`] - A new help view instance.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crate::tui::views::HelpView;
+    /// let help_view = HelpView::new();
+    /// ```
     pub fn new() -> Self {
         Self
     }
 
     /// Renders the help popup/modal with keyboard shortcuts and usage info.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - The TUI frame to render into.
+    /// * `area` - The area within which to render the help modal.
+    /// * `_app_state` - The current application state (used for context).
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// // Typically called within the TUI render loop
+    /// help_view.render(f, area, &app_state);
+    /// ```
     pub fn render(&self, f: &mut Frame, area: Rect, _app_state: &crate::tui::state::AppState) {
         // Create a centered area for the help content
         let help_area = centered_rect(85, 95, area);
@@ -283,7 +337,25 @@ impl HelpView {
     }
 }
 
-/// Helper function to create a centered rectangle for the help view
+/// Helper function to create a centered rectangle for the help view.
+///
+/// # Arguments
+///
+/// * `percent_x` - Width as a percentage of the parent area (0-100).
+/// * `percent_y` - Height as a percentage of the parent area (0-100).
+/// * `r` - The parent area rectangle.
+///
+/// # Returns
+///
+/// * `Rect` - The centered rectangle.
+///
+/// # Examples
+///
+/// ```rust
+/// let area = ratatui::layout::Rect::new(0, 0, 100, 40);
+/// let popup = crate::tui::views::help_view::centered_rect(80, 80, area);
+/// assert!(popup.width <= area.width && popup.height <= area.height);
+/// ```
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)

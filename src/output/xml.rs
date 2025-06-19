@@ -2,16 +2,21 @@
 //!
 //! # XML Output Module
 //!
-//! This module provides functions for formatting selected files and directories as XML output.
-//! It is used to generate XML-formatted code/documentation bundles for export or clipboard.
+//! Provides functions for formatting selected files and directories as XML output for code/documentation bundles.
 //!
-//! ## Usage
-//! Use `format_xml_output` to convert a set of selected files and folders into an XML string.
+//! ## Purpose
+//! - Generate XML-formatted output for export or clipboard.
+//! - Used by output and clipboard logic.
 //!
-//! ## Examples
+//! ## Organization
+//! - [`format_xml_output`]: Formats selected items as XML.
+//!
+//! ## Example
 //! ```rust
 //! use crate::output::xml::format_xml_output;
-//! let (xml, stats) = format_xml_output(&selected, &current_dir, true, &ignore_config).unwrap();
+//! use std::collections::HashSet;
+//! use std::path::PathBuf;
+//! let (xml, stats) = format_xml_output(&HashSet::new(), &PathBuf::from("."), true, &crate::models::IgnoreConfig::default()).unwrap();
 //! assert!(xml.contains("<file name="));
 //! ```
 
@@ -29,17 +34,27 @@ use crate::output::format::{format_file_content, is_binary_file, process_directo
 /// Each file is represented as a <file> element with its path as an attribute. Directories are represented as <folder> elements.
 ///
 /// # Arguments
+///
 /// * `selected_items` - Set of selected file and directory paths.
 /// * `current_dir` - The base directory for relative path calculation.
 /// * `show_line_numbers` - Whether to include line numbers in file contents.
 /// * `ignore_config` - Ignore configuration for filtering files.
 ///
 /// # Returns
+///
 /// * `io::Result<(String, CopyStats)>` - The XML output and copy statistics.
+///
+/// # Errors
+///
+/// Returns an error if a file or directory cannot be read.
 ///
 /// # Examples
 /// ```rust
-/// // Used internally by clipboard and file export logic.
+/// use crate::output::xml::format_xml_output;
+/// use std::collections::HashSet;
+/// use std::path::PathBuf;
+/// let (xml, stats) = format_xml_output(&HashSet::new(), &PathBuf::from("."), true, &crate::models::IgnoreConfig::default()).unwrap();
+/// assert!(xml.contains("<file name="));
 /// ```
 pub fn format_xml_output(
     selected_items: &HashSet<PathBuf>,

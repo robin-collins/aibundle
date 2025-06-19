@@ -1,20 +1,31 @@
 // src/config/mod.rs
 //!
-//! # Configuration Module
+//! # Configuration Management
 //!
 //! This module provides functions for loading, saving, and locating the application's configuration file.
-//! It supports TOML-based config files for both CLI and TUI modes.
+//! It supports TOML-based config files for both CLI and TUI modes, and ensures robust serialization and deserialization.
 //!
-//! ## Usage
-//! Use these functions to read and write user configuration, and to determine the config file path.
+//! ## Organization
+//! - Config file path resolution
+//! - Async config loading
+//! - Synchronous config saving
 //!
-//! ## Examples
+//! ## Example
 //! ```rust
-//! use crate::config::{load_config, save_config, config_file_path};
-//! let config = load_config().unwrap();
+//! use aibundle_modular::config::{load_config, save_config, config_file_path};
+//! # tokio_test::block_on(async {
+//! let config = load_config().await.unwrap();
 //! let path = config_file_path().unwrap();
-//! save_config(&config.cli.unwrap(), path.to_str().unwrap()).unwrap();
+//! save_config(&config.cli.unwrap(), &path).unwrap();
+//! # });
 //! ```
+//!
+//! # Doc Aliases
+//! - "configuration"
+//! - "settings"
+//!
+#![doc(alias = "configuration")]
+#![doc(alias = "settings")]
 
 use crate::models::app_config::FullConfig;
 use crate::models::AppConfig;

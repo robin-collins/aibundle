@@ -1,26 +1,39 @@
 // src/tui/mod.rs
 //!
-//! # TUI Module Root
+//! # Terminal User Interface (TUI) System
 //!
-//! This module is the entry point for the TUI system, organizing all submodules and re-exports for the application UI.
-//! It provides access to components, handlers, state, and views, and re-exports the main `App` type for launching the TUI.
+//! Entry point for the TUI system, organizing all submodules and re-exports for the application UI.
 //!
-//! ## Submodules
-//! - `components`: UI widgets and reusable components.
-//! - `handlers`: Event and input handlers.
-//! - `state`: Application and UI state management.
-//! - `views`: Layouts and rendering logic.
+//! ## Purpose
 //!
-//! ## Re-exports
-//! - `App`: Main TUI application struct.
-//! - `AppResult`: Internal result type for TUI operations.
+//! - Provide access to all TUI components, handlers, state, and views.
+//! - Re-export the main [`App`] type for launching the TUI.
+//! - Serve as the root for TUI-related documentation and discoverability.
 //!
-//! ## Examples
+//! ## Organization
+//! - [`components`]: UI widgets and reusable components.
+//! - [`handlers`]: Event and input handlers.
+//! - [`state`]: Application and UI state management.
+//! - [`views`]: Layouts and rendering logic.
+//!
+//! ## Example
 //! ```rust
-//! use crate::tui::App;
+//! use aibundle_modular::tui::App;
+//! # use aibundle_modular::models::{AppConfig, IgnoreConfig};
+//! # use std::path::PathBuf;
+//! let config = AppConfig::default();
+//! let start_dir = PathBuf::from(".");
+//! let ignore_config = IgnoreConfig::default();
 //! let mut app = App::new(config, start_dir, ignore_config).unwrap();
 //! app.run().unwrap();
 //! ```
+//!
+//! # Doc Aliases
+//! - "terminal-ui"
+//! - "user-interface"
+//!
+#![doc(alias = "terminal-ui")]
+#![doc(alias = "user-interface")]
 pub mod app;
 pub mod components;
 pub mod handlers;

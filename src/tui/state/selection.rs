@@ -2,13 +2,15 @@
 //!
 //! # Selection State Module
 //!
-//! This module defines the selection state and logic for managing file/folder selection in the TUI.
-//! It provides utilities for toggling selection, multi-select, and folder selection logic.
+//! Defines the selection state and logic for managing file/folder selection in the TUI. Provides utilities for toggling selection, multi-select, and folder selection logic. Enables robust selection workflows for file operations.
+//!
+//! ## Organization
+//! - [`SelectionState`]: State struct for selection and UI list state.
 //!
 //! ## Usage
-//! Use `SelectionState` to manage selection state and implement selection-related UI actions.
+//! Use [`SelectionState`] to manage selection state and implement selection-related UI actions.
 //!
-//! ## Examples
+//! # Examples
 //! ```rust
 //! use crate::tui::state::selection::SelectionState;
 //! let mut sel = SelectionState::new();
@@ -26,6 +28,18 @@ use crate::tui::state::app_state::{AppState, MessageType};
 use crate::tui::app::AppEvent;
 
 /// Represents the selection state for the file list, including UI and local selection.
+///
+/// # Fields
+/// * `list_state` - The list selection state for the UI.
+/// * `local_selected` - Set of locally selected paths.
+///
+/// # Examples
+/// ```rust
+/// use crate::tui::state::selection::SelectionState;
+/// let mut sel = SelectionState::new();
+/// sel.move_selection(1, 10);
+/// ```
+#[doc(alias = "selection-state")]
 pub struct SelectionState {
     pub list_state: ratatui::widgets::ListState,
     // Tracking selected paths in a HashSet for efficient lookups

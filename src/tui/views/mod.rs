@@ -3,22 +3,29 @@
 //!
 //! # TUI Views Module
 //!
-//! This is the root module for all TUI view components, including help, main, and message views.
-//! It re-exports the main view types for use throughout the TUI system.
+//! Root module for all TUI view components, including help, main, and message views.
+//!
+//! ## Purpose
+//!
+//! - Organize and re-export all TUI view components for ergonomic access.
+//! - Provide a single entry point for help, main, and message overlays.
 //!
 //! ## Submodules
-//! - `help_view`: Help popup/modal view.
-//! - `main_view`: Main TUI layout view.
-//! - `message_view`: Temporary message popup view.
 //!
-//! ## Re-exports
-//! The most commonly used view types are re-exported for ergonomic access.
+//! - [`help_view`]: Help popup/modal view.
+//! - [`main_view`]: Main TUI layout view.
+//! - [`message_view`]: Temporary message popup view.
 //!
-//! ## Examples
+//! ## Usage
+//!
 //! ```rust
 //! use crate::tui::views::{HelpView, MainView, MessageView};
 //! let main_view = MainView::new();
 //! ```
+//!
+//! # Doc Aliases
+//! - "views"
+//! - "tui views"
 
 mod help_view;
 mod main_view;
