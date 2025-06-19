@@ -1,13 +1,17 @@
 //!
 //! # Application State Module
 //!
-//! This module defines the main application state (`AppState`) and related types for the TUI system.
-//! It manages file system state, configuration, UI state, selection, search, and modal/message handling.
+//! Defines the main application state (`AppState`) and related types for the TUI system. Manages file system state, configuration, UI state, selection, search, and modal/message handling. Provides a central data structure for all TUI operations.
+//!
+//! ## Organization
+//! - [`AppState`]: Main application state struct.
+//! - [`Trie`]: Trie data structure for efficient path storage.
+//! - [`MessageType`], [`AppMessage`]: User feedback and modal dialog types.
 //!
 //! ## Usage
-//! Use `AppState` to track and mutate the state of the TUI application, including file navigation, selection, and clipboard operations.
+//! Use [`AppState`] to track and mutate the state of the TUI application, including file navigation, selection, and clipboard operations.
 //!
-//! ## Examples
+//! # Examples
 //! ```rust
 //! use crate::tui::state::AppState;
 //! let mut state = AppState::default();
@@ -34,8 +38,20 @@ struct TrieNode {
     is_end: bool,
 }
 
-/// Trie data structure for storing file paths
-#[derive(Default, Debug, Clone)]
+/// Trie data structure for storing file paths efficiently.
+///
+/// # Fields
+/// * `root` - The root node of the trie.
+///
+/// # Examples
+/// ```rust
+/// use crate::tui::state::Trie;
+/// let mut trie = Trie::new();
+/// trie.insert(std::path::Path::new("foo/bar.txt"));
+/// assert_eq!(trie.len(), 1);
+/// ```
+#[doc(alias = "trie")]
+#[derive(Default)]
 pub struct Trie {
     root: TrieNode,
 }
@@ -146,28 +162,39 @@ impl AppMessage {
 /// # Fields
 /// * `current_dir` - The current working directory.
 /// * `initial_dir` - The initial directory the application started in.
-/// * `items` - List of all items in the current directory.
-/// * `list_state` - List selection state for the file list.
+/// * `items` - Trie of all items in the current directory.
+/// * `filtered_items` - List of filtered items for display.
 /// * `selected_items` - Set of selected file/folder paths.
 /// * `expanded_folders` - Set of expanded folder paths.
-/// * `config` - Application configuration.
-/// * `ignore_config` - Ignore configuration for file filtering.
+/// * `list_state` - List selection state for the file list.
+/// * `search_query` - Current search query string.
+/// * `is_searching` - Whether search mode is active.
 /// * `output_format` - Current output format.
 /// * `show_line_numbers` - Whether to show line numbers in output.
-/// * `selection_limit` - Maximum number of items that can be selected.
 /// * `recursive` - Whether recursive traversal is enabled.
+/// * `ignore_config` - Ignore configuration for file filtering.
+/// * `selection_limit` - Maximum number of items that can be selected.
 /// * `quit` - Whether the application should quit.
-/// * `is_counting` - Whether a selection count operation is in progress.
-/// * `modal` - Current modal dialog, if any.
-/// * `show_help` - Whether the help view is active.
-/// * `show_message` - Whether the message view is active.
-/// * `counting_path` - Path being counted for selection.
+/// * `message` - Current message to display to the user.
+/// * `modal` - Optional modal dialog.
+/// * `last_copy_stats` - Statistics from the last copy operation.
+/// * `is_counting` - Whether a counting operation is in progress.
+/// * `counting_path` - Path being counted (for progress display).
 /// * `file_tree` - File tree structure for LLM output.
+/// * `optimistically_added_folder` - Folder optimistically added during selection.
+/// * `optimistically_added_children` - Children optimistically added during folder selection.
 /// * `count_abort_sender` - Sender for aborting a count operation.
 /// * `tx` - Sender for AppEvents.
 /// * `selection_is_over_limit` - Whether the selection is over the limit.
-/// * `optimistically_added_folder` - Stores the path of a folder optimistically added during selection pending count.
-/// * `optimistically_added_children` - Stores paths of children optimistically added during folder selection.
+/// * `pending_save_config_path` - Pending save operation config path.
+///
+/// # Examples
+/// ```rust
+/// use crate::tui::state::AppState;
+/// let mut state = AppState::default();
+/// state.load_items().unwrap();
+/// ```
+#[doc(alias = "app-state")]
 pub struct AppState {
     /// Current directory path.
     pub current_dir: PathBuf,

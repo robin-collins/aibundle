@@ -1,21 +1,34 @@
 // src/utils/mod.rs
 //!
-//! # Utilities Module
+//! # Utility Functions Module
 //!
-//! This module provides utility functions for UI layout and formatting, including:
+//! Provides utility functions for UI layout, formatting, and debugging in the TUI application.
+//!
+//! ## Purpose
+//!
 //! - Centering rectangles for popups and modals in the TUI.
 //! - Formatting file sizes as human-readable strings.
+//! - Logging and debug helpers for selection limit issues.
+//!
+//! ## Organization
+//!
+//! - `centered_rect`: Center a rectangle within a parent area.
+//! - `human_readable_size`: Format file sizes for display.
+//! - `log_event`: (No-op) Logging utility.
+//! - `write_selection_limit_debug_log`: Write debug logs for selection limit issues.
 //!
 //! ## Usage
-//! These functions are used throughout the TUI and CLI for layout and display purposes.
 //!
-//! ## Examples
 //! ```rust
-//! use crate::utils::{centered_rect, human_readable_size};
+//! use aibundle_modular::utils::{centered_rect, human_readable_size};
 //! let rect = ratatui::layout::Rect::new(0, 0, 100, 40);
 //! let popup = centered_rect(50, 20, rect);
 //! assert_eq!(human_readable_size(2048), "2.00 KB");
 //! ```
+//!
+//! # Doc Aliases
+//! - "utils"
+//! - "utility functions"
 
 use chrono::Local;
 use ratatui::layout::Rect;

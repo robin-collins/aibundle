@@ -1,20 +1,35 @@
 // src/fs/mod.rs
 //!
-//! # File System Utilities Module
+//! # File System Utilities
 //!
-//! This module provides file system utilities for directory traversal, ignore logic, file listing, and binary detection.
-//! It is used throughout the application for loading, filtering, and analyzing files and directories.
+//! This module provides robust file system utilities for directory traversal, ignore logic, file listing, binary detection, and path normalization.
+//! It is used throughout the application for loading, filtering, and analyzing files and directories, and for enforcing ignore rules and selection limits.
 //!
-//! ## Usage
-//! Use these functions for recursive file listing, ignore pattern handling, and file type checks.
+//! ## Organization
+//! - Ignore logic: `.gitignore`, default ignores, and custom patterns
+//! - File and directory listing (sync and async)
+//! - Binary file detection (extension and magic number)
+//! - Path normalization and utility helpers
 //!
-//! ## Examples
+//! ## Example
 //! ```rust
-//! use crate::fs::{list_files, is_binary_file};
-//! let files = list_files(&std::path::PathBuf::from("./src"));
+//! use aibundle_modular::fs::{list_files, is_binary_file, normalize_path};
+//! let files = list_files(std::path::Path::new("./src"));
 //! assert!(!files.is_empty());
 //! assert!(!is_binary_file(std::path::Path::new("main.rs")));
+//! assert_eq!(normalize_path("foo\\bar"), "foo/bar");
 //! ```
+//!
+//! # Doc Aliases
+//! - "filesystem"
+//! - "ignore"
+//! - "binary-detection"
+//! - "directory-traversal"
+//!
+#![doc(alias = "filesystem")]
+#![doc(alias = "ignore")]
+#![doc(alias = "binary-detection")]
+#![doc(alias = "directory-traversal")]
 
 use crate::models::{constants, IgnoreConfig};
 use crate::tui::state::AppState;
@@ -273,7 +288,7 @@ pub fn is_path_ignored_iterative_cached(
     // Check extra ignore patterns with cached regex compilation
     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
         // Create a fallback regex outside the loop to avoid repeated construction
-        let fallback_regex = regex::Regex::new("$.^").unwrap(); // Never matches if invalid
+        let fallback_regex = regex::Regex::new("^$").unwrap(); // Never matches if invalid
 
         for pattern in &ignore_config.extra_ignore_patterns {
             if let Ok(mut cache) = IGNORE_PATTERN_CACHE.lock() {
@@ -706,6 +721,8 @@ pub async fn collect_all_subdirs_async(
 
 /// Recursively collects all non-ignored descendant files and directories of a given folder path.
 /// Includes the directories themselves in the output set.
+/// 
+/// This function includes symlink loop detection to prevent infinite recursion.
 ///
 /// # Arguments
 /// * `folder_path` - The path to the folder to scan.
@@ -721,8 +738,36 @@ pub fn collect_folder_descendants(
     ignore_config: &IgnoreConfig,
     descendants_set: &mut HashSet<PathBuf>,
 ) -> io::Result<()> {
+    collect_folder_descendants_with_visited(
+        folder_path,
+        gitignore_base_dir,
+        ignore_config,
+        descendants_set,
+        &mut HashSet::new(),
+    )
+}
+
+/// Internal implementation of collect_folder_descendants with symlink loop detection.
+fn collect_folder_descendants_with_visited(
+    folder_path: &Path,
+    gitignore_base_dir: &PathBuf,
+    ignore_config: &IgnoreConfig,
+    descendants_set: &mut HashSet<PathBuf>,
+    visited: &mut HashSet<PathBuf>,
+) -> io::Result<()> {
     if !folder_path.is_dir() {
         return Ok(()); // Nothing to collect if it's not a directory
+    }
+
+    // Symlink loop detection
+    let canonical = match try_canonicalize(folder_path) {
+        Ok(c) => c,
+        Err(_e) => return Ok(()), // Permission denied or error, skip
+    };
+
+    if !visited.insert(canonical.clone()) {
+        // Symlink loop detected, skip this directory
+        return Ok(());
     }
 
     match fs::read_dir(folder_path) {
@@ -742,7 +787,7 @@ pub fn collect_folder_descendants(
 
                         if path.is_dir() {
                             // Recursively collect descendants of this subdirectory
-                            collect_folder_descendants(&path, gitignore_base_dir, ignore_config, descendants_set)?;
+                            collect_folder_descendants_with_visited(&path, gitignore_base_dir, ignore_config, descendants_set, visited)?;
                         }
                     }
                     Err(_e) => {

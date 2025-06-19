@@ -13,11 +13,11 @@
 //! - Default ignored directories
 //! - Language name mappings for file extensions
 //!
-//! ## Usage
-//! All constants and mappings should be accessed via this module. Do not redefine icons, ignored directories, or language mappings elsewhere in the codebase.
+//! ## Purpose
+//! - Provide a single source of truth for all constants used throughout the application.
+//! - Ensure consistency for icons, ignored directories, and language mappings.
 //!
-//! ## Examples
-//!
+//! ## Example
 //! ```rust
 //! use crate::models::constants::{ICONS, DEFAULT_IGNORED_DIRS, get_language_name};
 //! let lang = get_language_name("rs");
@@ -26,39 +26,45 @@
 
 /// The current version of the application.
 ///
-/// This constant is used for CLI and TUI version display and for embedding version info in output files.
+/// Used for CLI and TUI version display and for embedding version info in output files.
 ///
-/// # Examples
+/// # Example
 /// ```rust
-/// assert_eq!(crate::models::constants::VERSION, "0.7.0");
+/// use crate::models::constants::VERSION;
+/// assert_eq!(VERSION, "0.7.5");
 /// ```
+#[doc(alias = "version")]
 pub const VERSION: &str = "0.7.5";
 
 /// The default maximum number of items that can be selected at once.
 ///
 /// Used to prevent excessive memory usage or accidental large operations.
 ///
-/// # Examples
+/// # Example
 /// ```rust
-/// assert_eq!(crate::models::constants::DEFAULT_SELECTION_LIMIT, 400);
+/// use crate::models::constants::DEFAULT_SELECTION_LIMIT;
+/// assert_eq!(DEFAULT_SELECTION_LIMIT, 400);
 /// ```
+#[doc(alias = "selection-limit")]
 pub const DEFAULT_SELECTION_LIMIT: usize = 400;
 
 /// Icon mappings for file types, extensions, and special files.
 ///
-/// This array maps file extensions and special names to Unicode icons for display in the TUI and CLI outputs.
+/// Maps file extensions and special names to Unicode icons for display in the TUI and CLI outputs.
 ///
 /// # Format
 /// Each tuple is (extension_or_name, icon_unicode_str).
 ///
-/// # Examples
+/// # Example
 /// ```rust
-/// let icon = crate::models::constants::ICONS.iter().find(|(k, _)| *k == "rs").unwrap().1;
+/// use crate::models::constants::ICONS;
+/// let icon = ICONS.iter().find(|(k, _)| *k == "rs").unwrap().1;
 /// assert_eq!(icon, "🦀");
 /// ```
 ///
 /// # TODO : Consider moving to a HashMap for faster lookup if performance becomes an issue.
 ///
+#[doc(alias = "icons")]
 pub const ICONS: &[(&str, &str)] = &[
     // Folders
     ("folder", "📁"),
@@ -169,12 +175,14 @@ pub const ICONS: &[(&str, &str)] = &[
 
 /// Default directories to ignore during file system traversal.
 ///
-/// These are commonly ignored in most projects and are used by default in both CLI and TUI modes.
+/// Commonly ignored in most projects and used by default in both CLI and TUI modes.
 ///
-/// # Examples
+/// # Example
 /// ```rust
-/// assert!(crate::models::constants::DEFAULT_IGNORED_DIRS.contains(&"node_modules"));
+/// use crate::models::constants::DEFAULT_IGNORED_DIRS;
+/// assert!(DEFAULT_IGNORED_DIRS.contains(&"node_modules"));
 /// ```
+#[doc(alias = "ignored-dirs")]
 pub const DEFAULT_IGNORED_DIRS: &[&str] = &[
     "node_modules",
     ".git",
@@ -186,7 +194,7 @@ pub const DEFAULT_IGNORED_DIRS: &[&str] = &[
 
 /// Returns the canonical language name for a given file extension.
 ///
-/// This function is used throughout the application to map file extensions to their canonical language names for display, formatting, and output purposes.
+/// Maps file extensions to their canonical language names for display, formatting, and output purposes.
 ///
 /// # Arguments
 /// * `extension` - The file extension (without dot), e.g., "rs", "py", "js".
@@ -194,11 +202,13 @@ pub const DEFAULT_IGNORED_DIRS: &[&str] = &[
 /// # Returns
 /// * The canonical language name as a `&'static str`. Returns "Plain Text" if the extension is not recognized.
 ///
-/// # Examples
+/// # Example
 /// ```rust
-/// assert_eq!(crate::models::constants::get_language_name("rs"), "Rust");
-/// assert_eq!(crate::models::constants::get_language_name("unknown"), "Plain Text");
+/// use crate::models::constants::get_language_name;
+/// assert_eq!(get_language_name("rs"), "Rust");
+/// assert_eq!(get_language_name("unknown"), "Plain Text");
 /// ```
+#[doc(alias = "language-mapping")]
 pub fn get_language_name(extension: &str) -> &'static str {
     match extension {
         "py" => "Python",

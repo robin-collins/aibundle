@@ -2,18 +2,39 @@
 //!
 //! # TUI Application Entry Point
 //!
-//! This module defines the `App` struct, which manages the main application state, event loop, and UI rendering for the TUI.
-//! It coordinates state, event handlers, and views, and is responsible for launching and running the TUI.
+//! Provides the [`App`] struct, which manages the main application state, event loop, and UI rendering for the TUI.
 //!
-//! ## Usage
-//! Create an `App` instance and call `run()` to start the TUI.
+//! ## Purpose
 //!
-//! ## Examples
+//! - Coordinate state, event handlers, and views for the TUI.
+//! - Manage the event loop, rendering, and user input.
+//! - Launch and run the TUI application.
+//!
+//! ## Organization
+//!
+//! - [`App`]: Main TUI application struct.
+//! - [`AppRunResult`]: Enum for run result reporting.
+//! - [`ClipboardPrintData`]: Struct for clipboard copy stats.
+//! - [`AppEvent`]: Internal event enum for async operations.
+//!
+//! ## Example
 //! ```rust
-//! use crate::tui::app::App;
+//! use aibundle_modular::tui::App;
+//! # use aibundle_modular::models::{AppConfig, IgnoreConfig};
+//! # use std::path::PathBuf;
+//! let config = AppConfig::default();
+//! let start_dir = PathBuf::from(".");
+//! let ignore_config = IgnoreConfig::default();
 //! let mut app = App::new(config, start_dir, ignore_config).unwrap();
 //! app.run().unwrap();
 //! ```
+//!
+//! # Doc Aliases
+//! - "tui-app"
+//! - "terminal-app"
+//!
+#![doc(alias = "tui-app")]
+#![doc(alias = "terminal-app")]
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
@@ -201,31 +222,46 @@ impl App {
                         final_selection_set,
                         initial_optimistic_set,
                     } => {
-                        // TODO: Consider if this logic should be in AppState or a handler
-                        self.state.is_counting = false; // Always reset the counting flag
+                        // Only process if no cancellation was requested (prevent race conditions)
+                        if self.state.is_counting {
+                            self.state.is_counting = false; // Always reset the counting flag
 
-                        if initial_optimistic_set.len() > self.state.selection_limit && final_selection_set.is_empty() {
-                             self.state.set_message(
-                                format!(
-                                    "Selection limit ({}) exceeded. {} items were attempted. Selection reverted to initially visible items.",
-                                    self.state.selection_limit, total_potential_item_count
-                                ),
-                                MessageType::Warning,
-                            );
-                        } else {
-                            self.state.selected_items = final_selection_set;
-                            self.state.selection_is_over_limit = false;
+                            if initial_optimistic_set.len() > self.state.selection_limit && final_selection_set.is_empty() {
+                                 self.state.set_message(
+                                    format!(
+                                        "Selection limit ({}) exceeded. {} items were attempted. Selection reverted to initially visible items.",
+                                        self.state.selection_limit, total_potential_item_count
+                                    ),
+                                    MessageType::Warning,
+                                );
+                            } else {
+                                self.state.selected_items = final_selection_set;
+                                self.state.selection_is_over_limit = false;
+                            }
+                            self.dirty_flags.file_list = true; // Mark for redraw
+                            self.dirty_flags.status_bar = true;
                         }
-                        self.dirty_flags.file_list = true; // Mark for redraw
-                        self.dirty_flags.status_bar = true;
+                        // If is_counting was false, this event was cancelled/outdated, so ignore it
                     },
                     AppEvent::SelectionCountComplete(path, count, opt_folder, opt_children) => {
-                        // Delegate to a handler or process directly
-                        // This is effectively what FileOpsHandler::check_pending_selection was doing with app_state.pending_count
-                        // If we centralize event handling, check_pending_selection might change or be removed.
-                        // For now, this event might be redundant if check_pending_selection is still active.
-                        // However, if toggle_selection now sends this event via app_state.tx, this is the place to handle it.
-                        FileOpsHandler::finalize_single_selection(&mut self.state, path, count, opt_folder, opt_children);
+                        // Only process if still counting and the path matches what we're expecting
+                        if self.state.is_counting && self.state.counting_path.as_ref() == Some(&path) {
+                            // Delegate to a handler or process directly
+                            FileOpsHandler::finalize_single_selection(&mut self.state, path, count, opt_folder, opt_children);
+                            self.dirty_flags.file_list = true;
+                            self.dirty_flags.status_bar = true;
+                        }
+                        // If conditions don't match, this event was cancelled/outdated, so ignore it
+                    },
+                    AppEvent::CancelSelectionOperations => {
+                        // Cancel any ongoing selection operations
+                        self.state.is_counting = false;
+                        self.state.counting_path = None;
+                        self.state.optimistically_added_folder = None;
+                        self.state.optimistically_added_children.clear();
+                        if let Some(sender) = self.state.count_abort_sender.take() {
+                            let _ = sender.send(());
+                        }
                         self.dirty_flags.file_list = true;
                         self.dirty_flags.status_bar = true;
                     },
@@ -256,6 +292,28 @@ impl App {
                     // Mark activity and update UI state
                     self.mark_activity();
                     self.mark_ui_dirty_for_input(&key);
+
+                    // Cancel ongoing selection operations on certain key presses to prevent race conditions
+                    let should_cancel_operations = match key.code {
+                        KeyCode::Char(' ') | KeyCode::Char('a') | KeyCode::Char('A') => {
+                            // Selection keys should cancel previous operations
+                            !self.state.is_searching
+                        }
+                        KeyCode::Esc => {
+                            // Escape always cancels operations
+                            true
+                        }
+                        _ => false
+                    };
+
+                    if should_cancel_operations && self.state.is_counting {
+                        // Send cancel event to prevent race conditions
+                        if let Err(_) = self.event_tx.send(AppEvent::CancelSelectionOperations) {
+                            // Channel closed - handle gracefully
+                            self.state.is_counting = false;
+                            self.state.counting_path = None;
+                        }
+                    }
 
                     // Gate copy operations
                     let is_copy_key = (key.code == KeyCode::Char('c') || key.code == KeyCode::Char('q'))
@@ -493,4 +551,6 @@ pub enum AppEvent {
         final_selection_set: HashSet<PathBuf>,
         initial_optimistic_set: HashSet<PathBuf>
     },
+    /// Event to cancel ongoing selection operations (prevent race conditions)
+    CancelSelectionOperations,
 }

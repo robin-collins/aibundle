@@ -3,134 +3,100 @@ description:
 globs:
 alwaysApply: true
 ---
-Ensure that your code follows the SOLID, YAGNI, and KISS principles.
+## CORE PRINCIPLES
 
-[FORBIDDEN PATTERNS]
+* **SOLID**: Write modular, extensible code. Each module/type should have a single responsibility. Avoid mixing unrelated concerns.
+* **KISS**: Prefer simple, direct solutions over clever abstractions.
+* **DRY**: Eliminate code duplication using functions, traits, or generics.
+* **YAGNI**: Do not implement features or abstractions until they are needed.
+
+## FORBIDDEN PATTERNS
+
 DO NOT:
-* Add "just in case" features
+
+* Add "just in case" features or future requirements
 * Create abstractions without immediate use
-* Mix multiple responsibilities
-* Implement future requirements
-* Optimize prematurely
+* Mix multiple responsibilities in a module or function
+* Optimize prematurely (without profiling evidence)
 
-[CODE RULES AND GUIDELINES]
+## MANDATORY RULES
 
-Rules (Mandatory):
+### 1. Project Structure & Dependency Management
 
-- Dependencies: For Rust, specify any crate dependencies in a Cargo.toml `[dependencies]` block or note them clearly at the end of the code output. Include brief installation/setup instructions if needed (e.g., `cargo add <crate>`).
-- File Encoding: Generally, Rust source files default to UTF-8. If your code performs file I/O, specify UTF-8 when reading or writing files.
-- Versioning: Use Rust’s `Cargo.toml` version field. Increment the smallest version number according to Semantic Versioning if one exists.
-- Session End: Indicate the end of code output with "Code Output Complete."
+* Use Cargo for all project, dependency, and build management.
+* Specify dependencies in `Cargo.toml` under `[dependencies]`; keep `Cargo.toml` and `Cargo.lock` in sync.
+* For binaries, commit `Cargo.lock`; for libraries, do not (except for CI/dev consistency).
+* Organize code into logical modules; use `src/lib.rs` for library code and `src/main.rs` or `src/bin/` for executables.
+* Rust source files and all I/O should use UTF-8 encoding.
+* Maintain semantic versioning in `Cargo.toml`; keep any runtime version constants in sync.
 
-Guidelines (Recommended):
+### 2. Compiler, Linting & Toolchain
 
-- Best Practices: Follow coding and security best practices for Rust and the broader ecosystem.
-- Error Handling: Return `Result<T, E>` for recoverable errors and handle them with `?`, or create detailed custom error types.
-- Code Documentation: Use `///` for item-level docs and `//!` for module-level or crate-level documentation. Include doc tests to demonstrate usage.
-- Naming Conventions: Follow standard Rust naming conventions (e.g., `snake_case` for functions and variables, `CamelCase` for types and traits).
-- DRY Principle: Avoid code duplication.
-- Code Modularity: Organize modules and crates for clarity. Separate library code in `src/lib.rs` and binary entry points in `src/main.rs` or `src/bin`.
-- Performance Optimization: Use profiling or benchmarking tools (`cargo bench`, `criterion`) to identify bottlenecks before optimizing.
-- Named Constants: Use `const` or `static` for constants instead of magic numbers.
-- Change Tracking: Provide a concise bullet list of changes made to each file when relevant.
-- Detailed Comments: Explain complex logic or design choices in comments, especially within `unsafe` blocks if used.
-- Input Validation: Implement validation at boundaries (e.g., parsing user input, network requests).
-- Design Patterns: Use traits, generics, and Rust’s type system effectively to maintain clarity and extensibility.
-- Environment Compatibility: Ensure compatibility with stable Rust toolchains and standard crates.
-- Logging and Monitoring: Use crates such as `log`, `env_logger`, or `tracing` for structured logging.
-- Testability: Write unit tests and integration tests (`cargo test`). Encourage high coverage for critical modules.
-- Internationalization: (If applicable) rely on external libraries or domain-specific solutions for internationalization, or store localized data in resource files.
-- Database Optimization: If using databases, leverage efficient crates (e.g., `diesel` or `sqlx`) and tune queries as needed.
-- Authentication/Authorization: For web services, use crates that implement secure methods or protocols.
-- Asynchronous Programming: Use async runtimes like `tokio` or `async-std` if concurrency is required, ensuring non-blocking I/O.
+* Use the latest stable Rust toolchain, unless a nightly feature is required (document why).
+* Use `rustfmt` for formatting. Apply consistent import and module ordering.
+* Enforce warnings-as-errors in development and CI using `#![deny(warnings)]` and `cargo clippy -- -D warnings`.
 
-[RUST SPECIFIC RULES AND GUIDELINES]
+### 3. Error Handling
 
-Rules (Mandatory):
+* Use `Result<T, E>` for recoverable errors; prefer propagating with `?`.
+* Use custom error types (`thiserror` for libraries, `anyhow` for binaries) for clarity.
+* Use `panic!` only for unrecoverable logic errors.
+* Do not use `.unwrap()` or `.expect()` except in test/example code.
 
-1. Project Structure and Tooling:
-   - Always use Cargo for dependency management and project structure.
-   - Keep the `Cargo.toml` and `Cargo.lock` files in sync with your dependencies.
-   - Separate library code (`src/lib.rs`) from binary executables (`src/main.rs`) where appropriate.
-   - Organize modules into logical subdirectories/files, adhering to Rust’s module conventions.
+### 4. Testing & Documentation
 
-2. Compiler and Linting:
-   - Use the latest stable version of the Rust compiler unless specific version pinning is required.
-   - Leverage `#![deny(warnings)]`, `#![deny(clippy::all)]`, or appropriate Clippy lints to maintain code quality.
-   - Address or explicitly allow warnings that cannot be avoided.
+* Co-locate unit tests using `#[cfg(test)] mod tests`. Place integration tests in `tests/`.
+* Ensure all public items have doc comments (`///`) with examples and error/panic conditions.
+* Use module-level docs (`//!`) for high-level overviews.
+* Run doc-tests and `cargo test` in CI.
 
-3. Error Handling:
-   - Prefer `Result<T, E>` for recoverable errors, using the `?` operator for concise propagation.
-   - For unrecoverable errors, use `panic!` sparingly and only when absolutely necessary (e.g., critical invariants).
-   - Employ custom error types or libraries like `anyhow` and `thiserror` to provide descriptive error messages.
+### 5. Code Style & Organization
 
-4. Memory Safety:
-   - Adhere to Rust’s ownership model, borrowing rules, and lifetimes to prevent data races and undefined behavior.
-   - Use smart pointers (`Box`, `Rc`, `Arc`, etc.) judiciously, focusing on minimal shared state and explicit ownership.
-   - Avoid unsafe code blocks unless absolutely necessary, and always document their usage with reasoning and safety invariants.
+* Follow Rust naming conventions (snake\_case for fn/vars/modules, CamelCase for types/traits, SCREAMING\_SNAKE\_CASE for constants).
+* Use constants for magic numbers/strings.
+* Write small, focused functions.
+* Document all `unsafe` code with a "SAFETY:" comment explaining invariants.
 
-5. Testing and Benchmarks:
-   - Provide unit tests (`#[test]`) alongside the code in the same module or in a separate `tests` directory for integration tests.
-   - Use `cargo test` as part of continuous integration and to ensure high test coverage.
-   - For performance-critical code, consider adding benchmarks (`#[bench]` or `criterion`) to measure and optimize performance.
+### 6. Performance & Optimization
 
-6. Documentation:
-   - Write descriptive doc comments (`///`) on all public items to generate comprehensive API documentation.
-   - Use `//!` for module-level or crate-level documentation, explaining the purpose and usage of the crate.
-   - Showcase examples in doc tests (`/// # Examples`) whenever applicable, ensuring they compile and run correctly with `cargo test`.
+* Do not optimize without measurement (profile/benchmark first).
+* Use `cargo bench` or Criterion for benchmarks.
+* Use the most appropriate data structures and algorithms; prefer readability over premature tuning.
 
-7. Formatting and Style:
-   - Use `rustfmt` to maintain consistent formatting throughout the codebase.
-   - Follow the Rust API Guidelines and community best practices for naming, error handling, and module organization.
-   - Place imports logically (standard library, crates.io dependencies, workspace dependencies, local modules) and keep them sorted.
+### 7. Concurrency & Async
 
-8. Concurrency and Parallelism:
-   - Leverage Rust’s threading or async features (`std::thread`, `tokio`, `async-std`, etc.) only when concurrency is needed.
-   - Ensure data is shared safely using concurrency primitives (`Mutex`, `RwLock`, `mpsc`, etc.) or channels.
-   - Avoid blocking operations in async contexts; use asynchronous I/O or tasks instead.
+* Use threads, async runtimes (Tokio/async-std), and parallelism only as needed.
+* Use safe concurrency primitives (`Arc`, `Mutex`, `RwLock`) when sharing state.
+* Avoid blocking operations in async code.
 
-Guidelines (Recommended):
+### 8. FFI & Unsafe Code
 
-1. Clean Code Organization:
-   - Prefer smaller functions and methods with well-defined responsibilities, keeping modules focused and coherent.
-   - Use traits to define shared behavior and default method implementations, promoting polymorphism and code reuse.
-   - Consider feature-gating optional functionalities to keep the core library concise and reduce compile times.
+* Encapsulate unsafe/FFI code behind safe abstractions.
+* Clearly document ownership and invariants at boundaries.
+* Test FFI code and use FFI-friendly types (`libc` or `std::os::raw`).
 
-2. Idiomatic Rust:
-   - Emphasize functional combinators (`map`, `and_then`, `unwrap_or_else`) for cleaner control flow when handling options and results.
-   - Use pattern matching comprehensively for safe and clear branching.
-   - Embrace iterators and iterator adapters (`.map()`, `.filter()`, `.collect()`) over manual loops for concise transformations.
+### 9. Logging & Diagnostics
 
-3. Dependency Management:
-   - Limit the number of external crates to reduce compile times and avoid version conflicts.
-   - Keep crate versions pinned in `Cargo.lock` for reproducible builds, especially in production environments.
-   - Evaluate security and maintenance status of third-party crates before adding them as dependencies.
+* Use the `log` or `tracing` crate for diagnostics, never direct `println!` in libraries.
+* Use appropriate log levels; provide context in messages.
 
-4. Logging and Tracing:
-   - Use community crates like `log` or `tracing` for structured logging and instrumentation.
-   - Provide contextual information in log messages, ensuring clarity of events and errors.
+### 10. Security Best Practices
 
-5. Performance Considerations:
-   - Profile with tools like `cargo bench`, `perf`, or `criterion` to identify bottlenecks before optimizing.
-   - Avoid premature optimization; prioritize readability and correctness first.
-   - Use concurrency and parallelism carefully to prevent unnecessary complexity.
+* Validate and sanitize all external inputs.
+* Never hardcode secrets; use environment variables/config outside version control.
+* Use established cryptography crates; do not implement cryptography yourself.
+* Regularly update dependencies and use `cargo audit`.
+* Forbid unsafe code (`#![forbid(unsafe_code)]`) if possible.
+* Do not log sensitive data (PII, secrets).
 
-6. FFI (Foreign Function Interface):
-   - If interfacing with C or other languages, encapsulate `unsafe` blocks in well-documented functions.
-   - Clearly define ownership boundaries for data crossing language interfaces, using references or pointers as needed.
-   - Provide tests for FFI boundaries to catch memory safety regressions early.
+---
 
-7. Security Best Practices:
-   - Validate all external inputs and sanitize any data used in potentially unsafe contexts.
-   - Treat cryptographic crates and security primitives with caution, favoring well-reviewed libraries over homegrown solutions.
-   - Keep secrets out of version control; use environment variables or dedicated secret management solutions.
+## GUIDELINES (Recommended, Not Mandatory)
 
-Dependencies:
-- Rust (stable version)
-- cargo
-- Optionally: `clippy`, `rustfmt`, `thiserror`, `anyhow`, `criterion`, `tracing`, `tokio` (depending on the project needs)
-
-Versioning:
-- Version Creation: Add a `VERSION` constant to any .rs files that are modified. Start with 0.1.0.
-- Version Increment: Increment the smallest version number when updating a file.
-- Increment or specify version in `src/main.rs` according to Semantic Versioning (SemVer). Ensure that the version in the `Cargo.toml` file matches the version in the `src/main.rs` file.
+* Prefer feature-gating optional functionality.
+* Use iterators, combinators, and pattern matching for idiomatic control flow.
+* Limit dependency count to reduce build times and avoid bloat.
+* Keep imports and code organized for readability.
+* Use doc-tests for API examples.
+* Profile and optimize only after identifying actual bottlenecks.
+* Avoid global mutable state; prefer passing context explicitly.

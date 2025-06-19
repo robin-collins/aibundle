@@ -2,16 +2,21 @@
 //!
 //! # Markdown Output Module
 //!
-//! This module provides functions for formatting selected files and directories as Markdown output.
-//! It is used to generate Markdown-formatted code/documentation bundles for export or clipboard.
+//! Provides functions for formatting selected files and directories as Markdown output for code/documentation bundles.
 //!
-//! ## Usage
-//! Use `format_markdown_output` to convert a set of selected files and folders into a Markdown string.
+//! ## Purpose
+//! - Generate Markdown-formatted output for export or clipboard.
+//! - Used by output and clipboard logic.
 //!
-//! ## Examples
+//! ## Organization
+//! - [`format_markdown_output`]: Formats selected items as Markdown.
+//!
+//! ## Example
 //! ```rust
 //! use crate::output::markdown::format_markdown_output;
-//! let (md, stats) = format_markdown_output(&selected, &current_dir, true, &ignore_config).unwrap();
+//! use std::collections::HashSet;
+//! use std::path::PathBuf;
+//! let (md, stats) = format_markdown_output(&HashSet::new(), &PathBuf::from("."), true, &crate::models::IgnoreConfig::default()).unwrap();
 //! assert!(md.contains("```"));
 //! ```
 
@@ -30,17 +35,27 @@ use crate::output::format::{format_file_content, is_binary_file, process_directo
 /// Directories are rendered as Markdown headers, and their contents are recursively included.
 ///
 /// # Arguments
+///
 /// * `selected_items` - Set of selected file and directory paths.
 /// * `current_dir` - The base directory for relative path calculation.
 /// * `show_line_numbers` - Whether to include line numbers in code blocks.
 /// * `ignore_config` - Ignore configuration for filtering files.
 ///
 /// # Returns
+///
 /// * `io::Result<(String, CopyStats)>` - The Markdown output and copy statistics.
+///
+/// # Errors
+///
+/// Returns an error if a file or directory cannot be read.
 ///
 /// # Examples
 /// ```rust
-/// // Used internally by clipboard and file export logic.
+/// use crate::output::markdown::format_markdown_output;
+/// use std::collections::HashSet;
+/// use std::path::PathBuf;
+/// let (md, stats) = format_markdown_output(&HashSet::new(), &PathBuf::from("."), true, &crate::models::IgnoreConfig::default()).unwrap();
+/// assert!(md.contains("```"));
 /// ```
 pub fn format_markdown_output(
     selected_items: &HashSet<PathBuf>,

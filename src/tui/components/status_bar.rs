@@ -2,18 +2,39 @@
 //!
 //! # Status Bar Component
 //!
-//! This module defines the `StatusBar` component for rendering the status bar at the bottom of the TUI.
-//! It displays item counts, selection info, and key command hints.
+//! Provides the [`StatusBar`] component for rendering the status bar at the bottom of the TUI.
 //!
-//! ## Usage
-//! Use `StatusBar` in the main TUI view to render the bottom status bar with dynamic information.
+//! ## Purpose
 //!
-//! ## Examples
+//! - Display item counts, selection info, and key command hints.
+//! - Show toggle states for ignores, gitignore, binary files, output format, and line numbers.
+//!
+//! ## Organization
+//!
+//! - [`StatusBar`]: Main status bar component.
+//!
+//! ## Example
 //! ```rust
 //! use crate::tui::components::StatusBar;
+//! use crate::tui::state::{AppState, SelectionState};
+//! # use ratatui::{backend::TestBackend, Terminal, layout::Rect};
+//! # let app_state = AppState::default_for_test();
+//! # let selection_state = SelectionState::new();
+//! # let backend = TestBackend::new(80, 1);
+//! # let mut terminal = Terminal::new(backend).unwrap();
+//! # let area = Rect::new(0, 0, 80, 1);
 //! let status_bar = StatusBar::new();
-//! status_bar.render(f, area, app_state, selection_state);
+//! terminal.draw(|f| {
+//!     status_bar.render(f, area, &app_state, &selection_state);
+//! }).unwrap();
 //! ```
+//!
+//! # Doc Aliases
+//! - "status-bar"
+//! - "tui-status"
+//!
+#![doc(alias = "status-bar")]
+#![doc(alias = "tui-status")]
 
 use ratatui::{
     layout::Rect,
@@ -24,6 +45,16 @@ use ratatui::{
 use crate::tui::state::AppState;
 
 /// Status bar component for rendering item counts, selection info, and key hints.
+///
+/// # Purpose
+/// Shows dynamic information about the current state, including item and selection counts, toggle states, and key command hints.
+///
+/// # Examples
+/// ```rust
+/// use crate::tui::components::StatusBar;
+/// let status_bar = StatusBar::new();
+/// # // See module-level example for full usage
+/// ```
 pub struct StatusBar;
 
 impl Default for StatusBar {
@@ -33,7 +64,13 @@ impl Default for StatusBar {
 }
 
 impl StatusBar {
-    /// Creates a new `StatusBar` component.
+    /// Creates a new [`StatusBar`] component.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::components::StatusBar;
+    /// let status_bar = StatusBar::new();
+    /// ```
     pub fn new() -> Self {
         Self
     }
@@ -45,6 +82,25 @@ impl StatusBar {
     /// * `area` - The area to render the status bar in.
     /// * `app_state` - The current application state.
     /// * `_selection_state` - The current selection state (unused).
+    ///
+    /// # Panics
+    /// This function does not panic.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use crate::tui::components::StatusBar;
+    /// # use crate::tui::state::{AppState, SelectionState};
+    /// # use ratatui::{backend::TestBackend, Terminal, layout::Rect};
+    /// # let app_state = AppState::default_for_test();
+    /// # let selection_state = SelectionState::new();
+    /// # let backend = TestBackend::new(80, 1);
+    /// # let mut terminal = Terminal::new(backend).unwrap();
+    /// # let area = Rect::new(0, 0, 80, 1);
+    /// let status_bar = StatusBar::new();
+    /// terminal.draw(|f| {
+    ///     status_bar.render(f, area, &app_state, &selection_state);
+    /// }).unwrap();
+    /// ```
     pub fn render(
         &self,
         f: &mut Frame,

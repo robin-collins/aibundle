@@ -1,13 +1,16 @@
 //!
 //! # File Operations Handler
 //!
-//! This module defines the `FileOpsHandler` for managing file and folder operations in the TUI.
-//! It handles loading, searching, selection, toggling options, and folder expansion/collapse.
+//! Provides file and folder management for the TUI, including loading, searching, selection, toggling options, and folder expansion/collapse. This module is central to file system navigation and state management in the TUI.
+//!
+//! ## Organization
+//! - `FileOpsHandler`: Main handler struct for file/folder operations.
+//! - Helper functions for expansion/collapse and config management.
 //!
 //! ## Usage
-//! Use `FileOpsHandler` to manage file system interactions and UI state updates in the TUI.
+//! Use [`FileOpsHandler`] to manage file system interactions and UI state updates in the TUI.
 //!
-//! ## Examples
+//! # Examples
 //! ```rust
 //! use crate::tui::handlers::FileOpsHandler;
 //! FileOpsHandler::load_items(&mut app_state).unwrap();
@@ -21,21 +24,44 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::config::config_file_path;
-use crate::models::{CopyStats, OutputFormat};
-use crate::output::format_selected_items;
+use crate::models::{OutputFormat};
 use crate::tui::state::AppState;
 use crate::tui::state::{SearchState, SelectionState};
 use crate::utils::log_event;
 use crate::utils::write_selection_limit_debug_log;
 
 /// Handler for file and folder operations in the TUI.
+///
+/// # Purpose
+/// Provides methods for loading, searching, selecting, and managing files and folders in the TUI, including config save/restore and folder expansion logic.
+///
+/// # Examples
+/// ```rust
+/// use crate::tui::handlers::FileOpsHandler;
+/// FileOpsHandler::load_items(&mut app_state).unwrap();
+/// ```
+#[doc(alias = "file-ops")]
 pub struct FileOpsHandler;
 
 impl FileOpsHandler {
     /// Loads items (files/folders) into the application state.
-    /// This function now delegates to `app_state.load_items()` which handles
-    /// recursive/non-recursive loading based on `app_state.recursive` and
-    /// applies the correct sorting via `app_state.update_filtered_items()`.
+    ///
+    /// # Arguments
+    /// * `app_state` - Mutable reference to [`AppState`].
+    ///
+    /// # Returns
+    /// * `Ok(())` on success.
+    /// * `Err(io::Error)` if loading fails.
+    ///
+    /// # Errors
+    /// Returns an error if directory traversal fails.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::handlers::FileOpsHandler;
+    /// FileOpsHandler::load_items(&mut app_state).unwrap();
+    /// ```
+    #[doc(alias = "file-ops-load")]
     pub fn load_items(app_state: &mut AppState) -> io::Result<()> {
         log_event(&format!(
             "FileOpsHandler::load_items: current_dir={}",
@@ -74,6 +100,24 @@ impl FileOpsHandler {
     }
 
     /// Updates the search results in the application state based on the search query.
+    ///
+    /// # Arguments
+    /// * `app_state` - Mutable reference to [`AppState`].
+    /// * `search_state` - Mutable reference to [`SearchState`].
+    ///
+    /// # Returns
+    /// * `Ok(())` on success.
+    /// * `Err(io::Error)` if search update fails.
+    ///
+    /// # Errors
+    /// Returns an error if directory traversal fails during search.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::handlers::FileOpsHandler;
+    /// FileOpsHandler::update_search(&mut app_state, &mut search_state).unwrap();
+    /// ```
+    #[doc(alias = "file-ops-search")]
     pub fn update_search(
         app_state: &mut AppState,
         search_state: &mut SearchState,
@@ -158,27 +202,25 @@ impl FileOpsHandler {
         Ok(())
     }
 
-    /// Formats selected items for display or export.
-    #[allow(dead_code)]
-    pub fn format_selected_items(app_state: &mut AppState) -> io::Result<String> {
-        let result = format_selected_items(
-            &app_state.selected_items,
-            &app_state.current_dir,
-            &app_state.output_format,
-            app_state.show_line_numbers,
-            &app_state.ignore_config,
-        )?;
-
-        // Update last_copy_stats with the result statistics
-        app_state.last_copy_stats = Some(CopyStats {
-            files: result.1.files,
-            folders: result.1.folders,
-        });
-
-        Ok(result.0)
-    }
-
     /// Handles Enter key: navigates into directories or up to parent.
+    ///
+    /// # Arguments
+    /// * `app_state` - Mutable reference to [`AppState`].
+    /// * `selection_state` - Mutable reference to [`SelectionState`].
+    ///
+    /// # Returns
+    /// * `Ok(())` on success.
+    /// * `Err(io::Error)` if navigation fails.
+    ///
+    /// # Errors
+    /// Returns an error if directory navigation fails.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::handlers::FileOpsHandler;
+    /// FileOpsHandler::handle_enter(&mut app_state, &mut selection_state).unwrap();
+    /// ```
+    #[doc(alias = "file-ops-enter")]
     pub fn handle_enter(
         app_state: &mut AppState,
         selection_state: &mut SelectionState,
@@ -416,6 +458,24 @@ impl FileOpsHandler {
     }
 
     /// Toggles expansion/collapse of a folder in the file list.
+    ///
+    /// # Arguments
+    /// * `app_state` - Mutable reference to [`AppState`].
+    /// * `selection_state` - Reference to [`SelectionState`].
+    ///
+    /// # Returns
+    /// * `Ok(())` on success.
+    /// * `Err(io::Error)` if expansion fails.
+    ///
+    /// # Errors
+    /// Returns an error if folder expansion/collapse fails.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::handlers::FileOpsHandler;
+    /// FileOpsHandler::toggle_folder_expansion(&mut app_state, &selection_state).unwrap();
+    /// ```
+    #[doc(alias = "file-ops-expand")]
     pub fn toggle_folder_expansion(
         app_state: &mut AppState,
         selection_state: &SelectionState,
@@ -493,6 +553,24 @@ impl FileOpsHandler {
     }
 
     /// Toggles recursive expansion/collapse of a folder and its descendants.
+    ///
+    /// # Arguments
+    /// * `app_state` - Mutable reference to [`AppState`].
+    /// * `selection_state` - Mutable reference to [`SelectionState`].
+    ///
+    /// # Returns
+    /// * `Ok(())` on success.
+    /// * `Err(io::Error)` if recursive expansion fails.
+    ///
+    /// # Errors
+    /// Returns an error if recursive folder expansion/collapse fails.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::handlers::FileOpsHandler;
+    /// FileOpsHandler::toggle_folder_expansion_recursive(&mut app_state, &mut selection_state).unwrap();
+    /// ```
+    #[doc(alias = "file-ops-expand-recursive")]
     pub fn toggle_folder_expansion_recursive(
         app_state: &mut AppState,
         selection_state: &mut SelectionState,

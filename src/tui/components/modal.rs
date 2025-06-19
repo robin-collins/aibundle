@@ -2,18 +2,31 @@
 //!
 //! # Modal Component
 //!
-//! This module defines the `Modal` component for rendering modal dialogs in the TUI.
-//! It supports messages, help, copy stats, paging, and custom sizing.
+//! Provides the [`Modal`] component for rendering modal dialogs in the TUI, supporting messages, help, copy stats, paging, and custom sizing.
 //!
-//! ## Usage
-//! Use `Modal` to display messages, help, or status in a modal overlay.
+//! ## Purpose
 //!
-//! ## Examples
+//! - Display overlay dialogs for messages, help, confirmations, and status.
+//! - Support paging for long content and custom modal sizing.
+//!
+//! ## Organization
+//!
+//! - [`Modal`]: Main modal dialog component.
+//! - [`ModalType`]: Enum for modal dialog types.
+//!
+//! ## Example
 //! ```rust
 //! use crate::tui::components::Modal;
 //! let modal = Modal::new("Hello!".to_string(), 40, 10);
-//! modal.render(f, area);
+//! # // See Modal::render for rendering example
 //! ```
+//!
+//! # Doc Aliases
+//! - "modal-dialog"
+//! - "tui-modal"
+//!
+#![doc(alias = "modal-dialog")]
+#![doc(alias = "tui-modal")]
 
 use crate::models::OutputFormat;
 use ratatui::{
@@ -26,6 +39,21 @@ use ratatui::{
 use std::time::Instant;
 
 /// Modal dialog component for displaying messages, help, and status overlays.
+///
+/// # Fields
+/// * `message` - The message or content to display in the modal.
+/// * `timestamp` - Timestamp when the modal was created (for timeouts or animations).
+/// * `width` - Width of the modal in characters.
+/// * `height` - Height of the modal in lines.
+/// * `page` - Current page for paginated content.
+/// * `modal_type` - Modal type for different behaviors.
+///
+/// # Examples
+/// ```rust
+/// use crate::tui::components::Modal;
+/// let modal = Modal::new("Test message".to_string(), 40, 10);
+/// assert_eq!(modal.width, 40);
+/// ```
 pub struct Modal {
     /// The message or content to display in the modal.
     pub message: String,
@@ -38,11 +66,11 @@ pub struct Modal {
     pub height: u16,
     /// Current page for paginated content.
     pub page: usize,
-    /// Modal type for different behaviors
+    /// Modal type for different behaviors.
     pub modal_type: ModalType,
 }
 
-/// Types of modals with different interaction behaviors
+/// Types of modals with different interaction behaviors.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ModalType {
     /// Standard informational modal (ESC/q to close)
@@ -52,7 +80,22 @@ pub enum ModalType {
 }
 
 impl Modal {
-    /// Creates a new `Modal` with the given message, width, and height.
+    /// Creates a new [`Modal`] with the given message, width, and height.
+    ///
+    /// # Arguments
+    /// * `message` - The message or content to display.
+    /// * `width` - Width of the modal in characters.
+    /// * `height` - Height of the modal in lines.
+    ///
+    /// # Returns
+    /// A new [`Modal`] instance.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::components::Modal;
+    /// let modal = Modal::new("Hello!".to_string(), 40, 10);
+    /// assert_eq!(modal.width, 40);
+    /// ```
     pub fn new(message: String, width: u16, height: u16) -> Self {
         Self {
             message,
@@ -65,6 +108,21 @@ impl Modal {
     }
 
     /// Creates a new confirmation modal with the given message, width, and height.
+    ///
+    /// # Arguments
+    /// * `message` - The message or content to display.
+    /// * `width` - Width of the modal in characters.
+    /// * `height` - Height of the modal in lines.
+    ///
+    /// # Returns
+    /// A new [`Modal`] instance with [`ModalType::Confirmation`].
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::components::Modal;
+    /// let modal = Modal::new_confirmation("Confirm?".to_string(), 40, 10);
+    /// assert_eq!(modal.modal_type, crate::tui::components::ModalType::Confirmation);
+    /// ```
     pub fn new_confirmation(message: String, width: u16, height: u16) -> Self {
         Self {
             message,
@@ -77,6 +135,24 @@ impl Modal {
     }
 
     /// Creates a modal displaying copy statistics for clipboard operations.
+    ///
+    /// # Arguments
+    /// * `file_count` - Number of files copied.
+    /// * `folder_count` - Number of folders copied.
+    /// * `line_count` - Number of lines copied.
+    /// * `byte_size` - Total size in bytes.
+    /// * `format` - Output format used.
+    ///
+    /// # Returns
+    /// A [`Modal`] instance summarizing the copy operation.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::components::Modal;
+    /// use crate::models::OutputFormat;
+    /// let modal = Modal::copy_stats(3, 2, 100, 2048, &OutputFormat::Json);
+    /// assert!(modal.message.contains("Copied to clipboard"));
+    /// ```
     pub fn copy_stats(
         file_count: usize,
         folder_count: usize,
@@ -96,6 +172,16 @@ impl Modal {
     }
 
     /// Creates a help modal with keyboard shortcuts and navigation info.
+    ///
+    /// # Returns
+    /// A [`Modal`] instance containing help text.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::components::Modal;
+    /// let modal = Modal::help();
+    /// assert!(modal.message.contains("Keyboard Shortcuts"));
+    /// ```
     pub fn help() -> Self {
         let help_text = "📋 Keyboard Shortcuts
 ═══════════════════════
@@ -144,7 +230,20 @@ impl Modal {
         Self::new(help_text, 68, 32)
     }
 
-    /// Creates a confirmation modal for config file overwrite
+    /// Creates a confirmation modal for config file overwrite.
+    ///
+    /// # Arguments
+    /// * `config_path` - Path to the configuration file.
+    ///
+    /// # Returns
+    /// A [`Modal`] instance prompting for overwrite confirmation.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::components::Modal;
+    /// let modal = Modal::config_overwrite_confirmation(std::path::Path::new("/tmp/config.toml"));
+    /// assert_eq!(modal.modal_type, crate::tui::components::ModalType::Confirmation);
+    /// ```
     pub fn config_overwrite_confirmation(config_path: &std::path::Path) -> Self {
         let message = format!(
             "Configuration file already exists:\n{}\n\nDo you want to overwrite it?\n\n[Y] Yes, overwrite\n[N] No, cancel",
@@ -154,6 +253,20 @@ impl Modal {
     }
 
     /// Returns visible content for the modal with pagination support.
+    ///
+    /// # Arguments
+    /// * `available_height` - Height available for content display.
+    ///
+    /// # Returns
+    /// Tuple of (visible content string, has_more_pages).
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::components::Modal;
+    /// let modal = Modal::new("Line1\nLine2\nLine3".to_string(), 40, 3);
+    /// let (content, has_more) = modal.get_visible_content(3);
+    /// assert!(content.contains("Line1"));
+    /// ```
     #[allow(dead_code)]
     pub fn get_visible_content(&self, available_height: u16) -> (String, bool) {
         let content_height = (available_height - 4) as usize;
@@ -178,6 +291,16 @@ impl Modal {
     }
 
     /// Advances to the next page of content, if available.
+    ///
+    /// # Arguments
+    /// * `available_height` - Height available for content display.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::components::Modal;
+    /// let mut modal = Modal::new("Line1\nLine2\nLine3".to_string(), 40, 3);
+    /// modal.next_page(3);
+    /// ```
     pub fn next_page(&mut self, available_height: u16) {
         let content_height = (available_height - 4) as usize;
         let total_lines = self.message.lines().count();
@@ -188,6 +311,16 @@ impl Modal {
     }
 
     /// Goes to the previous page of content, if available.
+    ///
+    /// # Arguments
+    /// * `available_height` - Height available for content display.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::components::Modal;
+    /// let mut modal = Modal::new("Line1\nLine2\nLine3".to_string(), 40, 3);
+    /// modal.prev_page(3);
+    /// ```
     pub fn prev_page(&mut self, available_height: u16) {
         let content_height = (available_height - 4) as usize;
         let total_lines = self.message.lines().count();
@@ -198,6 +331,18 @@ impl Modal {
     }
 
     /// Renders the modal dialog in the given area.
+    ///
+    /// # Arguments
+    /// * `f` - The TUI frame to render into.
+    /// * `area` - The area to render the modal in.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// # // Rendering requires a ratatui Frame and area
+    /// # use crate::tui::components::Modal;
+    /// # let modal = Modal::new("Hello!".to_string(), 40, 10);
+    /// # // modal.render(f, area);
+    /// ```
     pub fn render(&self, f: &mut Frame, area: Rect) {
         let title = match self.modal_type {
             ModalType::Confirmation => " Confirmation ",

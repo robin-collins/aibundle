@@ -2,18 +2,17 @@
 //!
 //! # TUI State Module
 //!
-//! This is the root module for all TUI state management, including application, search, and selection state.
-//! It re-exports the main state types for use throughout the TUI system.
+//! Root module for all TUI state management, including application, search, and selection state. Provides ergonomic re-exports for state types used throughout the TUI system.
 //!
 //! ## Submodules
-//! - `app_state`: Main application state (files, config, UI, etc.).
-//! - `search`: Search state and logic.
-//! - `selection`: Selection state and logic.
+//! - [`app_state`]: Main application state (files, config, UI, etc.).
+//! - [`search`]: Search state and logic.
+//! - [`selection`]: Selection state and logic.
 //!
 //! ## Re-exports
 //! The most commonly used state types are re-exported for ergonomic access.
 //!
-//! ## Examples
+//! # Examples
 //! ```rust
 //! use crate::tui::state::{AppState, SearchState, SelectionState};
 //! let mut app_state = AppState::default();

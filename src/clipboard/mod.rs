@@ -1,20 +1,31 @@
 // src/clipboard/mod.rs
 //!
-//! # Clipboard Utilities Module
+//! # Clipboard Utilities
 //!
-//! This module provides cross-platform clipboard utilities for copying to and reading from the system clipboard.
-//! It supports Windows, macOS, Linux (Wayland/X11), and WSL environments.
+//! This module provides robust, cross-platform clipboard utilities for copying to and reading from the system clipboard.
+//! It supports Windows, macOS, Linux (Wayland/X11), and WSL environments, handling Unicode and encoding issues transparently.
 //!
-//! ## Usage
-//! Use these functions to copy text to the clipboard or retrieve clipboard contents in a platform-agnostic way.
+//! ## Organization
+//! - Clipboard copy and paste (with encoding and platform handling)
+//! - WSL and PowerShell integration
+//! - Utility detection for environment
 //!
-//! ## Examples
+//! ## Example
 //! ```rust
-//! use crate::clipboard::{copy_to_clipboard, get_clipboard_contents};
+//! use aibundle_modular::clipboard::{copy_to_clipboard, get_clipboard_contents};
 //! copy_to_clipboard("Hello, clipboard!").unwrap();
 //! let contents = get_clipboard_contents().unwrap();
 //! assert!(contents.contains("Hello"));
 //! ```
+//!
+//! # Doc Aliases
+//! - "copy"
+//! - "paste"
+//! - "wsl"
+//!
+#![doc(alias = "copy")]
+#![doc(alias = "paste")]
+#![doc(alias = "wsl")]
 
 use std::env::consts::OS;
 use std::fs;

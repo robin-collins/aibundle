@@ -2,16 +2,23 @@
 //!
 //! # LLM Output Formatter
 //!
-//! This module provides functions for formatting selected files and directories as LLM-friendly output, including dependency analysis and project structure.
-//! It is used to generate structured, annotated output for AI assistants and code analysis tools.
+//! Provides functions for formatting selected files and directories as LLM-friendly output, including dependency analysis and project structure.
 //!
-//! ## Usage
-//! Use `format_llm_output` to generate a Markdown report with file contents, dependencies, and project structure.
+//! ## Purpose
+//! - Generate structured, annotated output for AI assistants and code analysis tools.
+//! - Analyze dependencies and project structure for LLM consumption.
 //!
-//! ## Examples
+//! ## Organization
+//! - [`format_llm_output`]: Main entry point for LLM output formatting.
+//! - [`analyze_dependencies`]: Analyzes file dependencies.
+//! - [`format_llm_output_internal`]: Formats the final LLM output.
+//!
+//! ## Example
 //! ```rust
 //! use crate::output::llm::format_llm_output;
-//! let (output, stats) = format_llm_output(&selected_items, &current_dir, &ignore_config).unwrap();
+//! use std::collections::HashSet;
+//! use std::path::PathBuf;
+//! let (output, stats) = format_llm_output(&HashSet::new(), &PathBuf::from("."), &crate::models::IgnoreConfig::default()).unwrap();
 //! println!("{}", output);
 //! ```
 
@@ -32,16 +39,25 @@ use crate::output::format::is_binary_file;
 /// Formats selected files and directories as LLM-friendly Markdown output, including dependencies and structure.
 ///
 /// # Arguments
+///
 /// * `selected_items` - Set of selected file and directory paths.
 /// * `current_dir` - The root directory for relative paths.
 /// * `ignore_config` - Ignore configuration.
 ///
 /// # Returns
+///
 /// * `io::Result<(String, CopyStats)>` - The formatted output and copy statistics.
+///
+/// # Errors
+///
+/// Returns an error if a file or directory cannot be read.
 ///
 /// # Examples
 /// ```rust
-/// let (output, stats) = crate::output::llm::format_llm_output(&selected_items, &current_dir, &ignore_config).unwrap();
+/// use crate::output::llm::format_llm_output;
+/// use std::collections::HashSet;
+/// use std::path::PathBuf;
+/// let (output, stats) = format_llm_output(&HashSet::new(), &PathBuf::from("."), &crate::models::IgnoreConfig::default()).unwrap();
 /// println!("{}", output);
 /// ```
 pub fn format_llm_output(
@@ -257,15 +273,19 @@ fn add_path_to_tree(root: &mut Node, rel_path: &Path, is_dir: bool) {
 /// Analyzes dependencies between files based on language-specific import/include patterns.
 ///
 /// # Arguments
+///
 /// * `file_contents` - List of (relative path, file content) tuples.
 /// * `_base_dir` - The base directory (unused).
 ///
 /// # Returns
+///
 /// * `HashMap<String, FileDependencies>` - Map of file paths to their dependencies.
 ///
 /// # Examples
 /// ```rust
-/// let deps = crate::output::llm::analyze_dependencies(&file_contents, &base_dir);
+/// use crate::output::llm::analyze_dependencies;
+/// let deps = analyze_dependencies(&vec![("main.rs".to_string(), "mod foo;".to_string())], &std::path::PathBuf::from("."));
+/// assert!(deps.contains_key("main.rs"));
 /// ```
 pub fn analyze_dependencies(
     file_contents: &[(String, String)],
@@ -614,17 +634,26 @@ fn count_files(node: &Node) -> usize {
 /// Formats the LLM output, including project info, structure, dependencies, and file contents.
 ///
 /// # Arguments
+///
 /// * `output` - Mutable string to write output to.
 /// * `file_contents` - List of (relative path, file content) tuples.
 /// * `root_path` - The root directory path.
 /// * `root_node` - The root node of the file tree.
 /// * `dependencies` - Map of file dependencies.
 /// * `total_files` - Total number of files selected.
-/// * `total_folders` - Total number of folders selected.
+/// * `_total_folders` - Total number of folders selected (unused).
 ///
 /// # Examples
 /// ```rust
-/// crate::output::llm::format_llm_output_internal(&mut output, &file_contents, &root_path, &root_node, &dependencies, total_files, total_folders);
+/// use crate::output::llm::format_llm_output_internal;
+/// use crate::models::app_config::{FileDependencies, Node};
+/// use std::collections::HashMap;
+/// let mut output = String::new();
+/// let file_contents = vec![("main.rs".to_string(), "mod foo;".to_string())];
+/// let root_node = Node { name: "root".to_string(), is_dir: true, children: Some(HashMap::new()) };
+/// let dependencies = HashMap::new();
+/// format_llm_output_internal(&mut output, &file_contents, &std::path::PathBuf::from("."), &root_node, &dependencies, 1, 0);
+/// assert!(output.contains("PROJECT ANALYSIS"));
 /// ```
 pub fn format_llm_output_internal(
     output: &mut String,

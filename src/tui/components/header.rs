@@ -2,18 +2,39 @@
 //!
 //! # Header View Component
 //!
-//! This module defines the `HeaderView` component for rendering the header bar in the TUI.
-//! It displays the application version, current directory, and search input when active.
+//! Provides the [`HeaderView`] component for rendering the top header bar in the TUI, including version, current directory, and search input.
 //!
-//! ## Usage
-//! Use `HeaderView` in the main TUI view to render the top header and search bar.
+//! ## Purpose
 //!
-//! ## Examples
+//! - Display application version and current working directory.
+//! - Show search input when searching is active.
+//!
+//! ## Organization
+//!
+//! - [`HeaderView`]: Main component for header rendering.
+//!
+//! ## Example
 //! ```rust
 //! use crate::tui::components::HeaderView;
+//! use crate::tui::state::{AppState, SearchState};
+//! # use ratatui::{backend::TestBackend, Terminal, layout::Rect};
+//! # let app_state = AppState::default_for_test();
+//! # let search_state = SearchState::new();
+//! # let backend = TestBackend::new(80, 3);
+//! # let mut terminal = Terminal::new(backend).unwrap();
+//! # let area = Rect::new(0, 0, 80, 3);
 //! let header = HeaderView::new();
-//! header.render(f, area, app_state, search_state);
+//! terminal.draw(|f| {
+//!     header.render(f, area, &app_state, &search_state);
+//! }).unwrap();
 //! ```
+//!
+//! # Doc Aliases
+//! - "header-bar"
+//! - "tui-header"
+//!
+#![doc(alias = "header-bar")]
+#![doc(alias = "tui-header")]
 
 use ratatui::{
     layout::Rect,
@@ -26,6 +47,16 @@ use crate::models::constants::VERSION;
 use crate::tui::state::{AppState, SearchState};
 
 /// Header view component for rendering the top bar and search input in the TUI.
+///
+/// # Purpose
+/// Displays the application version, current directory, and search input (when active).
+///
+/// # Examples
+/// ```rust
+/// use crate::tui::components::HeaderView;
+/// let header = HeaderView::new();
+/// # // See module-level example for full usage
+/// ```
 pub struct HeaderView {}
 
 impl Default for HeaderView {
@@ -35,7 +66,13 @@ impl Default for HeaderView {
 }
 
 impl HeaderView {
-    /// Creates a new `HeaderView` component.
+    /// Creates a new [`HeaderView`] component.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::components::HeaderView;
+    /// let header = HeaderView::new();
+    /// ```
     pub fn new() -> Self {
         Self {}
     }
@@ -47,6 +84,25 @@ impl HeaderView {
     /// * `area` - The area to render the header in.
     /// * `app_state` - The current application state.
     /// * `search_state` - The current search state.
+    ///
+    /// # Panics
+    /// This function does not panic.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use crate::tui::components::HeaderView;
+    /// # use crate::tui::state::{AppState, SearchState};
+    /// # use ratatui::{backend::TestBackend, Terminal, layout::Rect};
+    /// # let app_state = AppState::default_for_test();
+    /// # let search_state = SearchState::new();
+    /// # let backend = TestBackend::new(80, 3);
+    /// # let mut terminal = Terminal::new(backend).unwrap();
+    /// # let area = Rect::new(0, 0, 80, 3);
+    /// let header = HeaderView::new();
+    /// terminal.draw(|f| {
+    ///     header.render(f, area, &app_state, &search_state);
+    /// }).unwrap();
+    /// ```
     pub fn render(
         &self,
         f: &mut Frame,
@@ -70,12 +126,11 @@ impl HeaderView {
 
         // If searching, render the search input inside the calculated inner_area
         if app_state.is_searching && inner_area.height > 0 {
-            // Check if inner_area has any height
             // Use only the last line of the inner_area for search input
             let search_line_area = Rect {
                 y: inner_area.y + inner_area.height - 1,
                 height: 1,
-                ..inner_area // Inherit x and width from inner_area
+                ..inner_area
             };
 
             // Blinking cursor logic: toggles every 500ms

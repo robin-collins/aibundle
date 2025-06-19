@@ -1,18 +1,34 @@
 //!
-//! # CLI Options Module
+//! # CLI Options and Workflow
 //!
 //! This module defines the command-line options, argument parsing, and CLI mode logic for the application.
-//! It provides conversion utilities for config and output format handling.
+//! It provides conversion utilities for config and output format handling, and the main CLI workflow entrypoint.
+//!
+//! ## Organization
+//! - [`CliOptions`]: Argument parsing and user input.
+//! - [`CliModeOptions`]: Internal struct for CLI workflow.
+//! - [`run_cli_mode`]: Entrypoint for CLI execution.
 //!
 //! ## Usage
-//! Use `CliOptions` for parsing CLI arguments, and `run_cli_mode` to execute the CLI workflow.
+//! Use [`CliOptions`] for parsing CLI arguments, and [`run_cli_mode`] to execute the CLI workflow.
 //!
-//! ## Examples
+//! ## Example
 //! ```rust
-//! use crate::cli::options::{CliOptions, run_cli_mode};
+//! use aibundle_modular::cli::options::{CliOptions, run_cli_mode};
+//! # tokio_test::block_on(async {
 //! let opts = CliOptions::parse();
-//! run_cli_mode(opts.to_cli_mode_options()).unwrap();
+//! run_cli_mode(opts.to_cli_mode_options()).await.unwrap();
+//! # });
 //! ```
+//!
+//! # Doc Aliases
+//! - "cli-options"
+//! - "cli-mode"
+//! - "cli-workflow"
+//!
+#![doc(alias = "cli-options")]
+#![doc(alias = "cli-mode")]
+#![doc(alias = "cli-workflow")]
 
 // src/cli/options.rs
 use crate::models::app_config::FullConfig;

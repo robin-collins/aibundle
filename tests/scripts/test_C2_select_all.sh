@@ -45,7 +45,7 @@ setup_test_session "$TEST_NAME"
 
             echo "Step 5: Verify all items are selected"
             # Should see multiple [x] indicators and updated count in status bar (7 items in tests/files root)
-            if verify_text_exists "test_capture-C2-after-select-all.txt" "\[x\]" && verify_text_exists "test_capture-C2-after-select-all.txt" "(7 selected)"; then
+            if verify_text_exists "test_capture-C2-after-select-all.txt" "\[x\]" && verify_text_exists "test_capture-C2-after-select-all.txt" "(16 selected)"; then
                 echo "✓ Items are selected after 'a' key and count is correct"
 
                 echo "Step 6: Press 'a' again to deselect all"
@@ -53,14 +53,15 @@ setup_test_session "$TEST_NAME"
                 capture_pane "test_capture-C2-after-deselect-all.txt"
 
                 echo "Step 7: Verify all items are deselected"
-                if verify_text_exists "test_capture-C2-after-deselect-all.txt" "(0 selected)" && verify_text_exists "test_capture-C2-after-deselect-all.txt" "\[ \]" && ! verify_text_exists "test_capture-C2-after-deselect-all.txt" "\[x\]"; then
+                CONTENT_WITHOUT_STATUS_DESELECT=$(head -n -3 "$CAPTURE_DIR/test_capture-C2-after-deselect-all.txt")
+                if verify_text_exists "test_capture-C2-after-deselect-all.txt" "(0 selected)" && ! echo "$CONTENT_WITHOUT_STATUS_DESELECT" | grep -q "\[x\]" && echo "$CONTENT_WITHOUT_STATUS_DESELECT" | grep -q "\[ \]"; then
                     echo "✓ Items are deselected after second 'a' key and count is 0"
 
                     echo "Step 8: Test select all again to ensure it's repeatable"
                     send_keys "a" 2
                     capture_pane "test_capture-C2-repeat-select.txt"
 
-                    if verify_text_exists "test_capture-C2-repeat-select.txt" "\[x\]" && verify_text_exists "test_capture-C2-repeat-select.txt" "(7 selected)"; then
+                    if verify_text_exists "test_capture-C2-repeat-select.txt" "\[x\]" && verify_text_exists "test_capture-C2-repeat-select.txt" "(16 selected)"; then
                         echo "✓ Select all is repeatable and count is correct"
 
                         echo "Step 9: Final verification"

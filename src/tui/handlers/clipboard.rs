@@ -2,16 +2,20 @@
 //!
 //! # Clipboard Handler
 //!
-//! This module defines the `ClipboardHandler` for managing copy-to-clipboard operations in the TUI.
-//! It handles formatting, stats, and tree-building for selected items, and supports multiple output formats.
+//! Clipboard management for the TUI, supporting copy-to-clipboard operations, formatting, and statistics for selected files and folders. This module enables exporting selections in multiple formats (XML, Markdown, JSON, LLM) and integrates with the application state for seamless user workflows.
+//!
+//! ## Organization
+//! - `ClipboardHandler`: Main handler struct for clipboard operations.
+//! - Internal helpers for directory and file processing.
 //!
 //! ## Usage
-//! Use `ClipboardHandler` to copy selected files/folders to the clipboard in the desired format.
+//! Use [`ClipboardHandler`] to copy selected files/folders to the clipboard in the desired format.
 //!
-//! ## Examples
+//! # Examples
 //! ```rust
 //! use crate::tui::handlers::ClipboardHandler;
-//! ClipboardHandler::copy_selected_to_clipboard(&mut app_state).unwrap();
+//! let (output, stats) = ClipboardHandler::format_selected_items(&app_state).unwrap();
+//! println!("{} ({} files, {} folders)", output, stats.files, stats.folders);
 //! ```
 
 use std::collections::HashSet;
@@ -22,6 +26,17 @@ use crate::models::{CopyStats, OutputFormat};
 use crate::tui::state::AppState;
 
 /// Handler for clipboard operations (copying selected items, formatting, stats).
+///
+/// # Purpose
+/// Provides methods to format and process selected items for clipboard export, supporting multiple output formats and statistics.
+///
+/// # Examples
+/// ```rust
+/// use crate::tui::handlers::ClipboardHandler;
+/// let (output, stats) = ClipboardHandler::format_selected_items(&app_state).unwrap();
+/// assert!(stats.files >= 0);
+/// ```
+#[doc(alias = "clipboard")]
 pub struct ClipboardHandler;
 
 impl Default for ClipboardHandler {
@@ -32,12 +47,38 @@ impl Default for ClipboardHandler {
 
 impl ClipboardHandler {
     /// Creates a new `ClipboardHandler` instance.
-    #[allow(dead_code)]
+    ///
+    /// # Returns
+    ///
+    /// * `ClipboardHandler` - A new handler instance.
+    ///
+    /// # Examples
+    /// ```rust
+    /// let handler = crate::tui::handlers::ClipboardHandler::new();
+    /// ```
+    #[doc(alias = "clipboard-new")]
     pub fn new() -> Self {
         Self
     }
 
     /// Formats the selected items for clipboard output and returns stats.
+    ///
+    /// # Arguments
+    /// * `app_state` - Reference to the current [`AppState`] containing selection and config.
+    ///
+    /// # Returns
+    /// * `Ok((String, CopyStats))` - The formatted output and statistics.
+    /// * `Err(io::Error)` - If file or directory processing fails.
+    ///
+    /// # Errors
+    /// Returns an error if reading files or directories fails.
+    ///
+    /// # Examples
+    /// ```rust
+    /// let (output, stats) = crate::tui::handlers::ClipboardHandler::format_selected_items(&app_state).unwrap();
+    /// assert!(output.len() > 0);
+    /// ```
+    #[doc(alias = "clipboard-format")]
     pub fn format_selected_items(app_state: &AppState) -> io::Result<(String, CopyStats)> {
         let mut output = String::new();
 
@@ -134,6 +175,24 @@ impl ClipboardHandler {
     }
 
     /// Recursively processes a directory, collecting file contents and stats.
+    ///
+    /// # Arguments
+    /// * `app_state` - Reference to the current [`AppState`].
+    /// * `path` - Directory path to process.
+    /// * `file_contents` - Accumulator for file contents.
+    /// * `base_path` - Base directory for relative path calculation.
+    ///
+    /// # Returns
+    /// * `Ok(())` on success.
+    /// * `Err(io::Error)` if reading fails.
+    ///
+    /// # Errors
+    /// Returns an error if directory traversal or file reading fails.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// // Used internally by ClipboardHandler
+    /// ```
     fn process_directory(
         app_state: &AppState,
         path: &PathBuf,
@@ -174,6 +233,24 @@ impl ClipboardHandler {
     }
 
     /// Processes a file, collecting its contents if not ignored or binary (unless allowed).
+    ///
+    /// # Arguments
+    /// * `app_state` - Reference to the current [`AppState`].
+    /// * `path` - File path to process.
+    /// * `file_contents` - Accumulator for file contents.
+    /// * `base_path` - Base directory for relative path calculation.
+    ///
+    /// # Returns
+    /// * `Ok(())` on success.
+    /// * `Err(io::Error)` if reading fails.
+    ///
+    /// # Errors
+    /// Returns an error if file reading fails.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// // Used internally by ClipboardHandler
+    /// ```
     fn process_file(
         app_state: &AppState,
         path: &PathBuf,

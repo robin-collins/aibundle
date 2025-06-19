@@ -2,15 +2,14 @@
 //!
 //! # Enums Module
 //!
-//! This module defines enums and error types used throughout the application, including:
-//! - OutputFormat: Supported output formats for file aggregation and formatting.
-//! - ParseOutputFormatError: Error type for parsing output formats from strings.
+//! Defines enums and error types used throughout the application, including:
+//! - [`OutputFormat`]: Supported output formats for file aggregation and formatting.
+//! - [`ParseOutputFormatError`]: Error type for parsing output formats from strings.
 //!
-//! ## Usage
-//! Use these enums for type-safe handling of output formats and related logic.
+//! ## Purpose
+//! - Provide type-safe handling of output formats and related logic.
 //!
-//! ## Examples
-//!
+//! ## Example
 //! ```rust
 //! use crate::models::enums::OutputFormat;
 //! let fmt = OutputFormat::Json;
@@ -23,7 +22,7 @@ use std::str::FromStr;
 
 /// Represents the supported output formats for file aggregation and formatting.
 ///
-/// This enum is used to select the output format for CLI and TUI operations, and is serializable for config files.
+/// Used to select the output format for CLI and TUI operations, and is serializable for config files.
 ///
 /// # Variants
 /// * `Xml` - XML output format.
@@ -31,18 +30,23 @@ use std::str::FromStr;
 /// * `Json` - JSON output format.
 /// * `Llm` - LLM (Large Language Model) prompt format (default).
 ///
-/// # Examples
+/// # Example
 /// ```rust
 /// use crate::models::enums::OutputFormat;
 /// assert_eq!(OutputFormat::Markdown.to_string(), "Markdown");
 /// ```
+#[doc(alias = "output-format")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum OutputFormat {
+    /// XML output format.
     Xml,
+    /// Markdown output format.
     Markdown,
+    /// JSON output format.
     Json,
+    /// LLM (Large Language Model) prompt format (default).
     #[default]
     Llm,
 }
@@ -55,6 +59,12 @@ impl fmt::Display for OutputFormat {
     ///
     /// # Returns
     /// * `fmt::Result` - The result of the formatting operation.
+    ///
+    /// # Example
+    /// ```rust
+    /// use crate::models::enums::OutputFormat;
+    /// assert_eq!(OutputFormat::Xml.to_string(), "XML");
+    /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             OutputFormat::Xml => write!(f, "XML"),
@@ -69,17 +79,25 @@ impl fmt::Display for OutputFormat {
 ///
 /// Used when converting user input or config values to OutputFormat.
 ///
-/// # Examples
+/// # Example
 /// ```rust
 /// use crate::models::enums::{OutputFormat, ParseOutputFormatError};
 /// use std::str::FromStr;
 /// assert!(OutputFormat::from_str("invalid").is_err());
 /// ```
+#[doc(alias = "parse-output-format-error")]
 #[derive(Debug, PartialEq, Eq)]
 pub struct ParseOutputFormatError;
 
 impl fmt::Display for ParseOutputFormatError {
     /// Formats the error as a user-friendly string.
+    ///
+    /// # Example
+    /// ```rust
+    /// use crate::models::enums::ParseOutputFormatError;
+    /// let err = ParseOutputFormatError;
+    /// assert_eq!(err.to_string(), "Invalid output format string");
+    /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Invalid output format string")
     }
@@ -97,7 +115,7 @@ impl FromStr for OutputFormat {
     /// * `Ok(OutputFormat)` if the string matches a known format.
     /// * `Err(ParseOutputFormatError)` if the string is invalid.
     ///
-    /// # Examples
+    /// # Example
     /// ```rust
     /// use crate::models::enums::OutputFormat;
     /// use std::str::FromStr;
@@ -120,7 +138,7 @@ impl OutputFormat {
     /// # Returns
     /// * The next OutputFormat variant.
     ///
-    /// # Examples
+    /// # Example
     /// ```rust
     /// use crate::models::enums::OutputFormat;
     /// assert_eq!(OutputFormat::Xml.toggle(), OutputFormat::Markdown);

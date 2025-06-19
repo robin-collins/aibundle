@@ -2,18 +2,40 @@
 //!
 //! # File List Component
 //!
-//! This module defines the `FileList` component for rendering the file/folder list in the TUI.
-//! It handles display, selection highlighting, icons, and indentation for directory structure.
+//! Provides the [`FileList`] component for rendering a navigable, selectable list of files and folders in the TUI.
 //!
-//! ## Usage
-//! Use `FileList` in the main TUI view to render the current directory contents and selection state.
+//! ## Purpose
 //!
-//! ## Examples
+//! - Display directory contents with icons, indentation, and selection state.
+//! - Support navigation, selection, and visual feedback for file/folder operations.
+//!
+//! ## Organization
+//!
+//! - [`FileList`]: Main component for rendering file/folder lists.
+//! - Helper: `get_icon` for icon selection.
+//!
+//! ## Example
 //! ```rust
 //! use crate::tui::components::FileList;
+//! use crate::tui::state::{AppState, SelectionState};
+//! # use ratatui::{backend::TestBackend, Terminal, layout::Rect, Frame};
+//! # let mut app_state = AppState::default_for_test();
+//! # let mut selection_state = SelectionState::new();
+//! # let backend = TestBackend::new(80, 24);
+//! # let mut terminal = Terminal::new(backend).unwrap();
+//! # let area = Rect::new(0, 0, 80, 24);
 //! let file_list = FileList::new();
-//! file_list.render(f, area, app_state, selection_state);
+//! terminal.draw(|f| {
+//!     file_list.render(f, area, &app_state, &mut selection_state);
+//! }).unwrap();
 //! ```
+//!
+//! # Doc Aliases
+//! - "file-list"
+//! - "file-browser"
+//!
+#![doc(alias = "file-list")]
+#![doc(alias = "file-browser")]
 
 use ratatui::{
     layout::Rect,
@@ -27,16 +49,27 @@ use crate::models::constants::ICONS;
 use crate::tui::state::{AppState, SelectionState};
 
 /// File list component for rendering files and folders in the TUI.
+///
+/// # Purpose
+/// Provides a scrollable, selectable list of files and folders, with icons and indentation reflecting directory structure.
+///
+/// # Examples
+/// ```rust
+/// use crate::tui::components::FileList;
+/// let file_list = FileList::new();
+/// # // See module-level example for full usage
+/// ```
+#[derive(Debug, Default, Clone, Copy)]
 pub struct FileList;
 
-impl Default for FileList {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl FileList {
-    /// Creates a new `FileList` component.
+    /// Creates a new [`FileList`] component.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use crate::tui::components::FileList;
+    /// let file_list = FileList::new();
+    /// ```
     pub fn new() -> Self {
         Self
     }
@@ -48,6 +81,25 @@ impl FileList {
     /// * `area` - The area to render the file list in.
     /// * `app_state` - The current application state.
     /// * `selection_state` - The current selection state.
+    ///
+    /// # Panics
+    /// This function does not panic.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use crate::tui::components::FileList;
+    /// # use crate::tui::state::{AppState, SelectionState};
+    /// # use ratatui::{backend::TestBackend, Terminal, layout::Rect};
+    /// # let mut app_state = AppState::default_for_test();
+    /// # let mut selection_state = SelectionState::new();
+    /// # let backend = TestBackend::new(80, 24);
+    /// # let mut terminal = Terminal::new(backend).unwrap();
+    /// # let area = Rect::new(0, 0, 80, 24);
+    /// let file_list = FileList::new();
+    /// terminal.draw(|f| {
+    ///     file_list.render(f, area, &app_state, &mut selection_state);
+    /// }).unwrap();
+    /// ```
     pub fn render(
         &self,
         f: &mut Frame,
@@ -119,6 +171,20 @@ impl FileList {
     }
 
     /// Returns the icon for a given path, based on file extension or directory status.
+    ///
+    /// # Arguments
+    /// * `path` - The file or directory path.
+    ///
+    /// # Returns
+    /// * `&'static str` - The icon string for the file or directory.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use std::path::Path;
+    /// # use crate::tui::components::FileList;
+    /// let icon = FileList::get_icon(Path::new("foo.rs"));
+    /// assert!(icon.len() > 0);
+    /// ```
     fn get_icon(path: &Path) -> &'static str {
         if path.is_dir() {
             return ICONS
