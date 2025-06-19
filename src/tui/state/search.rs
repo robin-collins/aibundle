@@ -34,7 +34,6 @@ use std::path::{Path, PathBuf};
 /// let mut state = SearchState::new();
 /// state.search_query = "foo".to_string();
 /// ```
-#[doc(alias = "search-state")]
 ///
 /// # Fields
 /// * `search_query` - The current search query string.
@@ -47,7 +46,6 @@ use std::path::{Path, PathBuf};
 /// let mut state = SearchState::new();
 /// state.search_query = "foo".to_string();
 /// ```
-#[doc(alias = "search-state")]
 #[derive(Default)]
 pub struct SearchState {
     pub search_query: String,

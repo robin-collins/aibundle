@@ -382,7 +382,14 @@ impl AppState {
             }
         }
         if self.ignore_config.use_gitignore {
-            if let Some(gitignore_matcher) = crate::fs::get_cached_gitignore_matcher(&self.current_dir) {
+            // Use the file's parent directory as context for gitignore matching
+            let context_dir = if path.is_file() {
+                path.parent().unwrap_or(&self.current_dir).to_path_buf()
+            } else {
+                path.to_path_buf()
+            };
+            
+            if let Some(gitignore_matcher) = crate::fs::get_cached_gitignore_matcher_for_context(&context_dir, &self.current_dir) {
                 let is_dir = path.is_dir();
                 if let Match::Ignore(_) = gitignore_matcher.matched_path_or_any_parents(path, is_dir) {
                     return true;
