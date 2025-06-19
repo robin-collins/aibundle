@@ -207,6 +207,8 @@ impl KeyboardHandler {
                                 if let Some(parent) = app_state.current_dir.parent() {
                                     if parent != app_state.current_dir { // Ensure we don't go "up" from root to root
                                         app_state.current_dir = parent.to_path_buf();
+                                        // Clear gitignore cache when changing directories
+                                        crate::fs::clear_gitignore_cache();
                                         FileOpsHandler::load_items(app_state)?;
                                         selection_state.list_state.select(Some(0));
                                     }

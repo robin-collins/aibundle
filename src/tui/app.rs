@@ -308,7 +308,7 @@ impl App {
 
                     if should_cancel_operations && self.state.is_counting {
                         // Send cancel event to prevent race conditions
-                        if let Err(_) = self.event_tx.send(AppEvent::CancelSelectionOperations) {
+                        if self.event_tx.send(AppEvent::CancelSelectionOperations).is_err() {
                             // Channel closed - handle gracefully
                             self.state.is_counting = false;
                             self.state.counting_path = None;
@@ -553,4 +553,138 @@ pub enum AppEvent {
     },
     /// Event to cancel ongoing selection operations (prevent race conditions)
     CancelSelectionOperations,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{AppConfig, IgnoreConfig};
+    use tempfile::TempDir;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    /// Test AppEvent enum completeness
+    #[test]
+    fn test_app_event_variants() {
+        // Ensure all expected event types exist
+        let _selection_complete = AppEvent::SelectionCountComplete(
+            PathBuf::from("/test"),
+            42,
+            None,
+            HashSet::new()
+        );
+
+        let _select_all_complete = AppEvent::SelectAllScanComplete {
+            total_potential_item_count: 100,
+            final_selection_set: HashSet::new(),
+            initial_optimistic_set: HashSet::new(),
+        };
+
+        let _cancel_operations = AppEvent::CancelSelectionOperations;
+
+        // Test that events can be sent through channel
+        let (tx, rx) = mpsc::channel::<AppEvent>();
+        tx.send(AppEvent::CancelSelectionOperations).unwrap();
+
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(AppEvent::CancelSelectionOperations) => {}, // Expected
+            _ => panic!("Should receive CancelSelectionOperations event"),
+        }
+    }
+
+    /// Test App creation with event channel
+    #[test]
+    fn test_app_creation_with_event_channel() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let config = AppConfig::default();
+        let ignore_config = IgnoreConfig::default();
+
+        let app_result = App::new(
+            config,
+            temp_dir.path().to_path_buf(),
+            ignore_config,
+        );
+
+        assert!(app_result.is_ok(), "App creation should succeed");
+
+        let app = app_result.unwrap();
+        // Verify event channel was created
+        // Note: We can't easily test the channel directly due to private fields,
+        // but we can verify the app was created successfully
+        assert_eq!(app.state.current_dir, temp_dir.path().to_path_buf());
+    }
+
+    /// Test event handling doesn't block main thread
+    #[test]
+    fn test_event_channel_non_blocking() {
+        let (tx, rx) = mpsc::channel::<AppEvent>();
+
+        // Send multiple events rapidly
+        for i in 0..1000 {
+            let event = AppEvent::SelectionCountComplete(
+                PathBuf::from(format!("/test/{}", i)),
+                i,
+                None,
+                HashSet::new(),
+            );
+
+            // This should not block
+            let send_result = tx.send(event);
+            if send_result.is_err() {
+                // Channel receiver might be dropped, but shouldn't panic
+                break;
+            }
+        }
+
+        // Send cancellation event
+        tx.send(AppEvent::CancelSelectionOperations).unwrap();
+
+        // Verify events can be received
+        let mut received_cancel = false;
+        while let Ok(event) = rx.try_recv() {
+            if matches!(event, AppEvent::CancelSelectionOperations) {
+                received_cancel = true;
+                break;
+            }
+        }
+
+        assert!(received_cancel, "Should receive cancellation event");
+    }
+
+    /// Mock test for race condition prevention
+    #[test]
+    fn test_selection_operation_cancellation_pattern() {
+        let (tx, rx) = mpsc::channel::<AppEvent>();
+
+        // Simulate scenario where user input triggers cancellation
+        // while background selection operation is running
+
+        // 1. Start background operation (simulated)
+        tx.send(AppEvent::SelectionCountComplete(
+            PathBuf::from("/test"),
+            100,
+            None,
+            HashSet::new(),
+        )).unwrap();
+
+        // 2. User input causes cancellation
+        tx.send(AppEvent::CancelSelectionOperations).unwrap();
+
+        // 3. Another background operation result arrives late
+        tx.send(AppEvent::SelectAllScanComplete {
+            total_potential_item_count: 200,
+            final_selection_set: HashSet::new(),
+            initial_optimistic_set: HashSet::new(),
+        }).unwrap();
+
+        // Event handler should process cancellation and ignore late results
+        let events: Vec<_> = rx.try_iter().collect();
+        assert_eq!(events.len(), 3);
+
+        // Verify cancellation event is present
+        let has_cancellation = events.iter().any(|e| {
+            matches!(e, AppEvent::CancelSelectionOperations)
+        });
+        assert!(has_cancellation, "Should contain cancellation event");
+    }
 }
