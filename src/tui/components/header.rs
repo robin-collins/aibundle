@@ -149,7 +149,7 @@ impl HeaderView {
 
             // Compose the search input text with blinking cursor
             let search_text = format!(
-                "Search: {}{} (Press / to finish, ESC to cancel)",
+                "Search: {}{} (Press Enter or / to finish, ESC to cancel)",
                 search_state.search_query, cursor
             );
             let search_widget = Paragraph::new(search_text).fg(ratatui::style::Color::Yellow);

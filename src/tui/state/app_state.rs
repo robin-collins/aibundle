@@ -28,8 +28,8 @@ use std::collections::{BTreeMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Instant};
-use std::sync::mpsc::{Sender, channel};
-use crate::tui::app::AppEvent;
+use std::sync::mpsc::{SyncSender, Sender, sync_channel};
+use crate::tui::app::{AppEvent, OperationId};
 
 // Trie node structure for efficient path storage
 #[derive(Default, Debug, Clone)]
@@ -256,6 +256,9 @@ pub struct AppState {
     /// Path being counted (for progress display).
     pub counting_path: Option<PathBuf>,
 
+    /// Current operation ID for tracking async operations and preventing race conditions.
+    pub current_operation_id: Option<OperationId>,
+
     /// File tree structure for LLM output.
     #[allow(dead_code)]
     pub file_tree: Option<Node>,
@@ -270,7 +273,7 @@ pub struct AppState {
     pub count_abort_sender: Option<Sender<()>>,
 
     /// Sender for AppEvents.
-    pub tx: Sender<AppEvent>,
+    pub tx: SyncSender<AppEvent>,
 
     /// Whether the selection is over the limit.
     pub selection_is_over_limit: bool,
@@ -285,7 +288,7 @@ impl Default for AppState {
         let config = AppConfig::default();
         let ignore_config = IgnoreConfig::default();
         let initial_dir = std::env::current_dir().unwrap_or_default();
-        let (tx, _rx) = channel::<crate::tui::app::AppEvent>();
+        let (tx, _rx) = sync_channel::<crate::tui::app::AppEvent>(100); // Bounded channel with capacity 100
         Self::new(config, initial_dir, ignore_config, tx)
             .expect("Failed to create default AppState")
     }
@@ -297,7 +300,7 @@ impl AppState {
         config: AppConfig,
         initial_dir_param: PathBuf,
         ignore_config_param: IgnoreConfig,
-        event_sender: Sender<AppEvent>,
+        event_sender: SyncSender<AppEvent>,
     ) -> Result<Self, io::Error> {
         let selection_limit = config
             .selection_limit
@@ -331,6 +334,7 @@ impl AppState {
             last_copy_stats: None,
             is_counting: false,
             counting_path: None,
+            current_operation_id: None,
             file_tree: None,
             optimistically_added_folder: None,
             optimistically_added_children: HashSet::new(),
@@ -433,7 +437,7 @@ impl AppState {
             Err(e) => { return Err(e); }
         }
 
-        // Sort the entries for the current directory level
+        // Sort entries at each directory level to maintain proper order within each folder
         current_level_entries.sort_by(|a, b| {
             let a_is_dir = a.is_dir();
             let b_is_dir = b.is_dir();
@@ -441,6 +445,7 @@ impl AppState {
             let b_name_os = b.file_name().unwrap_or_default();
             let a_name_str = a_name_os.to_string_lossy();
             let b_name_str = b_name_os.to_string_lossy();
+            
             match (a_is_dir, b_is_dir) {
                 (true, false) => std::cmp::Ordering::Less,
                 (false, true) => std::cmp::Ordering::Greater,
@@ -484,9 +489,11 @@ impl AppState {
             });
         }
 
-        // If in full recursive mode, apply a global sort.
-        // Otherwise, items from gather_items_for_view are already hierarchically sorted.
+        // Don't sort the items globally for non-recursive mode as it breaks tree structure
+        // Instead, rely on the order items were collected in gather_items_for_view
+        // which maintains proper hierarchical order
         if self.recursive {
+            // For recursive mode, sort normally since hierarchy is flattened
             raw_items.sort_by(|a, b| {
                 let a_is_dir = a.is_dir();
                 let b_is_dir = b.is_dir();
@@ -494,6 +501,7 @@ impl AppState {
                 let b_name_os = b.file_name().unwrap_or_default();
                 let a_name_str = a_name_os.to_string_lossy();
                 let b_name_str = b_name_os.to_string_lossy();
+                
                 match (a_is_dir, b_is_dir) {
                     (true, false) => std::cmp::Ordering::Less,
                     (false, true) => std::cmp::Ordering::Greater,
@@ -516,6 +524,7 @@ impl AppState {
                 }
             });
         }
+        // For non-recursive mode, preserve the collection order which maintains tree structure
 
         self.filtered_items = raw_items;
 

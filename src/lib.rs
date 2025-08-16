@@ -21,7 +21,7 @@
 //!
 //! ## Examples
 //! ```rust
-//! use aibundle_modular::CliOptions;
+//! use aibundle::CliOptions;
 //! let opts = CliOptions::parse_from(["aibundle", "--files", "src/**/*.rs"]);
 //! assert_eq!(opts.files, Some("src/**/*.rs".to_string()));
 //! ```
@@ -40,7 +40,7 @@ pub mod utils;
 /// # Examples
 ///
 /// ```rust
-/// use aibundle_modular::CliOptions;
+/// use aibundle::CliOptions;
 /// let opts = CliOptions::parse_from(["aibundle", "--files", "src/**/*.rs"]);
 /// assert_eq!(opts.files, Some("src/**/*.rs".to_string()));
 /// ```
@@ -57,7 +57,7 @@ pub use cli::CliOptions;
 /// # Examples
 ///
 /// ```rust
-/// use aibundle_modular::{AppConfig, FullConfig};
+/// use aibundle::{AppConfig, FullConfig};
 /// let app_config = AppConfig { ..Default::default() };
 /// let full_config = FullConfig { cli: None, tui: None };
 /// ```

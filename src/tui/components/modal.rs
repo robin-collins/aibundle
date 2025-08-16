@@ -269,7 +269,10 @@ impl Modal {
     /// ```
     #[allow(dead_code)]
     pub fn get_visible_content(&self, available_height: u16) -> (String, bool) {
-        let content_height = (available_height - 4) as usize;
+        let content_height = available_height.saturating_sub(4) as usize;
+        if content_height == 0 {
+            return (String::new(), false);
+        }
         let lines: Vec<&str> = self.message.lines().collect();
         let total_lines = lines.len();
         let total_pages = total_lines.div_ceil(content_height);
@@ -302,7 +305,10 @@ impl Modal {
     /// modal.next_page(3);
     /// ```
     pub fn next_page(&mut self, available_height: u16) {
-        let content_height = (available_height - 4) as usize;
+        let content_height = available_height.saturating_sub(4) as usize;
+        if content_height == 0 {
+            return;
+        }
         let total_lines = self.message.lines().count();
         let total_pages = total_lines.div_ceil(content_height);
         if total_pages > 1 {
@@ -322,7 +328,10 @@ impl Modal {
     /// modal.prev_page(3);
     /// ```
     pub fn prev_page(&mut self, available_height: u16) {
-        let content_height = (available_height - 4) as usize;
+        let content_height = available_height.saturating_sub(4) as usize;
+        if content_height == 0 {
+            return;
+        }
         let total_lines = self.message.lines().count();
         let total_pages = total_lines.div_ceil(content_height);
         if total_pages > 1 {

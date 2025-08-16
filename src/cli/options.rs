@@ -14,7 +14,7 @@
 //!
 //! ## Example
 //! ```rust
-//! use aibundle_modular::cli::options::{CliOptions, run_cli_mode};
+//! use aibundle::cli::options::{CliOptions, run_cli_mode};
 //! # tokio_test::block_on(async {
 //! let opts = CliOptions::parse();
 //! run_cli_mode(opts.to_cli_mode_options()).await.unwrap();
@@ -31,11 +31,12 @@
 #![doc(alias = "cli-workflow")]
 
 // src/cli/options.rs
-use crate::models::app_config::FullConfig;
 use crate::models::{AppConfig, IgnoreConfig, OutputFormat};
 use crate::tui::App;
+use crate::tui::state::AppState;
 use crate::ModeConfig;
 use clap::Parser;
+use glob::Pattern;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -49,7 +50,7 @@ use crate::models::constants::VERSION;
 /// * `output_file` - Output file path.
 /// * `output_console` - Whether to print output to console.
 /// * `files` - File pattern(s) to include.
-/// * `search` - Search query.
+
 /// * `format` - Output format (markdown, xml, json, llm).
 /// * `source_dir` - Source directory (default: ".").
 /// * `recursive` - Whether to enable recursive traversal.
@@ -81,9 +82,6 @@ pub struct CliOptions {
 
     #[arg(short = 'f', long)]
     pub files: Option<String>,
-
-    #[arg(short = 's', long)]
-    pub search: Option<String>,
 
     #[arg(short = 'm', long, value_parser = ["markdown", "xml", "json", "llm"], default_value = "llm")]
     pub format: String,
@@ -219,26 +217,8 @@ pub fn to_output_format(format: &str) -> OutputFormat {
     }
 }
 
-/// Loads and merges the CLI config with the current options, saving if requested.
-///
-/// # Arguments
-/// * `cli_opts` - The CLI options to merge.
-///
-/// # Returns
-/// * `io::Result<FullConfig>` - The merged configuration.
-///
-/// # Examples
-/// ```rust
-/// // Used internally by CLI entrypoint.
-/// ```
-#[allow(dead_code)]
-pub async fn get_merged_config(cli_opts: &CliOptions) -> io::Result<FullConfig> {
-    let mut config = crate::config::load_config().await?;
-    if cli_opts.save_config {
-        config.cli = Some(cli_opts.to_mode_config());
-    }
-    Ok(config)
-}
+// Removed get_merged_config function - it was misleading (implied saving but didn't persist)
+// and unused (dead code). Config saving is handled properly in main.rs
 
 /// Converts CLI options to an `IgnoreConfig` for file filtering.
 ///
@@ -255,11 +235,19 @@ pub async fn get_merged_config(cli_opts: &CliOptions) -> io::Result<FullConfig> 
 #[allow(dead_code)]
 pub fn to_ignore_config(cli_opts: &CliOptions) -> IgnoreConfig {
     let use_default_ignores = cli_opts.ignore.iter().any(|s| s == "default");
+    // Filter out the literal "default" string from ignore patterns
+    let extra_ignore_patterns = cli_opts
+        .ignore
+        .iter()
+        .filter(|s| s.as_str() != "default")
+        .cloned()
+        .collect();
+    
     IgnoreConfig {
         use_default_ignores,
         use_gitignore: cli_opts.gitignore,
         include_binary_files: false, // Default to false, could be a CLI option
-        extra_ignore_patterns: cli_opts.ignore.clone(), // Clone needed for owned field
+        extra_ignore_patterns,
     }
 }
 
@@ -286,11 +274,20 @@ pub async fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
         selection_limit: None, // Selection limit override handled later
     };
     // 2. Create IgnoreConfig - Memory optimization: use iterator instead of contains
+    let use_default_ignores = options.ignore_list.iter().any(|s| s == "default");
+    // Filter out the literal "default" string from ignore patterns
+    let extra_ignore_patterns = options
+        .ignore_list
+        .iter()
+        .filter(|s| s.as_str() != "default")
+        .cloned()
+        .collect();
+    
     let ignore_config = IgnoreConfig {
-        use_default_ignores: options.ignore_list.iter().any(|s| s == "default"),
+        use_default_ignores,
         use_gitignore: options.gitignore,
         include_binary_files: false, // Assuming false for CLI
-        extra_ignore_patterns: options.ignore_list.clone(), // Clone needed for owned field
+        extra_ignore_patterns,
     };
     // 3. Create start_dir PathBuf - Memory optimization: use reference
     let start_dir = PathBuf::from(&options.source_dir);
@@ -316,13 +313,10 @@ pub async fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
         crate::tui::handlers::FileOpsHandler::load_items_nonrecursive(&mut app.state)?;
     }
 
-    // Apply file pattern filter
+    // Apply file pattern filter using proper glob matching (not substring search)
     if let Some(pattern) = options.files_pattern {
-        app.state.search_query = pattern.to_string();
-        let mut search_state = crate::tui::state::SearchState::new();
-        search_state.search_query = pattern.to_string();
-        let _ =
-            crate::tui::handlers::FileOpsHandler::update_search(&mut app.state, &mut search_state);
+        apply_cli_file_pattern_filter(&mut app.state, &pattern)?;
+        
         // In CLI mode, only select files that match the pattern (exclude directories)
         // For LLM format, we need to keep directories to build a proper structure
         if app.state.output_format != OutputFormat::Llm {
@@ -355,18 +349,127 @@ pub async fn run_cli_mode(options: CliModeOptions) -> io::Result<()> {
     let (output, _stats) =
         crate::tui::handlers::ClipboardHandler::format_selected_items(&app.state)?;
 
-    // Handle output
+    // Handle output with improved default behavior
     if let Some(file_path) = options.output_file {
         fs::write(&file_path, output)?;
         println!("Output written to file: {file_path}");
     } else if options.output_console {
         println!("{output}");
     } else {
-        // Replace ClipboardContext with our new function
-        crate::clipboard::copy_to_clipboard(&output)?;
-        println!("Output copied to clipboard");
+        // Default behavior: Show preview and copy to clipboard
+        show_output_preview_and_copy(&output)?;
     }
 
+    Ok(())
+}
+
+/// Applies CLI file pattern filtering using proper glob pattern matching.
+/// 
+/// This replaces the broken substring matching with proper glob patterns.
+/// Supports standard glob patterns like *.rs, src/*.md, etc.
+///
+/// # Arguments
+/// * `app_state` - Mutable reference to the application state
+/// * `pattern` - The glob pattern to match against file paths
+///
+/// # Returns
+/// * `Result<(), io::Error>` - Ok on success, error on pattern compilation failure
+///
+/// # Examples
+/// - `*.rs` matches all Rust files
+/// - `src/*.md` matches markdown files in src directory
+/// - `**/*.py` matches Python files recursively
+fn apply_cli_file_pattern_filter(app_state: &mut AppState, pattern: &str) -> io::Result<()> {
+    let glob_pattern = Pattern::new(pattern)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, 
+            format!("Invalid glob pattern '{}': {}", pattern, e)))?;
+    
+    // Get all items to filter
+    let all_items = if app_state.recursive {
+        // For recursive mode, get all items from the items trie
+        app_state.items.to_vec()
+    } else {
+        // For non-recursive, get current filtered items
+        app_state.filtered_items.clone()
+    };
+    
+    // Filter items using glob pattern matching
+    let filtered: Vec<PathBuf> = all_items
+        .into_iter()
+        .filter(|path| {
+            // Try to match against the full path
+            if let Some(path_str) = path.to_str() {
+                if glob_pattern.matches(path_str) {
+                    return true;
+                }
+            }
+            
+            // Also try to match against just the filename
+            if let Some(filename) = path.file_name() {
+                if let Some(filename_str) = filename.to_str() {
+                    if glob_pattern.matches(filename_str) {
+                        return true;
+                    }
+                }
+            }
+            
+            // For patterns like "src/*.md", try matching against relative path from current dir
+            if let Ok(relative) = path.strip_prefix(&app_state.current_dir) {
+                if let Some(relative_str) = relative.to_str() {
+                    if glob_pattern.matches(relative_str) {
+                        return true;
+                    }
+                }
+            }
+            
+            false
+        })
+        .collect();
+    
+    app_state.filtered_items = filtered;
+    Ok(())
+}
+
+/// Shows a preview of the output and copies it to clipboard.
+/// 
+/// This provides better user experience by showing what was processed
+/// instead of silently copying to clipboard.
+///
+/// # Arguments
+/// * `output` - The formatted output string
+///
+/// # Returns
+/// * `Result<(), io::Error>` - Ok on success, error on clipboard operation failure
+fn show_output_preview_and_copy(output: &str) -> io::Result<()> {
+    let lines: Vec<&str> = output.lines().collect();
+    let total_lines = lines.len();
+    
+    println!("📄 Generated output ({} lines):", total_lines);
+    println!("┌─────────────────────────────────────────────────────────────────────────────┐");
+    
+    // Show first few lines as preview
+    let preview_lines = std::cmp::min(10, total_lines);
+    for (i, line) in lines.iter().take(preview_lines).enumerate() {
+        // Truncate long lines for display
+        let display_line = if line.len() > 75 {
+            format!("{}...", &line[..72])
+        } else {
+            line.to_string()
+        };
+        println!("│ {:2} │ {:<72} │", i + 1, display_line);
+    }
+    
+    if total_lines > preview_lines {
+        println!("│ .. │ ... ({} more lines) ...                                           │", total_lines - preview_lines);
+    }
+    
+    println!("└─────────────────────────────────────────────────────────────────────────────┘");
+    
+    // Copy to clipboard
+    crate::clipboard::copy_to_clipboard(output)?;
+    println!("✅ Output copied to clipboard");
+    println!("💡 Use --output-console to print full output or --output-file <path> to save to file");
+    
     Ok(())
 }
 

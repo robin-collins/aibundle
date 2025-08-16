@@ -13,7 +13,7 @@
 //!
 //! ## Example
 //! ```rust
-//! use aibundle_modular::fs::{list_files, is_binary_file, normalize_path};
+//! use aibundle::fs::{list_files, is_binary_file, normalize_path};
 //! let files = list_files(std::path::Path::new("./src"));
 //! assert!(!files.is_empty());
 //! assert!(!is_binary_file(std::path::Path::new("main.rs")));
@@ -127,16 +127,25 @@ pub fn confirm_overwrite(file_path: &str) -> io::Result<bool> {
 pub fn list_files(path: &Path) -> Vec<PathBuf> {
     let mut result = Vec::new();
     let mut visited = HashSet::new();
+    let mut path_trackers = HashSet::new();
     let mut stack: Vec<PathBuf> = vec![path.to_path_buf()];
 
     while let Some(current_path) = stack.pop() {
-        let canonical = match try_canonicalize(&current_path) {
-            Ok(c) => c,
+        // Enhanced symlink loop detection
+        let path_tracker = match PathTracker::new(&current_path) {
+            Ok(tracker) => tracker,
             Err(_e) => continue, // Permission denied or error, skip
         };
 
-        if !visited.insert(canonical.clone()) {
-            // Symlink loop detected, skip
+        // Check canonical path tracking (original behavior)
+        if !visited.insert(path_tracker.canonical.clone()) {
+            // Symlink loop detected via canonical path, skip
+            continue;
+        }
+
+        // Check enhanced path tracking (new behavior)
+        if !path_trackers.insert(path_tracker) {
+            // Complex symlink loop detected via path tracking, skip
             continue;
         }
 
@@ -436,12 +445,22 @@ pub fn collect_all_subdirs(
     let mut dirs = HashSet::new();
     let mut stack = vec![base_dir_buf.clone()];
     let mut visited = HashSet::new();
+    let mut path_trackers = HashSet::new();
+    
     while let Some(current) = stack.pop() {
-        let canonical = match try_canonicalize(&current) {
-            Ok(c) => c,
+        // Enhanced symlink loop detection
+        let path_tracker = match PathTracker::new(&current) {
+            Ok(tracker) => tracker,
             Err(_e) => continue, // Permission denied or error, skip
         };
-        if !visited.insert(canonical.clone()) {
+
+        // Check canonical path tracking (original behavior)
+        if !visited.insert(path_tracker.canonical.clone()) {
+            continue;
+        }
+
+        // Check enhanced path tracking (new behavior)
+        if !path_trackers.insert(path_tracker) {
             continue;
         }
         if current.is_dir() {
@@ -591,11 +610,9 @@ fn is_binary_by_extension(path: &Path) -> bool {
         }
     }
 
-    // Check specific filenames that are typically binary
-    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-        let binary_files = ["index", "COMMIT_EDITMSG"];
-        return binary_files.contains(&name);
-    }
+    // Removed overly aggressive filename-based binary detection
+    // Files like "index.js", "index.html" should not be treated as binary
+    // COMMIT_EDITMSG is also plain text and should not be treated as binary
 
     false
 }
@@ -720,6 +737,7 @@ async fn list_files_async_inner(
     result: &mut Vec<PathBuf>,
     visited: &mut HashSet<PathBuf>,
 ) -> io::Result<()> {
+    // For async version, we use a simpler approach since PathTracker::new is sync
     let canonical = match tokio_fs::canonicalize(path).await {
         Ok(c) => c,
         Err(e) => {
@@ -731,10 +749,18 @@ async fn list_files_async_inner(
             }
         }
     };
-    if !visited.insert(canonical.clone()) {
+    
+    // Enhanced check: also track original path to detect complex symlink scenarios
+    let original = path.clone();
+    let combined_key = format!("{}:{}", canonical.display(), original.display());
+    
+    if !visited.insert(canonical.clone()) || visited.contains(&PathBuf::from(&combined_key)) {
         // Symlink loop detected, skip
         return Ok(());
     }
+    
+    // Track the combined key for enhanced detection
+    visited.insert(PathBuf::from(combined_key));
     let mut read_dir = match tokio_fs::read_dir(path).await {
         Ok(rd) => rd,
         Err(e) => {
@@ -809,6 +835,8 @@ pub async fn collect_all_subdirs_async(
 ///
 /// This function includes symlink loop detection to prevent infinite recursion.
 ///
+/// This function includes symlink loop detection to prevent infinite recursion.
+///
 /// # Arguments
 /// * `folder_path` - The path to the folder to scan.
 /// * `gitignore_base_dir` - The base directory for resolving .gitignore files (usually app_state.current_dir).
@@ -832,7 +860,24 @@ pub fn collect_folder_descendants(
     )
 }
 
-/// Internal implementation of collect_folder_descendants with symlink loop detection.
+/// Enhanced symlink tracking for better loop detection
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct PathTracker {
+    canonical: PathBuf,
+    original: PathBuf,
+}
+
+impl PathTracker {
+    fn new(path: &Path) -> io::Result<Self> {
+        let canonical = try_canonicalize(path)?;
+        Ok(Self {
+            canonical,
+            original: path.to_path_buf(),
+        })
+    }
+}
+
+/// Internal implementation of collect_folder_descendants with enhanced symlink loop detection.
 fn collect_folder_descendants_with_visited(
     folder_path: &Path,
     gitignore_base_dir: &PathBuf,
@@ -840,18 +885,44 @@ fn collect_folder_descendants_with_visited(
     descendants_set: &mut HashSet<PathBuf>,
     visited: &mut HashSet<PathBuf>,
 ) -> io::Result<()> {
+    collect_folder_descendants_with_enhanced_tracking(
+        folder_path,
+        gitignore_base_dir,
+        ignore_config,
+        descendants_set,
+        visited,
+        &mut HashSet::new(),
+    )
+}
+
+/// Internal implementation with enhanced symlink loop detection tracking both canonical and original paths.
+fn collect_folder_descendants_with_enhanced_tracking(
+    folder_path: &Path,
+    gitignore_base_dir: &PathBuf,
+    ignore_config: &IgnoreConfig,
+    descendants_set: &mut HashSet<PathBuf>,
+    visited: &mut HashSet<PathBuf>,
+    path_trackers: &mut HashSet<PathTracker>,
+) -> io::Result<()> {
     if !folder_path.is_dir() {
         return Ok(()); // Nothing to collect if it's not a directory
     }
 
-    // Symlink loop detection
-    let canonical = match try_canonicalize(folder_path) {
-        Ok(c) => c,
+    // Enhanced symlink loop detection - track both canonical and original paths
+    let path_tracker = match PathTracker::new(folder_path) {
+        Ok(tracker) => tracker,
         Err(_e) => return Ok(()), // Permission denied or error, skip
     };
 
-    if !visited.insert(canonical.clone()) {
-        // Symlink loop detected, skip this directory
+    // Check if we've already visited this canonical path (old behavior)
+    if !visited.insert(path_tracker.canonical.clone()) {
+        // Symlink loop detected via canonical path, skip this directory
+        return Ok(());
+    }
+
+    // Check if we've already processed this exact path combination (new behavior)
+    if !path_trackers.insert(path_tracker) {
+        // Complex symlink loop detected via path tracking, skip this directory
         return Ok(());
     }
 
@@ -871,8 +942,8 @@ fn collect_folder_descendants_with_visited(
                         descendants_set.insert(path.clone());
 
                         if path.is_dir() {
-                            // Recursively collect descendants of this subdirectory
-                            collect_folder_descendants_with_visited(&path, gitignore_base_dir, ignore_config, descendants_set, visited)?;
+                            // Recursively collect descendants of this subdirectory with enhanced tracking
+                            collect_folder_descendants_with_enhanced_tracking(&path, gitignore_base_dir, ignore_config, descendants_set, visited, path_trackers)?;
                         }
                     }
                     Err(_e) => {

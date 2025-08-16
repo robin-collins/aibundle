@@ -2,5 +2,11 @@
 command = "cargo"
 args = ["install", "--path", "."]
 
+[tasks.run-simple-tui-tests]
+script = ["scripts/test_tui_app.sh"]
+
+[tasks.run-tmux-tests]
+script = ["scripts/run_tmux_tests.sh"]
+
 [tasks.run-tests]
-script = ["tests/scripts/run_all_tests.sh"]
+script = ["scripts/cl_run_tests.sh"]

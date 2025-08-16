@@ -18,8 +18,8 @@
 //!
 //! ## Example
 //! ```rust
-//! use aibundle_modular::tui::App;
-//! # use aibundle_modular::models::{AppConfig, IgnoreConfig};
+//! use aibundle::tui::App;
+//! # use aibundle::models::{AppConfig, IgnoreConfig};
 //! # use std::path::PathBuf;
 //! let config = AppConfig::default();
 //! let start_dir = PathBuf::from(".");

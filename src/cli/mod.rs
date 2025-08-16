@@ -15,7 +15,7 @@
 //!
 //! ## Example
 //! ```rust
-//! use aibundle_modular::cli::{CliOptions, run_cli_mode};
+//! use aibundle::cli::{CliOptions, run_cli_mode};
 //! # tokio_test::block_on(async {
 //! let opts = CliOptions::parse();
 //! run_cli_mode(opts.to_cli_mode_options()).await.unwrap();

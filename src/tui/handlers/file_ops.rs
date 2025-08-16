@@ -129,7 +129,9 @@ impl FileOpsHandler {
         app_state.is_searching = !search_state.search_query.is_empty();
 
         if !app_state.is_searching {
-            app_state.filtered_items = app_state.items.to_vec();
+            // Recompute proper display list (handles '..', sorting, absolute paths)
+            // instead of using items.to_vec() which produces relative paths from Trie
+            Self::load_items(app_state)?;
             return Ok(());
         }
 
@@ -138,9 +140,11 @@ impl FileOpsHandler {
 
         // If not in recursive mode, filter only the current items (non-recursive filtering)
         if !app_state.recursive {
+            // Load items properly first to get absolute paths, then filter
+            Self::load_items(app_state)?;
             app_state.filtered_items = app_state
-                .items
-                .to_vec()
+                .filtered_items
+                .clone()
                 .into_iter()
                 .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(&matcher))
                 .collect();
@@ -328,12 +332,12 @@ impl FileOpsHandler {
             selection_limit: Some(app_state.selection_limit),
         };
 
-        // Directly save the config without terminal confirmation (TUI handles confirmation)
+        // Serialize config to TOML string
         let toml_str = toml::to_string_pretty(&config)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}")))?;
 
-        // Write the file directly using std::fs (synchronous for TUI)
-        std::fs::write(config_path, toml_str)?;
+        // Perform atomic write operation to prevent data corruption
+        crate::config::atomic_write_config(config_path, &toml_str)?;
 
         // Success message
         app_state.set_message(
@@ -503,7 +507,20 @@ impl FileOpsHandler {
 
     // Helper function for recursive expansion
     fn expand_all(app_state: &mut AppState, path: &PathBuf) -> io::Result<()> {
+        let mut visited = std::collections::HashSet::new();
+        Self::expand_all_inner(app_state, path, &mut visited)
+    }
+
+    // Inner helper that tracks visited canonical paths to prevent symlink loops
+    fn expand_all_inner(app_state: &mut AppState, path: &PathBuf, visited: &mut std::collections::HashSet<PathBuf>) -> io::Result<()> {
         if !path.is_dir() || app_state.is_path_ignored(path) {
+            return Ok(());
+        }
+
+        // Get canonical path to detect symlink loops
+        let canonical_path = std::fs::canonicalize(path).unwrap_or_else(|_| path.clone());
+        if !visited.insert(canonical_path) {
+            // Already visited this canonical path - avoid infinite recursion
             return Ok(());
         }
 
@@ -515,10 +532,7 @@ impl FileOpsHandler {
                 for entry in entries.filter_map(|e| e.ok()) {
                     let child_path = entry.path();
                     if child_path.is_dir() && !app_state.is_path_ignored(&child_path) {
-                        // Check if the child path is already expanded to prevent infinite loops in case of symlinks
-                        if !app_state.expanded_folders.contains(&child_path) {
-                            Self::expand_all(app_state, &child_path)?;
-                        }
+                        Self::expand_all_inner(app_state, &child_path, visited)?;
                     }
                 }
             }

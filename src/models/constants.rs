@@ -31,10 +31,10 @@
 /// # Example
 /// ```rust
 /// use crate::models::constants::VERSION;
-/// assert_eq!(VERSION, "0.7.5");
+/// assert_eq!(VERSION, "0.7.7");
 /// ```
 #[doc(alias = "version")]
-pub const VERSION: &str = "0.7.5";
+pub const VERSION: &str = "0.7.7";
 
 /// The default maximum number of items that can be selected at once.
 ///

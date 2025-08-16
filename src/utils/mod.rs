@@ -20,7 +20,7 @@
 //! ## Usage
 //!
 //! ```rust
-//! use aibundle_modular::utils::{centered_rect, human_readable_size};
+//! use aibundle::utils::{centered_rect, human_readable_size};
 //! let rect = ratatui::layout::Rect::new(0, 0, 100, 40);
 //! let popup = centered_rect(50, 20, rect);
 //! assert_eq!(human_readable_size(2048), "2.00 KB");

@@ -11,7 +11,7 @@
 //!
 //! ## Example
 //! ```rust
-//! use aibundle_modular::models::{AppConfig, OutputFormat, DEFAULT_SELECTION_LIMIT};
+//! use aibundle::models::{AppConfig, OutputFormat, DEFAULT_SELECTION_LIMIT};
 //! let config = AppConfig::default();
 //! let fmt = OutputFormat::Llm;
 //! assert_eq!(DEFAULT_SELECTION_LIMIT, 400);

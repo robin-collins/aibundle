@@ -32,6 +32,38 @@ use std::path::{Path, PathBuf};
 use crate::fs::normalize_path;
 use crate::models::{CopyStats, IgnoreConfig, OutputFormat};
 
+/// Escapes XML special characters in a string.
+///
+/// # Arguments
+/// * `s` - The string to escape.
+///
+/// # Returns
+/// * `String` - The escaped string safe for XML content.
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+     .replace('<', "&lt;")
+     .replace('>', "&gt;")
+     .replace('"', "&quot;")
+}
+
+/// Properly escapes a string for JSON content using serde_json.
+///
+/// # Arguments
+/// * `s` - The string to escape.
+///
+/// # Returns
+/// * `String` - The escaped string safe for JSON content (without surrounding quotes).
+fn json_escape(s: &str) -> String {
+    // Use serde_json to properly escape all control characters
+    let escaped = serde_json::to_string(s).unwrap_or_else(|_| "\"\"".to_string());
+    // Remove the surrounding quotes that serde_json adds
+    if escaped.len() >= 2 {
+        escaped[1..escaped.len()-1].to_string()
+    } else {
+        String::new()
+    }
+}
+
 /// Returns true if the given path is a binary file, based on extension or name.
 ///
 /// # Arguments
@@ -61,10 +93,8 @@ pub fn is_binary_file(path: &Path) -> bool {
         }
     }
 
-    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-        let binary_files = ["index"];
-        return binary_files.contains(&name);
-    }
+    // Removed overly aggressive filename-based binary detection
+    // Files like "index.js", "index.html" should not be treated as binary
     false
 }
 
@@ -173,11 +203,7 @@ pub fn process_directory(
                             files += 1;
                         }
                     } else if let Ok(content) = fs::read_to_string(&entry) {
-                        let escaped_content = content
-                            .replace('\\', "\\\\")
-                            .replace('\"', "\\\"")
-                            .replace('\n', "\\n")
-                            .replace('\r', "\\r");
+                        let escaped_content = json_escape(&content);
                         output.push_str(&format!(
                             "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
                             normalized_path,
@@ -238,10 +264,11 @@ pub fn process_directory(
                             OutputFormat::Xml => {
                                 output.push_str(&format!("<file name=\"{}\">\n", normalized_path));
                                 if let Ok(content) = fs::read_to_string(&entry) {
-                                    output.push_str(&format_file_content(
+                                    let formatted_content = format_file_content(
                                         &content,
                                         show_line_numbers,
-                                    ));
+                                    );
+                                    output.push_str(&xml_escape(&formatted_content));
                                 }
                                 output.push_str("</file>\n");
                                 files += 1;
