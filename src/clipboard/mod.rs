@@ -28,30 +28,8 @@
 #![doc(alias = "wsl")]
 
 use std::env::consts::OS;
-use std::fs;
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-
-/// RAII guard to ensure temporary files are cleaned up
-struct TempFileGuard {
-    path: PathBuf,
-}
-
-impl TempFileGuard {
-    fn new(path: &Path) -> Self {
-        Self {
-            path: path.to_path_buf(),
-        }
-    }
-}
-
-impl Drop for TempFileGuard {
-    fn drop(&mut self) {
-        // Best effort cleanup - ignore errors
-        let _ = fs::remove_file(&self.path);
-    }
-}
 
 /// Copies the given text to the system clipboard, supporting Windows, macOS, Linux (Wayland/X11), and WSL.
 ///
@@ -70,69 +48,33 @@ impl Drop for TempFileGuard {
 /// ```
 pub fn copy_to_clipboard(text: &str) -> io::Result<()> {
     if is_wsl() {
-        // For WSL2, write to a temporary file with explicit UTF-8 BOM and use PowerShell to read it
-        let temp_file = std::env::temp_dir().join("aibundle_clipboard_temp.txt");
-
-        // Ensure temp file cleanup with RAII guard
-        let _temp_guard = TempFileGuard::new(&temp_file);
-
-        // Add UTF-8 BOM to ensure correct encoding in Windows
-        let mut content_with_bom = Vec::new();
-        // UTF-8 BOM (EF BB BF)
-        content_with_bom.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
-        content_with_bom.extend_from_slice(text.as_bytes());
-
-        fs::write(&temp_file, content_with_bom)
-            .map_err(|e| io::Error::new(
-                io::ErrorKind::Other, 
-                format!("Failed to write temp file for WSL clipboard: {}", e)
-            ))?;
-
-        // Convert Linux path to Windows path with error handling
-        let wslpath_output = Command::new("wslpath")
-            .arg("-w")
-            .arg(&temp_file)
-            .output()
-            .map_err(|e| io::Error::new(
-                io::ErrorKind::Other, 
-                format!("Failed to run wslpath command: {}", e)
-            ))?;
-
-        if !wslpath_output.status.success() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("wslpath command failed with status: {}", wslpath_output.status)
-            ));
-        }
-
-        let windows_path = String::from_utf8(wslpath_output.stdout)
-            .map_err(|e| io::Error::new(
-                io::ErrorKind::Other, 
-                format!("Failed to convert wslpath output to UTF-8: {}", e)
-            ))?
-            .trim()
-            .to_string();
-
-        // Enhanced PowerShell command to ensure proper Unicode handling
-        let ps_command = format!(
-            "[Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
-            $content = [System.IO.File]::ReadAllText('{}', [System.Text.Encoding]::UTF8); \
-            [System.Windows.Forms.Clipboard]::SetText($content, [System.Windows.Forms.TextDataFormat]::UnicodeText);",
-            windows_path.replace("'", "''")
-        );
-
-        let status = Command::new("powershell.exe")
+        // For WSL2, use Set-Clipboard with piped stdin to avoid STA threading issues
+        let mut child = Command::new("powershell.exe")
             .args([
                 "-NoProfile",
                 "-NonInteractive",
                 "-Command",
-                // Add namespace reference for Windows Forms
-                &format!("Add-Type -AssemblyName System.Windows.Forms; {}", ps_command)
+                "[Console]::InputEncoding=[Text.UTF8Encoding]::new($false); Set-Clipboard -Value ([Console]::In.ReadToEnd())",
             ])
-            .status()
+            .stdin(Stdio::piped())
+            .spawn()
             .map_err(|e| io::Error::new(
                 io::ErrorKind::Other, 
-                format!("Failed to execute PowerShell command: {}", e)
+                format!("Failed to spawn PowerShell command: {}", e)
+            ))?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(text.as_bytes())
+                .map_err(|e| io::Error::new(
+                    io::ErrorKind::Other, 
+                    format!("Failed to write to PowerShell stdin: {}", e)
+                ))?;
+        }
+
+        let status = child.wait()
+            .map_err(|e| io::Error::new(
+                io::ErrorKind::Other, 
+                format!("Failed to wait for PowerShell command: {}", e)
             ))?;
 
         if !status.success() {
@@ -145,42 +87,33 @@ pub fn copy_to_clipboard(text: &str) -> io::Result<()> {
     } else {
         match OS {
             "windows" => {
-                // For Windows, use the same temp file approach with UTF-8 BOM
-                let temp_file = std::env::temp_dir().join("aibundle_clipboard_temp.txt");
-                
-                // Ensure temp file cleanup with RAII guard
-                let _temp_guard = TempFileGuard::new(&temp_file);
-
-                // Add UTF-8 BOM to ensure correct encoding
-                let mut content_with_bom = Vec::new();
-                content_with_bom.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
-                content_with_bom.extend_from_slice(text.as_bytes());
-
-                fs::write(&temp_file, content_with_bom)
-                    .map_err(|e| io::Error::new(
-                        io::ErrorKind::Other, 
-                        format!("Failed to write temp file for Windows clipboard: {}", e)
-                    ))?;
-
-                // Enhanced PowerShell command to ensure proper Unicode handling
-                let ps_command = format!(
-                    "[Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
-                    $content = [System.IO.File]::ReadAllText('{}', [System.Text.Encoding]::UTF8); \
-                    [System.Windows.Forms.Clipboard]::SetText($content, [System.Windows.Forms.TextDataFormat]::UnicodeText);",
-                    temp_file.to_string_lossy().replace("'", "''")
-                );
-
-                let status = Command::new("powershell.exe")
+                // Use Set-Clipboard with piped stdin to avoid STA threading issues
+                let mut child = Command::new("powershell.exe")
                     .args([
                         "-NoProfile",
                         "-NonInteractive",
                         "-Command",
-                        &format!("Add-Type -AssemblyName System.Windows.Forms; {}", ps_command)
+                        "[Console]::InputEncoding=[Text.UTF8Encoding]::new($false); Set-Clipboard -Value ([Console]::In.ReadToEnd())",
                     ])
-                    .status()
+                    .stdin(Stdio::piped())
+                    .spawn()
                     .map_err(|e| io::Error::new(
                         io::ErrorKind::Other, 
-                        format!("Failed to execute PowerShell command: {}", e)
+                        format!("Failed to spawn PowerShell command: {}", e)
+                    ))?;
+
+                if let Some(mut stdin) = child.stdin.take() {
+                    stdin.write_all(text.as_bytes())
+                        .map_err(|e| io::Error::new(
+                            io::ErrorKind::Other, 
+                            format!("Failed to write to PowerShell stdin: {}", e)
+                        ))?;
+                }
+
+                let status = child.wait()
+                    .map_err(|e| io::Error::new(
+                        io::ErrorKind::Other, 
+                        format!("Failed to wait for PowerShell command: {}", e)
                     ))?;
 
                 if !status.success() {

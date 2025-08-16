@@ -29,6 +29,9 @@ use crate::fs::normalize_path;
 use crate::models::CopyStats;
 use crate::output::format::{is_binary_file, process_directory};
 
+// Note: json_escape function removed since we now use serde_json::json! macro
+// which handles all escaping automatically
+
 /// Formats the selected files and directories as JSON output.
 ///
 /// Each file is represented as a JSON object with its path and content. Directories are represented as nested objects.
@@ -60,13 +63,10 @@ pub fn format_json_output(
     current_dir: &PathBuf,
     ignore_config: &crate::models::IgnoreConfig,
 ) -> io::Result<(String, CopyStats)> {
-    let mut output = String::new();
     let mut stats = CopyStats {
         files: 0,
         folders: 0,
     };
-
-    output.push('[');
 
     // Process only items whose parent is not also selected (avoid duplication)
     let mut to_process: Vec<_> = selected_items
@@ -81,7 +81,8 @@ pub fn format_json_output(
         .collect();
     to_process.sort();
 
-    let mut first_item = true;
+    let mut json_items = Vec::new();
+    
     for path in to_process {
         // Handle the case where paths might be relative and current_dir is "."
         let rel_path = if current_dir == Path::new(".") && path.is_relative() {
@@ -94,37 +95,29 @@ pub fn format_json_output(
 
         let normalized_path = normalize_path(&rel_path.to_string_lossy());
 
-        if !first_item {
-            output.push(',');
-        }
-        first_item = false;
-
         if path.is_file() {
             if is_binary_file(path) {
                 if ignore_config.include_binary_files {
-                    output.push_str(&format!(
-                        "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":true}}",
-                        normalized_path
-                    ));
+                    json_items.push(serde_json::json!({
+                        "type": "file",
+                        "path": normalized_path,
+                        "binary": true
+                    }));
                     stats.files += 1;
                 }
             } else if let Ok(content) = fs::read_to_string(path) {
-                let escaped_content = content
-                    .replace('\\', "\\\\")
-                    .replace('"', "\\\"")
-                    .replace('\n', "\\n")
-                    .replace('\r', "\\r");
-                output.push_str(&format!(
-                    "{{\"type\":\"file\",\"path\":\"{}\",\"binary\":false,\"content\":\"{}\"}}",
-                    normalized_path, escaped_content
-                ));
+                json_items.push(serde_json::json!({
+                    "type": "file",
+                    "path": normalized_path,
+                    "binary": false,
+                    "content": content
+                }));
                 stats.files += 1;
             }
         } else if path.is_dir() {
-            output.push_str(&format!(
-                "{{\"type\":\"directory\",\"path\":\"{}\",\"contents\":[",
-                normalized_path
-            ));
+            // For directories, we still need to use the existing process_directory approach
+            // since it handles the recursive structure. We'll build the directory JSON manually
+            // but use serde_json for the outer structure.
             let mut dir_contents = String::new();
             if let Ok(dir_stats) = process_directory(
                 path,
@@ -135,16 +128,28 @@ pub fn format_json_output(
                 false, // JSON format doesn't use line numbers
                 ignore_config,
             ) {
-                output.push_str(&dir_contents);
+                // Parse the directory contents as JSON and embed it
+                let contents_json: serde_json::Value = if dir_contents.is_empty() {
+                    serde_json::json!([])
+                } else {
+                    serde_json::from_str(&format!("[{}]", dir_contents))
+                        .unwrap_or_else(|_| serde_json::json!([]))
+                };
+                
+                json_items.push(serde_json::json!({
+                    "type": "directory",
+                    "path": normalized_path,
+                    "contents": contents_json
+                }));
                 stats.files += dir_stats.files;
                 stats.folders += dir_stats.folders;
             }
-            output.push_str("]}");
             stats.folders += 1;
         }
     }
 
-    output.push(']');
+    let output = serde_json::to_string_pretty(&json_items)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("JSON serialization error: {}", e)))?;
 
     Ok((output, stats))
 }

@@ -610,11 +610,9 @@ fn is_binary_by_extension(path: &Path) -> bool {
         }
     }
 
-    // Check specific filenames that are typically binary
-    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-        let binary_files = ["index", "COMMIT_EDITMSG"];
-        return binary_files.contains(&name);
-    }
+    // Removed overly aggressive filename-based binary detection
+    // Files like "index.js", "index.html" should not be treated as binary
+    // COMMIT_EDITMSG is also plain text and should not be treated as binary
 
     false
 }

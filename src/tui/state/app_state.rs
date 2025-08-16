@@ -437,8 +437,36 @@ impl AppState {
             Err(e) => { return Err(e); }
         }
 
-        // Skip sorting during traversal - will sort once at the end for better performance
-        // This optimization reduces redundant sorting operations
+        // Sort entries at each directory level to maintain proper order within each folder
+        current_level_entries.sort_by(|a, b| {
+            let a_is_dir = a.is_dir();
+            let b_is_dir = b.is_dir();
+            let a_name_os = a.file_name().unwrap_or_default();
+            let b_name_os = b.file_name().unwrap_or_default();
+            let a_name_str = a_name_os.to_string_lossy();
+            let b_name_str = b_name_os.to_string_lossy();
+            
+            match (a_is_dir, b_is_dir) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => {
+                    let a_is_dot = a_name_str.starts_with(".");
+                    let b_is_dot = b_name_str.starts_with(".");
+                    match (a_is_dot, b_is_dot) {
+                        (true, false) => std::cmp::Ordering::Less,
+                        (false, true) => std::cmp::Ordering::Greater,
+                        _ => {
+                            let ordering = a_name_str.to_lowercase().cmp(&b_name_str.to_lowercase());
+                            if ordering != std::cmp::Ordering::Equal {
+                                ordering
+                            } else {
+                                a_name_str.cmp(&b_name_str)
+                            }
+                        }
+                    }
+                }
+            }
+        });
 
         // Add sorted entries to collected_items and recurse for expanded folders
         for path in current_level_entries {
@@ -461,46 +489,42 @@ impl AppState {
             });
         }
 
-        // Apply single sort at the end for optimal performance (instead of sorting at each directory level)
-        // This optimization reduces redundant sorting operations from O(n log n) per directory to O(n log n) total
-        raw_items.sort_by(|a, b| {
-            let a_is_dir = a.is_dir();
-            let b_is_dir = b.is_dir();
-            let a_name_os = a.file_name().unwrap_or_default();
-            let b_name_os = b.file_name().unwrap_or_default();
-            let a_name_str = a_name_os.to_string_lossy();
-            let b_name_str = b_name_os.to_string_lossy();
-            
-            match (a_is_dir, b_is_dir) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => {
-                    let a_is_dot = a_name_str.starts_with(".");
-                    let b_is_dot = b_name_str.starts_with(".");
-                    match (a_is_dot, b_is_dot) {
-                        (true, false) => std::cmp::Ordering::Less,
-                        (false, true) => std::cmp::Ordering::Greater,
-                        _ => {
-                            // For non-recursive mode, maintain hierarchical order by path depth
-                            if !self.recursive {
-                                let a_depth = a.components().count();
-                                let b_depth = b.components().count();
-                                if a_depth != b_depth {
-                                    return a_depth.cmp(&b_depth);
+        // Don't sort the items globally for non-recursive mode as it breaks tree structure
+        // Instead, rely on the order items were collected in gather_items_for_view
+        // which maintains proper hierarchical order
+        if self.recursive {
+            // For recursive mode, sort normally since hierarchy is flattened
+            raw_items.sort_by(|a, b| {
+                let a_is_dir = a.is_dir();
+                let b_is_dir = b.is_dir();
+                let a_name_os = a.file_name().unwrap_or_default();
+                let b_name_os = b.file_name().unwrap_or_default();
+                let a_name_str = a_name_os.to_string_lossy();
+                let b_name_str = b_name_os.to_string_lossy();
+                
+                match (a_is_dir, b_is_dir) {
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
+                    _ => {
+                        let a_is_dot = a_name_str.starts_with(".");
+                        let b_is_dot = b_name_str.starts_with(".");
+                        match (a_is_dot, b_is_dot) {
+                            (true, false) => std::cmp::Ordering::Less,
+                            (false, true) => std::cmp::Ordering::Greater,
+                            _ => {
+                                let ordering = a_name_str.to_lowercase().cmp(&b_name_str.to_lowercase());
+                                if ordering != std::cmp::Ordering::Equal {
+                                    ordering
+                                } else {
+                                    a_name_str.cmp(&b_name_str)
                                 }
-                            }
-                            
-                            let ordering = a_name_str.to_lowercase().cmp(&b_name_str.to_lowercase());
-                            if ordering != std::cmp::Ordering::Equal {
-                                ordering
-                            } else {
-                                a_name_str.cmp(&b_name_str)
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
+        // For non-recursive mode, preserve the collection order which maintains tree structure
 
         self.filtered_items = raw_items;
 

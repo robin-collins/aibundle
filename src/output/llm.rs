@@ -116,32 +116,8 @@ pub fn format_llm_output(
         } else if path.is_dir() {
             folder_count += 1;
 
-            // Add all files in directory to file_contents
-            if let Ok(entries) = fs::read_dir(path) {
-                for entry in entries.filter_map(Result::ok) {
-                    let entry_path = entry.path();
-                    if entry_path.is_file() {
-                        // Handle the case where paths might be relative and current_dir is "."
-                        let rel_entry_path = if current_dir == Path::new(".") && entry_path.is_relative() {
-                            entry_path.as_path()
-                        } else if let Ok(stripped) = entry_path.strip_prefix(current_dir) {
-                            stripped
-                        } else {
-                            entry_path.as_path()
-                        };
-
-                        if !is_binary_file(&entry_path)
-                            || ignore_config.include_binary_files
-                        {
-                            if let Ok(content) = fs::read_to_string(&entry_path) {
-                                let normalized_path =
-                                    normalize_path(&rel_entry_path.to_string_lossy());
-                                file_contents.push((normalized_path, content));
-                            }
-                        }
-                    }
-                }
-            }
+            // Recursively collect all files from the directory for file contents
+            collect_files_from_directory(path, current_dir, ignore_config, &mut file_contents);
         }
     }
 

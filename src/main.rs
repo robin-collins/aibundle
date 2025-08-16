@@ -166,7 +166,6 @@ async fn main() -> io::Result<()> {
 
             // If --save-config was provided without any other CLI options, exit early.
             if cli_args.files.is_none()
-                && cli_args.search.is_none()
                 && cli_args.output_file.is_none()
                 && !cli_args.output_console
             {

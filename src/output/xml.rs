@@ -29,6 +29,20 @@ use crate::fs::normalize_path;
 use crate::models::CopyStats;
 use crate::output::format::{format_file_content, is_binary_file, process_directory};
 
+/// Escapes XML special characters in a string.
+///
+/// # Arguments
+/// * `s` - The string to escape.
+///
+/// # Returns
+/// * `String` - The escaped string safe for XML content.
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+     .replace('<', "&lt;")
+     .replace('>', "&gt;")
+     .replace('"', "&quot;")
+}
+
 /// Formats the selected files and directories as XML output.
 ///
 /// Each file is represented as a <file> element with its path as an attribute. Directories are represented as <folder> elements.
@@ -106,7 +120,8 @@ pub fn format_xml_output(
             } else {
                 output.push_str(&format!("<file name=\"{}\">\n", normalized_path));
                 if let Ok(content) = fs::read_to_string(path) {
-                    output.push_str(&format_file_content(&content, show_line_numbers));
+                    let formatted_content = format_file_content(&content, show_line_numbers);
+                    output.push_str(&xml_escape(&formatted_content));
                 }
                 output.push_str("</file>\n");
                 stats.files += 1;
