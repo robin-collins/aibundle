@@ -19,8 +19,8 @@
 //!
 //! ## Example
 //! ```rust
-//! use aibundle_modular::tui::App;
-//! # use aibundle_modular::models::{AppConfig, IgnoreConfig};
+//! use aibundle::tui::App;
+//! # use aibundle::models::{AppConfig, IgnoreConfig};
 //! # use std::path::PathBuf;
 //! let config = AppConfig::default();
 //! let start_dir = PathBuf::from(".");
@@ -46,7 +46,7 @@ use std::io;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::collections::HashSet;
 
 use crate::models::AppConfig;
@@ -157,8 +157,10 @@ pub struct App {
     clipboard_rx: Option<mpsc::UnboundedReceiver<Result<(), String>>>,
     /// Add event channel fields to App struct
     #[allow(dead_code)]
-    pub event_tx: Sender<AppEvent>,
+    pub event_tx: SyncSender<AppEvent>,
     event_rx: Receiver<AppEvent>,
+    /// Recent events for deduplication (operation_id -> timestamp)
+    recent_events: std::collections::HashMap<OperationId, Instant>,
 }
 
 impl App {
@@ -168,7 +170,7 @@ impl App {
         start_dir: PathBuf,
         ignore_config: crate::models::IgnoreConfig,
     ) -> Result<Self, io::Error> {
-        let (event_tx, event_rx) = channel::<AppEvent>();
+        let (event_tx, event_rx) = sync_channel::<AppEvent>(100); // Bounded channel with capacity 100
 
         let app_state = AppState::new(config.clone(), start_dir, ignore_config.clone(), event_tx.clone())?;
 
@@ -187,6 +189,7 @@ impl App {
             clipboard_rx: Some(clipboard_rx),
             event_tx,
             event_rx,
+            recent_events: std::collections::HashMap::new(),
         };
 
         Ok(app)
@@ -212,18 +215,29 @@ impl App {
             // Update activity state based on time since last activity
             self.update_activity_state();
 
+            // Clean up old events from deduplication cache (older than 30 seconds)
+            self.cleanup_old_events();
+
             // Process internal AppEvents from the channel
             while let Ok(app_event) = self.event_rx.try_recv() {
-                // TODO: Implement comprehensive AppEvent handling here
-                // For now, just a placeholder. This is where SelectAllScanComplete would be handled.
+                // Check for event deduplication
+                if self.is_duplicate_event(&app_event) {
+                    continue; // Skip duplicate events
+                }
+                
+                // Track this event for deduplication
+                self.track_event(&app_event);
+                
                 match app_event {
                     AppEvent::SelectAllScanComplete {
+                        operation_id,
                         total_potential_item_count,
                         final_selection_set,
                         initial_optimistic_set,
                     } => {
-                        // Only process if no cancellation was requested (prevent race conditions)
-                        if self.state.is_counting {
+                        // Only process if no cancellation was requested and operation ID matches (prevent race conditions)
+                        if self.state.is_counting && 
+                           self.state.current_operation_id.as_ref() == Some(&operation_id) {
                             self.state.is_counting = false; // Always reset the counting flag
 
                             if initial_optimistic_set.len() > self.state.selection_limit && final_selection_set.is_empty() {
@@ -243,11 +257,19 @@ impl App {
                         }
                         // If is_counting was false, this event was cancelled/outdated, so ignore it
                     },
-                    AppEvent::SelectionCountComplete(path, count, opt_folder, opt_children) => {
-                        // Only process if still counting and the path matches what we're expecting
-                        if self.state.is_counting && self.state.counting_path.as_ref() == Some(&path) {
+                    AppEvent::SelectionCountComplete {
+                        operation_id,
+                        path,
+                        count,
+                        optimistic_folder,
+                        optimistic_children
+                    } => {
+                        // Only process if still counting, operation ID matches, and the path matches what we're expecting
+                        if self.state.is_counting && 
+                           self.state.current_operation_id.as_ref() == Some(&operation_id) &&
+                           self.state.counting_path.as_ref() == Some(&path) {
                             // Delegate to a handler or process directly
-                            FileOpsHandler::finalize_single_selection(&mut self.state, path, count, opt_folder, opt_children);
+                            FileOpsHandler::finalize_single_selection(&mut self.state, path, count, optimistic_folder, optimistic_children);
                             self.dirty_flags.file_list = true;
                             self.dirty_flags.status_bar = true;
                         }
@@ -257,6 +279,7 @@ impl App {
                         // Cancel any ongoing selection operations
                         self.state.is_counting = false;
                         self.state.counting_path = None;
+                        self.state.current_operation_id = None;
                         self.state.optimistically_added_folder = None;
                         self.state.optimistically_added_children.clear();
                         if let Some(sender) = self.state.count_abort_sender.take() {
@@ -542,11 +565,63 @@ impl App {
 
         Ok(())
     }
+
+    /// Cleans up old events from the deduplication cache
+    fn cleanup_old_events(&mut self) {
+        const EVENT_CACHE_DURATION: Duration = Duration::from_secs(30);
+        let cutoff_time = Instant::now() - EVENT_CACHE_DURATION;
+        
+        self.recent_events.retain(|_, timestamp| *timestamp > cutoff_time);
+    }
+
+    /// Checks if an event is a duplicate based on operation ID
+    fn is_duplicate_event(&self, event: &AppEvent) -> bool {
+        match event {
+            AppEvent::SelectionCountComplete { operation_id, .. } |
+            AppEvent::SelectAllScanComplete { operation_id, .. } => {
+                self.recent_events.contains_key(operation_id)
+            }
+            AppEvent::CancelSelectionOperations => false, // Always process cancellation events
+        }
+    }
+
+    /// Tracks an event for deduplication
+    fn track_event(&mut self, event: &AppEvent) {
+        match event {
+            AppEvent::SelectionCountComplete { operation_id, .. } |
+            AppEvent::SelectAllScanComplete { operation_id, .. } => {
+                self.recent_events.insert(*operation_id, Instant::now());
+            }
+            AppEvent::CancelSelectionOperations => {
+                // Clear all tracked events on cancellation
+                self.recent_events.clear();
+            }
+        }
+    }
+}
+
+/// Unique identifier for selection operations to prevent race conditions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OperationId(u64);
+
+impl OperationId {
+    pub fn new() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(1);
+        Self(COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
 }
 
 pub enum AppEvent {
-    SelectionCountComplete(PathBuf, usize, Option<PathBuf>, HashSet<PathBuf>),
+    SelectionCountComplete {
+        operation_id: OperationId,
+        path: PathBuf, 
+        count: usize, 
+        optimistic_folder: Option<PathBuf>, 
+        optimistic_children: HashSet<PathBuf>
+    },
     SelectAllScanComplete {
+        operation_id: OperationId,
         total_potential_item_count: usize,
         final_selection_set: HashSet<PathBuf>,
         initial_optimistic_set: HashSet<PathBuf>
@@ -560,21 +635,23 @@ mod tests {
     use super::*;
     use crate::models::{AppConfig, IgnoreConfig};
     use tempfile::TempDir;
-    use std::sync::mpsc;
+
     use std::time::Duration;
 
     /// Test AppEvent enum completeness
     #[test]
     fn test_app_event_variants() {
         // Ensure all expected event types exist
-        let _selection_complete = AppEvent::SelectionCountComplete(
-            PathBuf::from("/test"),
-            42,
-            None,
-            HashSet::new()
-        );
+        let _selection_complete = AppEvent::SelectionCountComplete {
+            operation_id: OperationId::new(),
+            path: PathBuf::from("/test"),
+            count: 42,
+            optimistic_folder: None,
+            optimistic_children: HashSet::new(),
+        };
 
         let _select_all_complete = AppEvent::SelectAllScanComplete {
+            operation_id: OperationId::new(),
             total_potential_item_count: 100,
             final_selection_set: HashSet::new(),
             initial_optimistic_set: HashSet::new(),
@@ -583,7 +660,7 @@ mod tests {
         let _cancel_operations = AppEvent::CancelSelectionOperations;
 
         // Test that events can be sent through channel
-        let (tx, rx) = mpsc::channel::<AppEvent>();
+        let (tx, rx) = std::sync::mpsc::sync_channel::<AppEvent>(10);
         tx.send(AppEvent::CancelSelectionOperations).unwrap();
 
         match rx.recv_timeout(Duration::from_millis(100)) {
@@ -617,16 +694,17 @@ mod tests {
     /// Test event handling doesn't block main thread
     #[test]
     fn test_event_channel_non_blocking() {
-        let (tx, rx) = mpsc::channel::<AppEvent>();
+        let (tx, rx) = std::sync::mpsc::sync_channel::<AppEvent>(1000);
 
         // Send multiple events rapidly
         for i in 0..1000 {
-            let event = AppEvent::SelectionCountComplete(
-                PathBuf::from(format!("/test/{}", i)),
-                i,
-                None,
-                HashSet::new(),
-            );
+            let event = AppEvent::SelectionCountComplete {
+                operation_id: OperationId::new(),
+                path: PathBuf::from(format!("/test/{}", i)),
+                count: i,
+                optimistic_folder: None,
+                optimistic_children: HashSet::new(),
+            };
 
             // This should not block
             let send_result = tx.send(event);
@@ -654,24 +732,26 @@ mod tests {
     /// Mock test for race condition prevention
     #[test]
     fn test_selection_operation_cancellation_pattern() {
-        let (tx, rx) = mpsc::channel::<AppEvent>();
+        let (tx, rx) = std::sync::mpsc::sync_channel::<AppEvent>(10);
 
         // Simulate scenario where user input triggers cancellation
         // while background selection operation is running
 
         // 1. Start background operation (simulated)
-        tx.send(AppEvent::SelectionCountComplete(
-            PathBuf::from("/test"),
-            100,
-            None,
-            HashSet::new(),
-        )).unwrap();
+        tx.send(AppEvent::SelectionCountComplete {
+            operation_id: OperationId::new(),
+            path: PathBuf::from("/test"),
+            count: 100,
+            optimistic_folder: None,
+            optimistic_children: HashSet::new(),
+        }).unwrap();
 
         // 2. User input causes cancellation
         tx.send(AppEvent::CancelSelectionOperations).unwrap();
 
         // 3. Another background operation result arrives late
         tx.send(AppEvent::SelectAllScanComplete {
+            operation_id: OperationId::new(),
             total_potential_item_count: 200,
             final_selection_set: HashSet::new(),
             initial_optimistic_set: HashSet::new(),

@@ -12,7 +12,7 @@
 //!
 //! ## Example
 //! ```rust
-//! use aibundle_modular::clipboard::{copy_to_clipboard, get_clipboard_contents};
+//! use aibundle::clipboard::{copy_to_clipboard, get_clipboard_contents};
 //! copy_to_clipboard("Hello, clipboard!").unwrap();
 //! let contents = get_clipboard_contents().unwrap();
 //! assert!(contents.contains("Hello"));
@@ -30,7 +30,28 @@
 use std::env::consts::OS;
 use std::fs;
 use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+
+/// RAII guard to ensure temporary files are cleaned up
+struct TempFileGuard {
+    path: PathBuf,
+}
+
+impl TempFileGuard {
+    fn new(path: &Path) -> Self {
+        Self {
+            path: path.to_path_buf(),
+        }
+    }
+}
+
+impl Drop for TempFileGuard {
+    fn drop(&mut self) {
+        // Best effort cleanup - ignore errors
+        let _ = fs::remove_file(&self.path);
+    }
+}
 
 /// Copies the given text to the system clipboard, supporting Windows, macOS, Linux (Wayland/X11), and WSL.
 ///
@@ -52,25 +73,45 @@ pub fn copy_to_clipboard(text: &str) -> io::Result<()> {
         // For WSL2, write to a temporary file with explicit UTF-8 BOM and use PowerShell to read it
         let temp_file = std::env::temp_dir().join("aibundle_clipboard_temp.txt");
 
+        // Ensure temp file cleanup with RAII guard
+        let _temp_guard = TempFileGuard::new(&temp_file);
+
         // Add UTF-8 BOM to ensure correct encoding in Windows
         let mut content_with_bom = Vec::new();
         // UTF-8 BOM (EF BB BF)
         content_with_bom.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
         content_with_bom.extend_from_slice(text.as_bytes());
 
-        fs::write(&temp_file, content_with_bom)?;
+        fs::write(&temp_file, content_with_bom)
+            .map_err(|e| io::Error::new(
+                io::ErrorKind::Other, 
+                format!("Failed to write temp file for WSL clipboard: {}", e)
+            ))?;
 
-        // Convert Linux path to Windows path
-        let windows_path = String::from_utf8(
-            Command::new("wslpath")
-                .arg("-w")
-                .arg(&temp_file)
-                .output()?
-                .stdout,
-        )
-        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to convert path"))?
-        .trim()
-        .to_string();
+        // Convert Linux path to Windows path with error handling
+        let wslpath_output = Command::new("wslpath")
+            .arg("-w")
+            .arg(&temp_file)
+            .output()
+            .map_err(|e| io::Error::new(
+                io::ErrorKind::Other, 
+                format!("Failed to run wslpath command: {}", e)
+            ))?;
+
+        if !wslpath_output.status.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("wslpath command failed with status: {}", wslpath_output.status)
+            ));
+        }
+
+        let windows_path = String::from_utf8(wslpath_output.stdout)
+            .map_err(|e| io::Error::new(
+                io::ErrorKind::Other, 
+                format!("Failed to convert wslpath output to UTF-8: {}", e)
+            ))?
+            .trim()
+            .to_string();
 
         // Enhanced PowerShell command to ensure proper Unicode handling
         let ps_command = format!(
@@ -88,15 +129,17 @@ pub fn copy_to_clipboard(text: &str) -> io::Result<()> {
                 // Add namespace reference for Windows Forms
                 &format!("Add-Type -AssemblyName System.Windows.Forms; {}", ps_command)
             ])
-            .status()?;
-
-        // Clean up temp file
-        let _ = fs::remove_file(temp_file);
+            .status()
+            .map_err(|e| io::Error::new(
+                io::ErrorKind::Other, 
+                format!("Failed to execute PowerShell command: {}", e)
+            ))?;
 
         if !status.success() {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "Failed to copy to Windows clipboard",
+                format!("PowerShell clipboard command failed with exit code: {}", 
+                    status.code().unwrap_or(-1))
             ));
         }
     } else {
@@ -104,13 +147,20 @@ pub fn copy_to_clipboard(text: &str) -> io::Result<()> {
             "windows" => {
                 // For Windows, use the same temp file approach with UTF-8 BOM
                 let temp_file = std::env::temp_dir().join("aibundle_clipboard_temp.txt");
+                
+                // Ensure temp file cleanup with RAII guard
+                let _temp_guard = TempFileGuard::new(&temp_file);
 
                 // Add UTF-8 BOM to ensure correct encoding
                 let mut content_with_bom = Vec::new();
                 content_with_bom.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
                 content_with_bom.extend_from_slice(text.as_bytes());
 
-                fs::write(&temp_file, content_with_bom)?;
+                fs::write(&temp_file, content_with_bom)
+                    .map_err(|e| io::Error::new(
+                        io::ErrorKind::Other, 
+                        format!("Failed to write temp file for Windows clipboard: {}", e)
+                    ))?;
 
                 // Enhanced PowerShell command to ensure proper Unicode handling
                 let ps_command = format!(
@@ -127,15 +177,17 @@ pub fn copy_to_clipboard(text: &str) -> io::Result<()> {
                         "-Command",
                         &format!("Add-Type -AssemblyName System.Windows.Forms; {}", ps_command)
                     ])
-                    .status()?;
-
-                // Clean up temp file
-                let _ = fs::remove_file(temp_file);
+                    .status()
+                    .map_err(|e| io::Error::new(
+                        io::ErrorKind::Other, 
+                        format!("Failed to execute PowerShell command: {}", e)
+                    ))?;
 
                 if !status.success() {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
-                        "Failed to copy to clipboard",
+                        format!("PowerShell clipboard command failed with exit code: {}", 
+                            status.code().unwrap_or(-1))
                     ));
                 }
             }
@@ -204,11 +256,24 @@ pub fn get_clipboard_contents() -> io::Result<String> {
                 "-Command",
                 "[Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Clipboard",
             ])
-            .output()?;
+            .output()
+            .map_err(|e| io::Error::new(
+                io::ErrorKind::Other, 
+                format!("Failed to execute PowerShell Get-Clipboard command: {}", e)
+            ))?;
 
         if output.status.success() {
             return String::from_utf8(output.stdout)
-                .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"));
+                .map_err(|e| io::Error::new(
+                    io::ErrorKind::Other, 
+                    format!("Invalid UTF-8 in WSL clipboard contents: {}", e)
+                ));
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("PowerShell Get-Clipboard failed with exit code: {}", 
+                    output.status.code().unwrap_or(-1))
+            ));
         }
     }
 
@@ -221,13 +286,24 @@ pub fn get_clipboard_contents() -> io::Result<String> {
                     "-Command",
                     "[Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Clipboard",
                 ])
-                .output()?;
+                .output()
+                .map_err(|e| io::Error::new(
+                    io::ErrorKind::Other, 
+                    format!("Failed to execute PowerShell Get-Clipboard command: {}", e)
+                ))?;
 
             if output.status.success() {
                 String::from_utf8(output.stdout)
-                    .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid UTF-8 in clipboard"))
+                    .map_err(|e| io::Error::new(
+                        io::ErrorKind::Other, 
+                        format!("Invalid UTF-8 in Windows clipboard contents: {}", e)
+                    ))
             } else {
-                Ok(String::new())
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("PowerShell Get-Clipboard failed with exit code: {}", 
+                        output.status.code().unwrap_or(-1))
+                ))
             }
         }
         "macos" => {

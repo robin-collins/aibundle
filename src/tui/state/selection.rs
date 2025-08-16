@@ -25,7 +25,7 @@ use std::thread;
 
 use crate::fs as crate_fs;
 use crate::tui::state::app_state::{AppState, MessageType};
-use crate::tui::app::AppEvent;
+use crate::tui::app::{AppEvent, OperationId};
 
 /// Represents the selection state for the file list, including UI and local selection.
 ///
@@ -107,91 +107,103 @@ impl SelectionState {
                 }
             } else { // Selecting a new item
                 if path.is_dir() {
-                    if app_state.selected_items.len() < limit || app_state.selected_items.contains(&path) {
-                        // Store optimistic additions for the event
-                        let optimistic_folder_for_event = Some(path.clone());
-                        let mut optimistic_children_for_event = HashSet::new();
-
-                        app_state.selected_items.insert(path.clone());
-                        app_state.optimistically_added_folder = Some(path.clone());
-                        app_state.optimistically_added_children.clear();
-
-                        if app_state.expanded_folders.contains(&path) {
-                            let mut children_to_add_optimistically = Vec::new();
-                            for item_in_list in app_state.get_display_items() {
-                                if item_in_list.starts_with(&path) && item_in_list != &path {
-                                    children_to_add_optimistically.push(item_in_list.clone());
-                                }
-                            }
-                            for child_path_opt in children_to_add_optimistically {
-                                if app_state.selected_items.len() < limit {
-                                    if app_state.selected_items.insert(child_path_opt.clone()) {
-                                        app_state.optimistically_added_children.insert(child_path_opt.clone());
-                                        optimistic_children_for_event.insert(child_path_opt); // Capture for event
-                                    }
-                                } else {
-                                    app_state.set_message(
-                                        format!(
-                                            "Selection limit ({}) reached while optimistically adding children.",
-                                            limit
-                                        ),
-                                        MessageType::Warning,
-                                    );
-                                    break;
-                                }
-                            }
-                        }
-
-                        // Async counting for this folder, sending AppEvent
-                        app_state.is_counting = true; // General flag for UI status
-                        app_state.counting_path = Some(path.clone()); // Path being counted for UI status
-                        // app_state.pending_count = None; // No longer using this old channel
-
-                        let p_clone = path.clone();
-                        let base_dir_clone = app_state.current_dir.clone();
-                        let ignore_config_clone = app_state.ignore_config.clone();
-                        let limit_clone = app_state.selection_limit;
-                        let event_tx_clone = app_state.tx.clone(); // Use the AppState's event sender
-
-                        thread::spawn(move || {
-                            let count_result = crate_fs::count_selection_items(
-                                &p_clone,
-                                &base_dir_clone,
-                                &ignore_config_clone,
-                                limit_clone
-                            );
-                            match count_result {
-                                Ok(num_items) => {
-                                    event_tx_clone.send(crate::tui::app::AppEvent::SelectionCountComplete(
-                                        p_clone,
-                                        num_items,
-                                        optimistic_folder_for_event, // Pass the captured optimistic data
-                                        optimistic_children_for_event,
-                                    )).unwrap_or_else(|e| eprintln!("Failed to send SelectionCountComplete event: {}", e));
-                                }
-                                Err(e) => {
-                                    eprintln!("Error counting items for {}: {}", p_clone.display(), e);
-                                    // Optionally send an error event if desired, or handle silently
-                                    // For now, errors are logged by the thread.
-                                    // We might want to send a specific AppEvent::Error back to the main thread.
-                                }
-                            }
-                        });
-                    } else {
-                         app_state.set_message(
+                    // Pre-check: Ensure we can at least add the folder itself
+                    if app_state.selected_items.len() >= limit {
+                        app_state.set_message(
                             format!("Selection limit ({}) reached. Cannot select folder.", limit),
                             MessageType::Warning,
                         );
+                        return Ok(());
                     }
+
+                    // Store optimistic additions for the event
+                    let optimistic_folder_for_event = Some(path.clone());
+                    let mut optimistic_children_for_event = HashSet::new();
+
+                    app_state.selected_items.insert(path.clone());
+                    app_state.optimistically_added_folder = Some(path.clone());
+                    app_state.optimistically_added_children.clear();
+
+                    // Pre-check for expanded folder children
+                    if app_state.expanded_folders.contains(&path) {
+                        let mut children_to_add_optimistically = Vec::new();
+                        for item_in_list in app_state.get_display_items() {
+                            if item_in_list.starts_with(&path) && item_in_list != &path {
+                                children_to_add_optimistically.push(item_in_list.clone());
+                            }
+                        }
+                        
+                        // Pre-check: Ensure we don't exceed limit with visible children
+                        if app_state.selected_items.len() + children_to_add_optimistically.len() > limit {
+                            app_state.set_message(
+                                format!(
+                                    "Cannot select folder: {} visible children would exceed selection limit ({})",
+                                    children_to_add_optimistically.len(), limit
+                                ),
+                                MessageType::Warning,
+                            );
+                            // Remove the folder we just added
+                            app_state.selected_items.remove(&path);
+                            app_state.optimistically_added_folder = None;
+                            return Ok(());
+                        }
+                        
+                        // Add children optimistically (already pre-checked)
+                        for child_path_opt in children_to_add_optimistically {
+                            if app_state.selected_items.insert(child_path_opt.clone()) {
+                                app_state.optimistically_added_children.insert(child_path_opt.clone());
+                                optimistic_children_for_event.insert(child_path_opt); // Capture for event
+                            }
+                        }
+                    }
+
+                    // Async counting for this folder, sending AppEvent
+                    let operation_id = OperationId::new();
+                    app_state.is_counting = true; // General flag for UI status
+                    app_state.counting_path = Some(path.clone()); // Path being counted for UI status
+                    app_state.current_operation_id = Some(operation_id); // Track operation ID
+
+                    let p_clone = path.clone();
+                    let base_dir_clone = app_state.current_dir.clone();
+                    let ignore_config_clone = app_state.ignore_config.clone();
+                    let limit_clone = app_state.selection_limit;
+                    let event_tx_clone = app_state.tx.clone(); // Use the AppState's event sender
+
+                    thread::spawn(move || {
+                        let count_result = crate_fs::count_selection_items(
+                            &p_clone,
+                            &base_dir_clone,
+                            &ignore_config_clone,
+                            limit_clone
+                        );
+                        match count_result {
+                            Ok(num_items) => {
+                                event_tx_clone.send(AppEvent::SelectionCountComplete {
+                                    operation_id,
+                                    path: p_clone,
+                                    count: num_items,
+                                    optimistic_folder: optimistic_folder_for_event, // Pass the captured optimistic data
+                                    optimistic_children: optimistic_children_for_event,
+                                }).unwrap_or_else(|e| eprintln!("Failed to send SelectionCountComplete event: {}", e));
+                            }
+                            Err(e) => {
+                                eprintln!("Error counting items for {}: {}", p_clone.display(), e);
+                                // Optionally send an error event if desired, or handle silently
+                                // For now, errors are logged by the thread.
+                                // We might want to send a specific AppEvent::Error back to the main thread.
+                            }
+                        }
+                    });
                 } else { // File selection
-                    if app_state.selected_items.len() < limit {
-                        app_state.selected_items.insert(path.clone());
-                    } else {
+                    // Pre-check: Ensure we can add the file
+                    if app_state.selected_items.len() >= limit {
                         app_state.set_message(
                             format!("Cannot select file: selection limit ({}) reached.", limit),
                             MessageType::Warning,
                         );
+                        return Ok(());
                     }
+                    app_state.selected_items.insert(path.clone());
                 }
             }
         }
@@ -268,12 +280,7 @@ impl SelectionState {
             }
         } else {
             // ---- "SELECT ALL" LOGIC ----
-            app_state.selected_items.clear();
-            app_state.optimistically_added_folder = None;
-            app_state.optimistically_added_children.clear();
-            app_state.selection_is_over_limit = false; // Reset flag
-            // app_state.select_all_pending_folders = None; // This field was removed
-
+            
             // Cancel any prior single item count that might be running
             if app_state.is_counting {
                  if let Some(sender) = app_state.count_abort_sender.take() {
@@ -283,37 +290,61 @@ impl SelectionState {
                 app_state.counting_path = None;
             }
 
+            let display_items_clone = app_state.get_display_items().to_vec(); // Clone for iteration
             let mut current_optimistic_selection: HashSet<PathBuf> = HashSet::new();
             let mut folders_to_scan_deeply: Vec<PathBuf> = Vec::new();
-            let display_items_clone = app_state.get_display_items().to_vec(); // Clone for iteration
 
-            // 1. Optimistic Phase & Identify Folders for Deep Scan
+            // 1. Pre-check: Count visible items first to avoid violating limits
+            let mut visible_item_count = 0;
+            for path in &display_items_clone {
+                if path.file_name().is_some_and(|n| n == "..") {
+                    continue;
+                }
+                visible_item_count += 1;
+                
+                if path.is_dir() && !app_state.expanded_folders.contains(path) {
+                    folders_to_scan_deeply.push(path.clone());
+                }
+            }
+
+            // Pre-check: If even visible items exceed limit, show warning and don't proceed
+            if visible_item_count > app_state.selection_limit {
+                app_state.set_message(
+                    format!(
+                        "Cannot select all: {} visible items exceed selection limit ({})",
+                        visible_item_count, app_state.selection_limit
+                    ),
+                    MessageType::Warning,
+                );
+                return Ok(());
+            }
+
+            // Clear current selection after pre-checks pass
+            app_state.selected_items.clear();
+            app_state.optimistically_added_folder = None;
+            app_state.optimistically_added_children.clear();
+            app_state.selection_is_over_limit = false; // Reset flag
+
+            // 2. Optimistic Phase & Identify Folders for Deep Scan (within limits)
             for path in &display_items_clone {
                 if path.file_name().is_some_and(|n| n == "..") {
                     continue;
                 }
 
                 current_optimistic_selection.insert(path.clone());
-
-                if path.is_dir() {
-                    // If folder is expanded, its visible children are already in display_items_clone
-                    // and will be added to current_optimistic_selection by the loop.
-                    // We only need to deep-scan unexpanded folders.
-                    if !app_state.expanded_folders.contains(path) {
-                        folders_to_scan_deeply.push(path.clone());
-                    }
-                }
             }
 
-            // Update UI immediately with optimistic selection
+            // Update UI immediately with optimistic selection (already pre-checked)
             app_state.selected_items = current_optimistic_selection.clone();
             // Mark related UI elements dirty (FileList, StatusBar)
             // This would ideally be done by the App/Tui main loop after an event or state change signal
 
             // 2. Asynchronous Deep Scan (if needed)
             if !folders_to_scan_deeply.is_empty() {
+                let operation_id = OperationId::new();
                 app_state.is_counting = true;
                 app_state.counting_path = None;
+                app_state.current_operation_id = Some(operation_id);
 
                 let event_tx_clone = app_state.tx.clone();
                 let ignore_config_clone = app_state.ignore_config.clone();
@@ -338,6 +369,7 @@ impl SelectionState {
                     let total_count = complete_set_for_select_all.len();
 
                     event_tx_clone.send(AppEvent::SelectAllScanComplete {
+                        operation_id,
                         total_potential_item_count: total_count,
                         final_selection_set: complete_set_for_select_all,
                         initial_optimistic_set: initial_optimistic_set_for_thread,

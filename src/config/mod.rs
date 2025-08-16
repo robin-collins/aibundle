@@ -12,7 +12,7 @@
 //!
 //! ## Example
 //! ```rust
-//! use aibundle_modular::config::{load_config, save_config, config_file_path};
+//! use aibundle::config::{load_config, save_config, config_file_path};
 //! # tokio_test::block_on(async {
 //! let config = load_config().await.unwrap();
 //! let path = config_file_path().unwrap();
@@ -113,10 +113,43 @@ pub fn save_config(config: &AppConfig, file_path: &Path) -> io::Result<()> {
     let toml_str = toml::to_string_pretty(config)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}")))?;
 
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(async { fs::write(file_path, toml_str).await })?;
+    // Use atomic write to prevent data corruption
+    atomic_write_config(file_path, &toml_str)?;
     println!("Configuration saved successfully.");
+    Ok(())
+}
+
+/// Performs an atomic write operation to prevent data corruption
+/// 
+/// # Arguments
+/// * `file_path` - The target file path
+/// * `content` - The content to write
+/// 
+/// # Returns
+/// * `io::Result<()>` - Ok on success, error on failure
+/// 
+/// # Implementation
+/// Writes to a temporary file first, then atomically renames it to the target path
+pub fn atomic_write_config(file_path: &Path, content: &str) -> io::Result<()> {
+    // Create a temporary file in the same directory as the target
+    let temp_path = if let Some(parent) = file_path.parent() {
+        let file_name = file_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("config");
+        parent.join(format!(".{}.tmp", file_name))
+    } else {
+        PathBuf::from(format!(".{}.tmp", 
+            file_path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("config")))
+    };
+
+    // Write to temporary file first
+    std::fs::write(&temp_path, content)?;
+
+    // Atomically rename temporary file to target file
+    std::fs::rename(&temp_path, file_path)?;
+
     Ok(())
 }
 

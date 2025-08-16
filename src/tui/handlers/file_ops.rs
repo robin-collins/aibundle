@@ -328,12 +328,12 @@ impl FileOpsHandler {
             selection_limit: Some(app_state.selection_limit),
         };
 
-        // Directly save the config without terminal confirmation (TUI handles confirmation)
+        // Serialize config to TOML string
         let toml_str = toml::to_string_pretty(&config)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML serialize error: {e}")))?;
 
-        // Write the file directly using std::fs (synchronous for TUI)
-        std::fs::write(config_path, toml_str)?;
+        // Perform atomic write operation to prevent data corruption
+        crate::config::atomic_write_config(config_path, &toml_str)?;
 
         // Success message
         app_state.set_message(

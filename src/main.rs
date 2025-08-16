@@ -46,6 +46,30 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use crate::tui::app::{AppRunResult};
 
+/// Installs a panic hook to ensure terminal state is restored on panic
+fn install_panic_hook() {
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        // Attempt to restore terminal state
+        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = crossterm::execute!(
+            io::stderr(),
+            crossterm::terminal::LeaveAlternateScreen,
+            crossterm::cursor::Show
+        );
+        
+        // Run system command to restore terminal as fallback
+        if cfg!(unix) {
+            let _ = std::process::Command::new("stty")
+                .arg("sane")
+                .status();
+        }
+        
+        // Call the original panic hook
+        original_hook(panic_info);
+    }));
+}
+
 /// Main entry point for the AIBundle application.
 ///
 /// Parses CLI arguments, loads configuration, and launches either the CLI or TUI mode.
@@ -74,6 +98,9 @@ use crate::tui::app::{AppRunResult};
 /// ```
 #[tokio::main]
 async fn main() -> io::Result<()> {
+    // Install panic hook to ensure terminal cleanup
+    install_panic_hook();
+    
     let cli_args = CliOptions::parse();
 
     // Use the positional SOURCE_DIR if supplied; otherwise, fall back to --source-dir.

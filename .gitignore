@@ -11,3 +11,37 @@ monolithich/
 *.log
 .specstory/ai_rules_backups/*
 test_results/*
+
+# Test artifacts and temporary files
+tests/temp_*/
+tests/captured-panes
+tests/captured-panes/*.txt
+tests/captured-panes/test_results_*.txt
+tests/scripts/base_dir/
+tests/files
+tests/small_files
+tests/snapshots
+
+
+# Test output files (but keep test input files)
+tests/files/test_output_*
+tests/files/*.out
+tests/files/*.tmp
+
+# Backup files
+*~
+*.bak
+*.backup
+
+# OS specific
+Thumbs.db
+ehthumbs.db
+.Spotlight-V100
+.Trashes
+
+# IDE
+*.swp
+*.swo
+
+references
+test_results_md

@@ -12,9 +12,9 @@ description = "A CLI & TUI file aggregator and formatter"
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.4", features = ["derive"] }
-hostname = "0.3"
+hostname = "0.4.1"
 rayon = { version = "1.8", optional = true }
-crossterm = "0.28.1"
+crossterm = "0.29.0"
 ratatui = "0.29.0"
 walkdir = "2.4"
 glob = "0.3"
@@ -31,9 +31,10 @@ tokio-stream = "0.1"
 lazy_static = "1.4.0"  # Added for filesystem caching
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.6", features = ["html_reports"] }
 tempfile = "3.8"
-rand = "0.8"
+rand = "0.9.1"
+tokio-test = "0.4"
 
 [features]
 default = []
